@@ -1,0 +1,246 @@
+{
+  "name": "vscode-cfml",
+  "displayName": "CFML",
+  "description": "CFML language",
+  "version": "0.1.0",
+  "preview": true,
+  "author": "KamasamaK",
+  "publisher": "KamasamaK",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.15.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KamasamaK/vscode-cfml.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KamasamaK/vscode-cfml/issues"
+  },
+  "categories": [
+    "Languages"
+  ],
+  "keywords": [
+    "cfml",
+    "coldfusion",
+    "lucee"
+  ],
+  "activationEvents": [
+    "onLanguage:cfml",
+    "workspaceContains:**/*.cfm",
+    "workspaceContains:**/*.cfml",
+    "workspaceContains:**/*.cfc"
+  ],
+  "icon": "./images/icon.png",
+  "main": "./out/cfmlMain",
+  "contributes": {
+    "languages": [
+      {
+        "id": "cfml",
+        "aliases": [
+          "CFML",
+          "cfml"
+        ],
+        "extensions": [
+          ".cfml",
+          ".cfm",
+          ".cfc"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cfml",
+        "scopeName": "embedding.cfml",
+        "path": "./syntaxes/cfml.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "CFML",
+      "properties": {
+        "cfml.globalDefinitions.source": {
+          "type": "string",
+          "description": "The source of the global definitions.",
+          "enum": [
+            "cfdocs"
+          ],
+          "default": "cfdocs"
+        },
+        "cfml.cfDocs.localPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Absolute path to the data directory of CFDocs.",
+          "default": null
+        },
+        "cfml.cfDocs.source": {
+          "type": "string",
+          "description": "Indicates which source will be used. Remote is GitHub repo. Local is based on cfDocs.localPath.",
+          "enum": [
+            "remote",
+            "local"
+          ],
+          "default": "remote"
+        },
+        "cfml.hover.enable": {
+          "type": "boolean",
+          "description": "Whether hover is enabled.",
+          "default": true
+        },
+        "cfml.signature.enable": {
+          "type": "boolean",
+          "description": "Whether signature help is enabled.",
+          "default": true
+        },
+        "cfml.suggest.enable": {
+          "type": "boolean",
+          "description": "Whether completion help is enabled.",
+          "default": true
+        },
+        "cfml.suggest.snippets.enable": {
+          "type": "boolean",
+          "description": "Whether snippets are part of completion help.",
+          "default": true
+        },
+        "cfml.suggest.snippets.exclude": {
+          "type": "array",
+          "description": "Set of snippet keys you would like excluded from suggestions.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "cfml.suggest.globalFunctions.enable": {
+          "type": "boolean",
+          "description": "Whether global functions are part of completion help.",
+          "default": true
+        },
+        "cfml.indexComponents.enable": {
+          "type": "boolean",
+          "description": "Whether to index all components in workspace. This is done on each startup and is required for multiple features.",
+          "default": true
+        },
+        "cfml.autoCloseTags.enable": {
+          "type": "boolean",
+          "description": "Whether to enable auto-closing tags for CFML. This uses the third-party extension auto-close-tag. Change requires restart.",
+          "default": true
+        },
+        "cfml.autoCloseTags.configurationTarget": {
+          "type": "string",
+          "description": "Auto-configuration target for auto-closing tags.",
+          "enum": [
+            "Global",
+            "Workspace",
+            "WorkspaceFolder"
+          ],
+          "default": "Global"
+        },
+        "cfml.emmet.enable": {
+          "type": "boolean",
+          "description": "Whether to enable Emmet for CFML. Change requires restart.",
+          "default": false
+        },
+        "cfml.emmet.configurationTarget": {
+          "type": "string",
+          "description": "Auto-configuration target for Emmet.",
+          "enum": [
+            "Global",
+            "Workspace",
+            "WorkspaceFolder"
+          ],
+          "default": "Global"
+        },
+        "cfml.engine": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Engine name.",
+              "default": "coldfusion",
+              "enum": [
+                "coldfusion",
+                "lucee"
+              ]
+            },
+            "version": {
+              "type": "string",
+              "description": "Engine version.",
+              "default": "2016",
+              "enum": [
+                "9",
+                "10",
+                "11",
+                "2016",
+                "4.5",
+                "5"
+              ]
+            }
+          },
+          "description": "CFML engine to validate against. Currently ignored.",
+          "default": null
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "cfml.refreshGlobalDefinitionCache",
+        "category": "CFML",
+        "title": "Refresh cache for global definitions"
+      },
+      {
+        "command": "cfml.refreshWorkspaceDefinitionCache",
+        "category": "CFML",
+        "title": "Refresh cache for workspace definitions"
+      },
+      {
+        "command": "cfml.toggleLineComment",
+        "category": "CFML",
+        "title": "Toggle CFML line comments"
+      },
+      {
+        "command": "cfml.toggleBlockComment",
+        "category": "CFML",
+        "title": "Toggle CFML block comments"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "cfml.toggleLineComment",
+        "key": "ctrl+/",
+        "mac": "cmd+/",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == cfml"
+      },
+      {
+        "command": "cfml.toggleBlockComment",
+        "key": "shift+alt+a",
+        "mac": "shift+alt+a",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == cfml"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "tsc -p ./",
+    "compile": "tsc -watch -p ./",
+    "postinstall": "node ./node_modules/vscode/bin/install",
+    "test": "node ./node_modules/vscode/bin/test"
+  },
+  "dependencies": {
+    "trie-prefix-tree": "1.4.0",
+    "request": "^2.81.0",
+    "find-config": "1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^2.5.3",
+    "tslint": "^5.7.0",
+    "vscode": "^1.1.5",
+    "mocha": "^3.5.3",
+    "@types/node": "^8.0.31",
+    "@types/mocha": "^2.2.43"
+  }
+}
