@@ -31,7 +31,7 @@
     "workspaceContains:**/*.cfml",
     "workspaceContains:**/*.cfc"
   ],
-  "icon": "./images/icon.png",
+  "icon": "images/icon.png",
   "main": "./out/cfmlMain",
   "contributes": {
     "languages": [
