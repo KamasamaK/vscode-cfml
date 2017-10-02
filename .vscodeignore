@@ -1,9 +1,9 @@
 .sonarlint/**
 .vscode/**
 .vscode-test/**
-out/**
-out/test/**
 test/**
+src/**
 **/*.map
 .gitignore
 tsconfig.json
+tslint.json

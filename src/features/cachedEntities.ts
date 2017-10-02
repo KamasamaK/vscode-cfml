@@ -1,4 +1,4 @@
-import { Uri, workspace, TextDocument, WorkspaceFolder } from "vscode";
+import { Uri, workspace, TextDocument, WorkspaceFolder, WorkspaceConfiguration, ConfigurationTarget } from "vscode";
 import { DataType } from "../entities/dataType";
 import { GlobalFunctions, GlobalTags, MemberFunctionsByType, GlobalFunction, GlobalTag, MemberFunction } from "../entities/globals";
 import { UserFunction, UserFunctionsByName, ComponentFunctions, UserFunctionByUri } from "../entities/userFunction";
@@ -204,20 +204,38 @@ export function cacheAllComponents(): void {
   clearAllCachedComponents();
 
   workspace.findFiles(COMPONENT_FILE_GLOB).then((componentUris: Uri[]) => {
-    componentUris.forEach((componentUri: Uri) => {
-      workspace.openTextDocument(componentUri).then((document: TextDocument) => {
-        const parsedComponent = parseComponent(document);
-        if (parsedComponent) {
-          cacheComponent(parsedComponent);
-        }
-        if (path.basename(componentUri.fsPath) === "Application.cfc") {
-          // TODO: Perform Application-specific tasks
-        }
+    // TODO: Revisit when https://github.com/Microsoft/vscode/issues/15178 is addressed
+    const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
+    if (cflintSettings) {
+      const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
+      const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
+      cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(() => {
+        cacheGivenComponents(componentUris);
+        cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
       });
-    });
+    } else {
+      cacheGivenComponents(componentUris);
+    }
   },
   (reason) => {
     console.error(reason);
+  });
+}
+
+/**
+ * Reads and parses given cfc files and caches their definitions
+ */
+function cacheGivenComponents(componentUris: Uri[]): void {
+  componentUris.forEach((componentUri: Uri) => {
+    workspace.openTextDocument(componentUri).then((document: TextDocument) => {
+      const parsedComponent = parseComponent(document);
+      if (parsedComponent) {
+        cacheComponent(parsedComponent);
+      }
+      if (path.basename(componentUri.fsPath) === "Application.cfc") {
+        // TODO: Perform Application-specific tasks
+      }
+    });
   });
 }
 

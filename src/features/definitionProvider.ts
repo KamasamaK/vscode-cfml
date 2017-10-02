@@ -1,5 +1,5 @@
 import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, workspace, TextLine } from "vscode";
-import { referencePatterns, ReferencePattern, Component, getComponentNameFromDotPath } from "../entities/component";
+import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath } from "../entities/component";
 import { componentPathToUri, getComponent } from "./cachedEntities";
 import { isCfmFile, isCfcFile, isContinuingExpressionPattern } from "../utils/contextUtil";
 import { Scope, getValidScopesPrefixPattern } from "../entities/scope";
@@ -32,7 +32,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
 
     // TODO: These references should ideally be in cachedEntities.
     let referenceMatch: RegExpExecArray | null;
-    referencePatterns.forEach((element: ReferencePattern) => {
+    objectReferencePatterns.forEach((element: ReferencePattern) => {
       const pattern: RegExp = element.pattern;
       while ((referenceMatch = pattern.exec(documentText))) {
         const path: string = referenceMatch[element.refIndex];

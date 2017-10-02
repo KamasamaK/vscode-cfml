@@ -93,6 +93,8 @@ export function getCfScriptRanges(document: TextDocument, range?: Range): Range[
 
 // TODO: getStringRanges
 
+// TODO: getJavaScriptRanges
+
 /**
  * Returns whether the given position is within a CFScript block
  * @param document The document to check

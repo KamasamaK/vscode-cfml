@@ -9,6 +9,7 @@ import { Property, parseProperties, Properties } from "./property";
 import { parseVariables, Variable } from "./variable";
 import { parseDocBlock, DocBlockKeyValue, getKeyPattern } from "./docblock";
 import { parseAttributes, Attributes, Attribute } from "./attribute";
+import { MyMap } from "../utils/collections";
 
 export const COMPONENT_EXT: string = ".cfc";
 export const COMPONENT_FILE_GLOB: string = "**/*" + COMPONENT_EXT;
@@ -20,7 +21,7 @@ export interface ReferencePattern {
   refIndex: number;
 }
 
-export const referencePatterns: ReferencePattern[] = [
+export const objectReferencePatterns: ReferencePattern[] = [
   // new object
   {
     pattern: /new\s+(['"])?([^(\1]+?)\1\(/gi,
@@ -42,6 +43,7 @@ export const referencePatterns: ReferencePattern[] = [
     refIndex: 2
   },
 ];
+// TODO: variableReferencePatterns
 const componentAttributeNames: Set<string> = new Set([
   "accessors",
   "alias",
@@ -107,6 +109,8 @@ export interface ImplicitFunction extends Function {
   signatures: UserFunctionSignature[];
   location: Location;
 }
+
+export interface ImplicitFunctions extends MyMap<string, ImplicitFunction> {}
 
 interface ComponentAttributes {
   accessors?: boolean;
@@ -265,6 +269,8 @@ export function parseComponent(document: TextDocument): Component {
     });
 
     component.functions = componentFunctions;
+
+    // TODO: ImplicitFunctions
 
     const componentDefinitionRange = new Range(document.positionAt(head.length), earliestFunctionRangeStart);
     component.variables = parseVariables(document, componentIsScript, componentDefinitionRange);

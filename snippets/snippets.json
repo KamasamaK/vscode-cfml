@@ -7,7 +7,7 @@
 			"\t$0",
 			"}"
 		],
-		"description": "component"
+		"description": "Component definition"
   },
   "function": {
 		"prefix": "function …",
@@ -17,12 +17,12 @@
 			"\t$5",
 			"}"
 		],
-		"description": "function"
+		"description": "Function definition"
 	},
 	"argument": {
-		"prefix": "argument …",
+		"prefix": "arg …",
 		"body": "${1:required }${2|any,array,binary,boolean,component,date,function,guid,numeric,query,string,struct,uuid,variableName,void,xml|} ${3:name}$0",
-		"description": "argument"
+		"description": "Argument"
 	},
 	"switch": {
 		"prefix": "switch …",
@@ -62,7 +62,7 @@
 			"\t${2}",
 			"}$0"
 		],
-		"description": "While-loop"
+		"description": "While loop"
 	},
 	"if": {
 		"prefix": "if …",
@@ -82,7 +82,7 @@
 			"\t${3}",
 			"}$0"
 		],
-		"description": "If Else block"
+		"description": "If-Else block"
 	},
 	"else": {
 		"prefix": "else …",
@@ -118,7 +118,7 @@
 			"\t${3}",
 			"}$0"
 		],
-		"description": "For each loop"
+		"description": "For-each loop"
 	},
 	"trycatch": {
 		"prefix": "try …",
@@ -129,7 +129,7 @@
 			"\t${4}",
 			"}$0"
 		],
-		"description": "Try catch block"
+		"description": "Try-catch block"
 	},
 	"trycatchfinally": {
 		"prefix": "tryfinally …",
@@ -142,7 +142,7 @@
 			"\t${5}",
 			"}$0"
 		],
-		"description": "Try catch finally block"
+		"description": "Try-catch-finally block"
 	},
 	"catch": {
 		"prefix": "catch …",
