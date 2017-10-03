@@ -10,6 +10,7 @@ import { Scope } from "./scope";
 import { DocBlockKeyValue, parseDocBlock, getKeyPattern } from "./docblock";
 import { ATTRIBUTES_PATTERN, Attributes, Attribute, parseAttributes } from "./attribute";
 import { equalsIgnoreCase } from "../utils/textUtil";
+import { MyMap } from "../utils/collections";
 
 // TODO: For scriptFunctionPattern, add another capture group that separates arguments from function attributes
 const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*(\((?:=\s*\{|[^{])*)\{/gi;
@@ -140,19 +141,7 @@ const userFunctionAttributeNames: Set<string> = new Set([
 ]);
 
 // Collection of user functions for a particular component. Key is function name lowercased.
-export class ComponentFunctions extends Map<string, UserFunction> {
-  public filter(callbackfn: (value: UserFunction, key: string) => boolean): ComponentFunctions {
-    let funcs = new ComponentFunctions();
-    this.forEach((func: UserFunction, funcKey: string) => {
-      if (callbackfn(func, funcKey)) {
-        funcs.set(funcKey, func);
-      }
-    });
-
-    return funcs;
-  }
-}
-
+export class ComponentFunctions extends MyMap<string, UserFunction> { }
 
 /*
 export interface UserFunctionsByUri {

@@ -1,6 +1,5 @@
 import {
-  commands, window, languages, Selection, TextEditor, TextEditorEdit, TextDocument, ConfigurationTarget,
-  ExtensionContext, Disposable, Hover, Position, CancellationToken, WorkspaceConfiguration, workspace, Range, LanguageConfiguration, Uri, FileSystemWatcher
+  commands, languages, TextDocument, ConfigurationTarget, ExtensionContext, WorkspaceConfiguration, workspace, Uri, FileSystemWatcher, extensions
 } from "vscode";
 import CFMLHoverProvider from "./features/hoverProvider";
 import CFMLDocumentSymbolProvider from "./features/documentSymbolProvider";
@@ -103,8 +102,9 @@ export function activate(context: ExtensionContext): void {
   });
 
   const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
-  const autoCloseTagsSettings: WorkspaceConfiguration = workspace.getConfiguration("auto-close-tag");
-  if (autoCloseTagsSettings) {
+  const autoCloseTagExt = extensions.getExtension("formulahendry.auto-close-tag");
+  if (autoCloseTagExt) {
+    const autoCloseTagsSettings: WorkspaceConfiguration = workspace.getConfiguration("auto-close-tag");
     const autoCloseLanguages = autoCloseTagsSettings.get<string[]>("activationOnLanguage");
     const autoCloseExcludedTags = autoCloseTagsSettings.get<string[]>("excludedTags");
     const enableAutoCloseTags = cfmlSettings.get<boolean>("autoCloseTags.enable");
@@ -141,8 +141,9 @@ export function activate(context: ExtensionContext): void {
     }
   }
 
-  const emmetSettings: WorkspaceConfiguration = workspace.getConfiguration("emmet");
-  if (emmetSettings) {
+  const emmetExt = extensions.getExtension("vscode.emmet");
+  if (emmetExt) {
+    const emmetSettings: WorkspaceConfiguration = workspace.getConfiguration("emmet");
     const emmetIncludeLanguages = emmetSettings.get("includeLanguages", {});
     if (cfmlSettings.get<boolean>("emmet.enable")) {
       emmetIncludeLanguages["cfml"] = "html";
@@ -160,8 +161,9 @@ export function activate(context: ExtensionContext): void {
   commands.executeCommand("cfml.refreshGlobalDefinitionCache");
   commands.executeCommand("cfml.refreshWorkspaceDefinitionCache");
 
-  const jsonString = fs.readFileSync(context.asAbsolutePath("./snippets/snippets.json"), "utf8");
-  snippets = JSON.parse(jsonString);
+  fs.readFile(context.asAbsolutePath("./snippets/snippets.json"), "utf8", (err, data) => {
+    snippets = JSON.parse(data);
+  });
 }
 
 /**

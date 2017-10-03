@@ -39,7 +39,7 @@ Win/Linux: `Ctrl+Space`; Mac: `Cmd+Space`
 ![Completion Suggestions](./images/cfdocs_leaderboard_completion.png)
 
 1. **Definition**
-Provides a link to the definition of a symbol. Currently only for object creation, function usage within its same component, function return types, argument tpyes, property types, and component extends.  
+Provides a link to the definition of a symbol. Currently only for object creation, function usage within its same component, function return types, argument types, property types, and component extends.  
 _Go to Definition:_ Win/Linux: `F12`/`Ctrl+Click`; Mac: `F12`  
 _Peek Definition:_ Win/Linux: `Alt+F12` (`Ctrl`+hover provides a smaller, alternate peek); Mac: `Opt+F12`
 ![Peek Definition](./images/cfdocs_definition-peek.png)
@@ -72,8 +72,8 @@ Used in Command Palette (Win/Linux: `Ctrl+Shift+P`; Mac: `Cmd+Shift+P`). Can als
 
 - Refresh cache for global definitions
 - Refresh cache for workspace definitions
-- Toggle CFML line comments
-- Toggle CFML block comments
+- Toggle CFML line comments (`Ctrl+/`)
+- Toggle CFML block comments (`Shift+Alt+A`)
 
 ## Known Issues/Limitations
 
@@ -93,6 +93,7 @@ Feel free to open issues for these or any other features you would find helpful 
 - Hover documentation for external component functions
 - Provide additional completion suggestions
   - Enumerated values
+  - Script-based tag functions
   - Script-based tag attribute names
   - External component functions
   - Component paths
@@ -112,7 +113,7 @@ VS Code and this extension lack features and functionality that I find useful fo
 - [Auto Close Tag](https://marketplace.visualstudio.com/items?itemName=formulahendry.auto-close-tag) - Enables automatic closing of tags. There are settings (`cfml.autoCloseTags.*`) to automate the configuration for HTML and CFML tags.
 - [CFLint](https://marketplace.visualstudio.com/items?itemName=KamasamaK.vscode-cflint) - Integrates CFLint into VS Code as diagnostics.
 - [highlight-matching-tag](https://marketplace.visualstudio.com/items?itemName=vincaslt.highlight-matching-tag) - This seems to break often, but I've found it to work just enough to be useful.
-- [Path Intellisense](https://marketplace.visualstudio.com/items?itemName=christian-kohler.path-intellisense)
+- [Path Intellisense](https://marketplace.visualstudio.com/items?itemName=christian-kohler.path-intellisense) - Provides suggestions when entering file paths
 - [Code Outline](https://marketplace.visualstudio.com/items?itemName=patrys.vscode-code-outline) - Displays document symbols in an outline view in the Explorer
 - [TODO Highlight](https://marketplace.visualstudio.com/items?itemName=wayou.vscode-todo-highlight)
 

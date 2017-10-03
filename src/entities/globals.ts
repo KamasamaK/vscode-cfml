@@ -2,6 +2,7 @@ import { DataType } from "./dataType";
 import { Function } from "./function";
 import { Parameter } from "./parameter";
 import { Signature } from "./signature";
+import { MyMap } from "../utils/collections";
 
 const cfTagAttributePattern = /<((cf[a-z_]+)\s+)([^<>]*)$/i;
 
@@ -28,7 +29,7 @@ export interface MemberFunction extends Function {
   returntype: DataType;
   signatures: Signature[];
 }
-export interface MemberFunctionsByType extends Map<DataType, Set<MemberFunction>> { }
+export interface MemberFunctionsByType extends MyMap<DataType, Set<MemberFunction>> { }
 export interface GlobalTag extends GlobalEntity {
   name: string;
   syntax: string;

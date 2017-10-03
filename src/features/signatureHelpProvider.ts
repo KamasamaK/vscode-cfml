@@ -87,7 +87,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
    * @param position The position at which the command was invoked.
    * @param token A cancellation token.
    */
-  public async provideSignatureHelp(document: TextDocument, position: Position, token: CancellationToken): Promise<SignatureHelp> {
+  public async provideSignatureHelp(document: TextDocument, position: Position, token: CancellationToken): Promise<SignatureHelp | null> {
     const cfmlSignatureSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.signature");
     if (!cfmlSignatureSettings.get<boolean>("enable", true)) {
       return null;

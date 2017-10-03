@@ -3,6 +3,7 @@ import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
 import { parseAttributes, Attribute } from "./attribute";
 import { getComponentNameFromDotPath } from "./component";
+import { MyMap } from "../utils/collections";
 
 const propertyPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:<cf)?property\b)([^;>]*)/gi;
 const attributePattern = /\b(\w+)\b(?:\s*=\s*(?:(['"])(.*?)\2|([a-z0-9:.]+)))?/gi;
@@ -36,18 +37,7 @@ export interface Property {
 }
 
 // Collection of properties for a particular component. Key is property name lowercased.
-export class Properties extends Map<string, Property> {
-  public filter(callbackfn: (value: Property, key: string) => boolean): Properties {
-    let props = new Properties();
-    this.forEach((prop: Property, propKey: string) => {
-      if (callbackfn(prop, propKey)) {
-        props.set(propKey, prop);
-      }
-    });
-
-    return props;
-  }
-}
+export class Properties extends MyMap<string, Property> { }
 
 /**
  * Returns an array of Property objects that define properties within the given component

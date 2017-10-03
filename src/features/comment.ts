@@ -4,8 +4,8 @@ import { isCfmFile, containsCfTag, containsCfScriptTag, isLastTagCFScript } from
 
 
 export enum CommentType {
-  Line = "line",
-  Block = "block"
+  Line,
+  Block
 }
 
 /**

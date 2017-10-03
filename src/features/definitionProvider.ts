@@ -9,7 +9,7 @@ import { equalsIgnoreCase } from "../utils/textUtil";
 
 export default class CFMLDefinitionProvider implements DefinitionProvider {
 
-  public async provideDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition | null> {
+  public async provideDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition> {
     const results: Definition = [];
 
     const docIsCfmFile: boolean = isCfmFile(document);

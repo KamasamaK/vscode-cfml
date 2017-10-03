@@ -1,12 +1,13 @@
 // Accommodates for the lack of proper multiple signature support in CFDocs
 
 import { Signature } from "../../entities/signature";
+import { MyMap } from "../collections";
 
-export interface MinMultiSigs extends Map<string, string[][]> { }
+export interface MinMultiSigs extends MyMap<string, string[][]> { }
 
 export const multiSigGlobalFunctions: MinMultiSigs =
   // Key: Function name. Value: Array of signatures, consisting of array of argument names.
-  new Map<string, string[][]>()
+  new MyMap<string, string[][]>()
     .set("arraySort",
       [
         [

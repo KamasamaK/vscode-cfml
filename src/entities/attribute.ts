@@ -1,4 +1,5 @@
 import { Range, TextDocument } from "vscode";
+import { MyMap } from "../utils/collections";
 
 export const ATTRIBUTES_PATTERN = /\b(\w+)\b(?:(\s*=\s*)(?:(['"])(.*?)\3|([a-z0-9:.]+)))?/gi;
 
@@ -9,18 +10,7 @@ export interface Attribute {
 }
 
 // Collection of attributes. Key is attribute name lowercased
-export class Attributes extends Map<string, Attribute> {
-  public filter(callbackfn: (value: Attribute, key: string) => boolean): Attributes {
-    let attrs = new Attributes();
-    this.forEach((attr: Attribute, attrKey: string) => {
-      if (callbackfn(attr, attrKey)) {
-        attrs.set(attrKey, attr);
-      }
-    });
-
-    return attrs;
-  }
-}
+export class Attributes extends MyMap<string, Attribute> { }
 
 /**
  * Gets a regular expression that matches an attribute with the given name

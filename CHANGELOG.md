@@ -2,6 +2,10 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.1.2] - 2017-10-02
+
+- Corrected checks for existence of certain other extensions
+
 ## [0.1.1] - 2017-10-02
 
 - Corrected issue with CFLint running for all indexed files

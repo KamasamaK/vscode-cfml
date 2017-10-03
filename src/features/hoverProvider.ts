@@ -36,7 +36,7 @@ export default class CFMLHoverProvider implements HoverProvider {
    * @param document The document in which the hover was invoked.
    * @param position The position at which the hover was invoked.
    */
-  public async getFormattedStrings(document: TextDocument, position: Position): Promise<MarkedString[]> {
+  public async getFormattedStrings(document: TextDocument, position: Position): Promise<MarkedString[] | null> {
     const wordRange: Range = document.getWordRangeAtPosition(position);
     if (!wordRange) {
       return null;
@@ -249,7 +249,10 @@ export default class CFMLHoverProvider implements HoverProvider {
     }
 
     return this.getFormattedStrings(document, position).then((formattedStrings: MarkedString[]) => {
-      return new Hover(formattedStrings);
+      if (formattedStrings) {
+        return new Hover(formattedStrings);
+      }
+      return undefined;
     }, () => {
       return undefined;
     });

@@ -18,6 +18,7 @@ import { Property } from "../entities/property";
 import { snippets, Snippet } from "../cfmlMain";
 import { parseAttributes, Attributes } from "../entities/attribute";
 import { Parameter } from "../entities/parameter";
+import { MyMap } from "../utils/collections";
 
 const findConfig = require("find-config");
 
@@ -293,7 +294,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       const tagAttributes: string = cfTagAttributeMatch[3];
       const globalTag: GlobalTag = getGlobalTag(tagName);
       if (globalTag) {
-        let attributeDocs: Map<string, Parameter> = new Map<string, Parameter>();
+        let attributeDocs: MyMap<string, Parameter> = new MyMap<string, Parameter>();
         globalTag.signatures.forEach((sig: Signature) => {
           sig.parameters.forEach((param: Parameter) => {
             attributeDocs.set(param.name.toLowerCase(), param);
@@ -307,15 +308,13 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
         const parsedAttributes: Attributes = parseAttributes(document, tagAttributeRange, attributeNames);
         const usedAttributeNames: Set<string> = new Set<string>(parsedAttributes.keys());
 
-        attributeDocs.forEach((param: Parameter) => {
-          if (!usedAttributeNames.has(param.name.toLowerCase())) {
-            if (currentWordMatches(param.name)) {
-              let attributeItem = new CompletionItem(param.name, CompletionItemKind.Property);
-              attributeItem.documentation = param.description;
-              attributeItem.insertText = param.name + "=";
-              result.push(attributeItem);
-            }
-          }
+        attributeDocs.filter((param: Parameter) => {
+          return !usedAttributeNames.has(param.name.toLowerCase()) && currentWordMatches(param.name);
+        }).forEach((param: Parameter) => {
+          let attributeItem = new CompletionItem(param.name, CompletionItemKind.Property);
+          attributeItem.documentation = param.description;
+          attributeItem.insertText = param.name + "=";
+          result.push(attributeItem);
         });
       }
     }

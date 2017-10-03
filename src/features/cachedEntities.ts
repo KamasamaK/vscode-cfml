@@ -1,16 +1,17 @@
-import { Uri, workspace, TextDocument, WorkspaceFolder, WorkspaceConfiguration, ConfigurationTarget } from "vscode";
+import { Uri, workspace, TextDocument, WorkspaceFolder, WorkspaceConfiguration, ConfigurationTarget, extensions } from "vscode";
 import { DataType } from "../entities/dataType";
 import { GlobalFunctions, GlobalTags, MemberFunctionsByType, GlobalFunction, GlobalTag, MemberFunction } from "../entities/globals";
 import { UserFunction, UserFunctionsByName, ComponentFunctions, UserFunctionByUri } from "../entities/userFunction";
 import { Component, ComponentsByUri, ComponentsByName, COMPONENT_EXT, COMPONENT_FILE_GLOB, parseComponent } from "../entities/component";
 import * as path from "path";
 import * as fs from "fs";
+import { MyMap } from "../utils/collections";
 
 const trie = require("trie-prefix-tree");
 
 let allGlobalFunctions: GlobalFunctions = {};
 let allGlobalTags: GlobalTags = {};
-let allMemberFunctions: MemberFunctionsByType = new Map<DataType, Set<MemberFunction>>();
+let allMemberFunctions: MemberFunctionsByType = new MyMap<DataType, Set<MemberFunction>>();
 
 let allComponentsByUri: ComponentsByUri = {};
 let allComponentsByName: ComponentsByName = {};
@@ -205,8 +206,9 @@ export function cacheAllComponents(): void {
 
   workspace.findFiles(COMPONENT_FILE_GLOB).then((componentUris: Uri[]) => {
     // TODO: Revisit when https://github.com/Microsoft/vscode/issues/15178 is addressed
-    const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
-    if (cflintSettings) {
+    const cflintExt = extensions.getExtension("KamasamaK.vscode-cflint");
+    if (cflintExt) {
+      const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
       const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
       const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
       cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(() => {
