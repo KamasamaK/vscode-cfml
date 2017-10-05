@@ -83,17 +83,14 @@ export namespace DataType {
 
   /**
    * Returns the truthy value of a string
-   * @param dataType A string to evaluate
+   * @param boolStr A string to evaluate
    */
   export function isTruthy(boolStr: string): boolean {
     if (equalsIgnoreCase(boolStr, "true") || equalsIgnoreCase(boolStr, "yes")) {
       return true;
     }
     if (isNumeric(boolStr)) {
-      const boolNum = parseFloat(boolStr);
-      if (boolNum !== 0) {
-        return true;
-      }
+      return (parseFloat(boolStr) !== 0);
     }
 
     return false;
@@ -115,5 +112,29 @@ export namespace DataType {
     }
 
     return null;
+  }
+
+  /**
+   * Take the value and parse and try to infer its type
+   * @param value
+   */
+  export function inferDataTypeFromValue(value: string): DataType {
+    if (/^(['"])?(false|true|no|yes)\1$/i.test(value)) {
+      return DataType.Boolean;
+    }
+
+    if (isNumeric(value)) {
+      return DataType.Numeric;
+    }
+
+    if (/^["'](?!#)/.test(value)) {
+      return DataType.String;
+    }
+
+    if (/^(arrayNew\(|\[)/.test(value)) {
+      return DataType.Array;
+    }
+
+    return DataType.Any;
   }
 }

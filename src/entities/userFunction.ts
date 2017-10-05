@@ -3,33 +3,46 @@ import { Location, Uri, TextDocument, Position, Range } from "vscode";
 import { Function } from "./function";
 import { Parameter } from "./parameter";
 import { Signature } from "./signature";
-import { componentPathToUri, getComponentNameFromDotPath } from "./component";
+import { componentPathToUri, getComponentNameFromDotPath, Component } from "./component";
 import { Variable, parseVariables } from "./variable";
 import { getCfScriptRanges } from "../utils/contextUtil";
 import { Scope } from "./scope";
 import { DocBlockKeyValue, parseDocBlock, getKeyPattern } from "./docblock";
 import { ATTRIBUTES_PATTERN, Attributes, Attribute, parseAttributes } from "./attribute";
 import { equalsIgnoreCase } from "../utils/textUtil";
-import { MyMap } from "../utils/collections";
+import { MyMap, MySet } from "../utils/collections";
+import { getComponent } from "../features/cachedEntities";
 
 // TODO: For scriptFunctionPattern, add another capture group that separates arguments from function attributes
-const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*(\((?:=\s*\{|[^{])*)\{/gi;
+const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*(\((?:=\s*\{|[^{])*)[\{;]/gi;
 // TODO: For scriptFunctionArgsPattern, prevent comma or close paren within string from delimiting arguments
 const scriptFunctionArgsPattern: RegExp = /((?:^\(|,)\s*(?:(required)\s+)?(?:\b([\w.]+)\b\s+)?(\b[\w$]+\b)(?:\s*=\s*(\{[^\}]*\}|\[[^\]]*\]|\([^\)]*\)|(?:[^,\)](?!\b\w+\s*=))+))?)([^,\)]*)?/gi;
 const tagFunctionPattern: RegExp = /((<cffunction\s+)([^>]*)>)([\s\S]*?)<\/cffunction>/gi;
 const tagFunctionArgPattern: RegExp = /(<cfargument\s+)([^>]*)>/gi;
 
-const booleanAttributes: Set<string> = new Set([
+const userFunctionAttributeNames: MySet<string> = new MySet([
+  "name",
+  "access",
+  "description",
+  "displayname",
+  "hint",
+  "output",
+  "returnformat",
+  "returntype",
+  "roles",
+  "securejson",
+  "verifyclient",
+  "restpath",
+  "httpmethod",
+  "produces",
+  "consumes"
+]);
+const userFunctionBooleanAttributes: MySet<string> = new MySet([
   "static",
   "abstract",
   "final"
 ]);
-const argumentAttributesToInterfaceMapping = {
-  type: "dataType",
-  default: "default",
-  hint: "description",
-  required: "required"
-};
+
 const accessArr: string[] = ["public", "private", "package", "remote"];
 
 export const inlineFunctionPattern = /([a-zA-Z_$][$\w.\[\]'"]*)\s*=\s*function\s*\(|function\s+([a-zA-Z_$][$\w]*)\s*\(/gi;
@@ -63,7 +76,7 @@ export namespace Access {
 
 export interface Argument extends Parameter {
   // description is hint
-  nameRange?: Range;
+  nameRange: Range;
   dataTypeRange?: Range;
   dataTypeComponentUri?: Uri; // Only when dataType is Component
 }
@@ -77,7 +90,13 @@ interface ArgumentAttributes {
   restargsource?: string;
   restargname?: string;
 }
-export const argumentAttributeNames: Set<string> = new Set([
+const argumentAttributesToInterfaceMapping = {
+  type: "dataType",
+  default: "default",
+  hint: "description",
+  required: "required"
+};
+const argumentAttributeNames: MySet<string> = new MySet([
   "name",
   "type",
   "default",
@@ -86,6 +105,9 @@ export const argumentAttributeNames: Set<string> = new Set([
   "required",
   "restargsource",
   "restargname"
+]);
+const argumentBooleanAttributes: MySet<string> = new MySet([
+  "required"
 ]);
 
 export interface UserFunctionSignature extends Signature {
@@ -122,23 +144,6 @@ interface UserFunctionAttributes {
   consumes?: string;
   modifier?: string;
 }
-const userFunctionAttributeNames: Set<string> = new Set([
-  "name",
-  "access",
-  "description",
-  "displayname",
-  "hint",
-  "output",
-  "returnformat",
-  "returntype",
-  "roles",
-  "securejson",
-  "verifyclient",
-  "restpath",
-  "httpmethod",
-  "produces",
-  "consumes"
-]);
 
 // Collection of user functions for a particular component. Key is function name lowercased.
 export class ComponentFunctions extends MyMap<string, UserFunction> { }
@@ -181,7 +186,14 @@ export function parseScriptFunctions(document: TextDocument): UserFunction[] {
       document.positionAt(scriptFunctionMatch.index + fullMatch.length - 1)
     );
 
-    const functionEndPosition: Position = getScriptFunctionEndPosition(document, scriptFunctionMatch.index + fullMatch.length);
+    let functionEndPosition: Position;
+    const comp: Component = getComponent(document.uri);
+    if (comp && comp.isInterface) {
+      functionEndPosition = document.positionAt(scriptFunctionMatch.index + fullMatch.length);
+    } else {
+      functionEndPosition = getScriptFunctionEndPosition(document, scriptFunctionMatch.index + fullMatch.length);
+    }
+
     const functionRange: Range = new Range(
       document.positionAt(scriptFunctionMatch.index),
       functionEndPosition
@@ -275,7 +287,7 @@ export function parseScriptFunctions(document: TextDocument): UserFunction[] {
               userFunction.returnTypeUri = checkDataType[1];
             }
           }
-        } else if (booleanAttributes.has(docElem.key)) {
+        } else if (userFunctionBooleanAttributes.has(docElem.key)) {
           userFunction[docElem.key] = DataType.isTruthy(docElem.value);
         } else if (docElem.key === "hint") {
           userFunction.description = docElem.value;
@@ -544,7 +556,7 @@ export function parseTagFunctions(document: TextDocument): UserFunction[] {
               returnTypeRange.end
             );
           }
-        } else if (booleanAttributes.has(attrName)) {
+        } else if (userFunctionBooleanAttributes.has(attrName)) {
           userFunction[attrVal] = DataType.isTruthy(attrVal);
         } else if (attrName === "hint") {
           userFunction.description = attrVal;

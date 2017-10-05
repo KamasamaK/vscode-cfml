@@ -3,12 +3,12 @@ import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
 import { parseAttributes, Attribute } from "./attribute";
 import { getComponentNameFromDotPath } from "./component";
-import { MyMap } from "../utils/collections";
+import { MyMap, MySet } from "../utils/collections";
 
 const propertyPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:<cf)?property\b)([^;>]*)/gi;
 const attributePattern = /\b(\w+)\b(?:\s*=\s*(?:(['"])(.*?)\2|([a-z0-9:.]+)))?/gi;
 
-const propertyAttributeNames: Set<string> = new Set([
+const propertyAttributeNames: MySet<string> = new MySet([
   "name",
   "displayname",
   "hint",
@@ -19,7 +19,7 @@ const propertyAttributeNames: Set<string> = new Set([
   "getter",
   "setter"
 ]);
-const booleanAttributes: Set<string> = new Set([
+const booleanAttributes: MySet<string> = new MySet([
   "getter",
   "setter"
 ]);

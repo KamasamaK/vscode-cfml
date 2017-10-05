@@ -2,6 +2,12 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.1.3] - 2017-10-05
+
+- Added docblock completion
+- Improved tag attribute name completion
+- Minor syntax additions
+
 ## [0.1.2] - 2017-10-02
 
 - Corrected checks for existence of certain other extensions

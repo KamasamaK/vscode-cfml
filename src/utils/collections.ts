@@ -10,3 +10,16 @@ export class MyMap<K, V> extends Map<K, V> {
     return myMap;
   }
 }
+
+export class MySet<T> extends Set<T> {
+  public filter(callbackfn: (value: T, value2: T, set: MySet<T>) => boolean): MySet<T> {
+    let mySet = new MySet<T>();
+    this.forEach((value: T, value2: T, set: MySet<T>) => {
+      if (callbackfn(value, value2, set)) {
+        mySet.add(value);
+      }
+    });
+
+    return mySet;
+  }
+}

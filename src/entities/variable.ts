@@ -6,7 +6,7 @@ import { Component } from "./component";
 import { UserFunction, UserFunctionSignature, Argument } from "./userFunction";
 import { getComponent } from "../features/cachedEntities";
 import { equalsIgnoreCase } from "../utils/textUtil";
-import { MyMap } from "../utils/collections";
+import { MyMap, MySet } from "../utils/collections";
 
 // Mistakenly matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
 const cfscriptVariableAssignmentPattern = /((?:^|[;{}]|\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=[^=]/gi;
@@ -185,5 +185,5 @@ export interface Variable {
 export class Variables extends MyMap<Scope, Variable[]> { }
 
 export interface Struct {
-  keys: Set<string>;
+  keys: MySet<string>;
 }

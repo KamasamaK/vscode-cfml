@@ -17,6 +17,7 @@ import { Signature } from "../entities/signature";
 import { getValidScopesPrefixPattern, Scope } from "../entities/scope";
 import { Access, UserFunction } from "../entities/userFunction";
 import * as path from "path";
+import { MySet } from "../utils/collections";
 
 const cfDocsLinkPrefix = "https://cfdocs.org/";
 
@@ -63,6 +64,8 @@ export default class CFMLHoverProvider implements HoverProvider {
       }
     }
 
+    // TODO: Add hover for arguments and properties
+
     if (!isGlobalFunction && !isGlobalTag && !isUserFunction) {
       return null;
     }
@@ -103,7 +106,7 @@ export default class CFMLHoverProvider implements HoverProvider {
    */
   public GTtoHoverProviderItem(tag: GlobalTag): HoverProviderItem {
     let paramArr: Parameter[] = [];
-    let paramNames = new Set<string>();
+    let paramNames = new MySet<string>();
 
     tag.signatures.forEach((s: Signature) => {
       s.parameters.forEach((p: Parameter) => {
@@ -132,7 +135,7 @@ export default class CFMLHoverProvider implements HoverProvider {
    */
   public FunctionToHoverProviderItem(func: Function): HoverProviderItem {
     let paramArr: Parameter[] = [];
-    let paramNames = new Set<string>();
+    let paramNames = new MySet<string>();
     func.signatures.forEach((s: Signature) => {
       s.parameters.forEach((p: Parameter) => {
         const paramName = p.name.split("=")[0];

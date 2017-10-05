@@ -470,7 +470,7 @@
         },
         {
           "name": "keyword.other.DML.sql",
-          "match": "(?i:\\b(select(\\s+distinct)?(\\s+top)?|insert\\s+(ignore\\s+)?into|update|delete|from|set|where|group\\s+by|or|like|and|between|union(\\s+all)?|intersect|(except|minus)|having|order\\s+by|limit|offset|over|partition\\s+by|(inner|cross)\\s+join|straight_join|(left|right|full)(\\s+outer)?\\s+join|natural(\\s+((left|right)(\\s+outer)?|inner))?\\s+join|fetch(\\s+(next|prior|first|last|absolute|relative))?)\\b)"
+          "match": "(?i:\\b(select(\\s+distinct)?(\\s+top)?|insert\\s+(ignore\\s+)?into|update|delete|from|set|where|group\\s+by|or|like|and|not|exists|between|union(\\s+all)?|intersect|(except|minus)|having|order\\s+by|limit|offset|over|partition\\s+by|(inner|cross)\\s+join|straight_join|(left|right|full)(\\s+outer)?\\s+join|natural(\\s+((left|right)(\\s+outer)?|inner))?\\s+join|fetch(\\s+(next|prior|first|last|absolute|relative))?)\\b)"
         },
         {
           "name": "keyword.other.DDL.create.II.sql",
@@ -1164,7 +1164,7 @@
           ],
           "end": "(?='[^'])",
           "name": "meta.string.quoted.single.cfml source.sql",
-          "begin": "(?=\\s*(?:USE|SELECT|INSERT|UPDATE|DELETE|CREATE|REPLACE|ALTER|WITH|DECLARE|FROM|WHERE|AND|OR|ORDER\\s+BY|GROUP\\s+BY|HAVING|(INNER|CROSS)\\s+JOIN|(LEFT|RIGHT|FULL)(\\s+OUTER)?\\s+JOIN|UNION|INTERSECT|EXCEPT|MINUS|LIMIT)\\b)"
+          "begin": "(?=\\s*(?:USE|SELECT|INSERT|UPDATE|DELETE|CREATE|REPLACE|ALTER|WITH|DECLARE|FROM|WHERE|AND|OR|NOT|EXISTS|ORDER\\s+BY|GROUP\\s+BY|HAVING|(INNER|CROSS)\\s+JOIN|(LEFT|RIGHT|FULL)(\\s+OUTER)?\\s+JOIN|UNION|INTERSECT|EXCEPT|MINUS|LIMIT)\\b)"
         },
         {
           "patterns": [
@@ -7294,7 +7294,7 @@
           ],
           "end": "(?=\"[^\"])",
           "name": "meta.string.quoted.double.cfml source.sql",
-          "begin": "(?=\\s*(?:USE|SELECT|INSERT|UPDATE|DELETE|CREATE|REPLACE|ALTER|WITH|DECLARE|FROM|WHERE|AND|OR|ORDER\\s+BY|GROUP\\s+BY|HAVING|(INNER|CROSS)\\s+JOIN|(LEFT|RIGHT|FULL)(\\s+OUTER)?\\s+JOIN|UNION|INTERSECT|EXCEPT|MINUS|LIMIT)\\b)"
+          "begin": "(?=\\s*(?:USE|SELECT|INSERT|UPDATE|DELETE|CREATE|REPLACE|ALTER|WITH|DECLARE|FROM|WHERE|AND|OR|NOT|EXISTS|ORDER\\s+BY|GROUP\\s+BY|HAVING|(INNER|CROSS)\\s+JOIN|(LEFT|RIGHT|FULL)(\\s+OUTER)?\\s+JOIN|UNION|INTERSECT|EXCEPT|MINUS|LIMIT)\\b)"
         },
         {
           "patterns": [

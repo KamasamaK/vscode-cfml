@@ -1,7 +1,8 @@
 import { Range, TextDocument } from "vscode";
-import { MyMap } from "../utils/collections";
+import { MyMap, MySet } from "../utils/collections";
 
 export const ATTRIBUTES_PATTERN = /\b(\w+)\b(?:(\s*=\s*)(?:(['"])(.*?)\3|([a-z0-9:.]+)))?/gi;
+export const VALUE_PATTERN = /=\s*['"]?$/;
 
 export interface Attribute {
   name: string; // lowercased
@@ -26,7 +27,7 @@ export function getAttributePattern(attributeName: string): RegExp {
  * @param attributeRange A range in which the attributes are found
  * @param validAttributeNames A set of valid names
  */
-export function parseAttributes(document: TextDocument, attributeRange: Range, validAttributeNames = new Set<string>()): Attributes {
+export function parseAttributes(document: TextDocument, attributeRange: Range, validAttributeNames = new MySet<string>()): Attributes {
   let attributeStr: string = document.getText(attributeRange);
   let attributes: Attributes = new Attributes();
   let attributeMatch: RegExpExecArray = null;

@@ -4,7 +4,7 @@ import { equalsIgnoreCase } from "../utils/textUtil";
 import { keywords } from "../entities/keyword";
 import { cgiVariables } from "../entities/cgi";
 import { getAllGlobalFunctions, getAllGlobalTags, getComponent, getGlobalTag } from "./cachedEntities";
-import { GlobalFunction, GlobalTag, GlobalFunctions, GlobalTags, getCfTagAttributePattern } from "../entities/globals";
+import { GlobalFunction, GlobalTag, GlobalFunctions, GlobalTags } from "../entities/globals";
 import { inlineFunctionPattern, UserFunction, UserFunctionSignature, Argument, Access, getLocalVariables } from "../entities/userFunction";
 import { getSyntaxString } from "../entities/function";
 import { constructSignatureLabel, Signature } from "../entities/signature";
@@ -16,9 +16,10 @@ import { usesConstantConvention, parseVariables, Variable } from "../entities/va
 import { scopes, Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern } from "../entities/scope";
 import { Property } from "../entities/property";
 import { snippets, Snippet } from "../cfmlMain";
-import { parseAttributes, Attributes } from "../entities/attribute";
+import { parseAttributes, Attributes, VALUE_PATTERN } from "../entities/attribute";
 import { Parameter } from "../entities/parameter";
-import { MyMap } from "../utils/collections";
+import { MyMap, MySet } from "../utils/collections";
+import { getCfTagPattern } from "../entities/tag";
 
 const findConfig = require("find-config");
 
@@ -58,7 +59,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
     const prefixChr: string = wordRange.start.character !== 0 ? linePrefix.substr(linePrefix.length-1, 1) : "";
     const continuingExpression: boolean = isContinuingExpressionPattern(docPrefix);
 
-    let added = new Set<string>();
+    let added = new MySet<string>();
 
     const createNewProposal = (name: string, kind: CompletionItemKind, entry: IEntry): CompletionItem => {
       const proposal: CompletionItem = new CompletionItem(name, kind);
@@ -81,6 +82,45 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       return matches(currentWord, name);
     };
 
+    // Global tag attributes
+    const ignoredTags: string[] = ["cfset", "cfif", "cfelseif", "cfreturn"];
+    const cfTagAttributePattern: RegExp = getCfTagPattern();
+    const cfTagAttributeMatch: RegExpExecArray = cfTagAttributePattern.exec(docPrefix);
+    if (cfTagAttributeMatch && !VALUE_PATTERN.test(docPrefix)) {
+      const tagAttributePrefix: string = cfTagAttributeMatch[1];
+      const tagName: string = cfTagAttributeMatch[2];
+      const tagAttributes: string = cfTagAttributeMatch[3];
+      const globalTag: GlobalTag = getGlobalTag(tagName);
+      if (!ignoredTags.includes(tagName) && globalTag) {
+        let attributeDocs: MyMap<string, Parameter> = new MyMap<string, Parameter>();
+        globalTag.signatures.forEach((sig: Signature) => {
+          sig.parameters.forEach((param: Parameter) => {
+            attributeDocs.set(param.name.toLowerCase(), param);
+          });
+        });
+        const attributeNames: MySet<string> = new MySet<string>(attributeDocs.keys());
+        const tagAttributeRange = new Range(
+          document.positionAt(cfTagAttributeMatch.index + tagAttributePrefix.length),
+          document.positionAt(cfTagAttributeMatch.index + tagAttributePrefix.length + tagAttributes.length)
+        );
+        const parsedAttributes: Attributes = parseAttributes(document, tagAttributeRange, attributeNames);
+        const usedAttributeNames: MySet<string> = new MySet<string>(parsedAttributes.keys());
+
+        attributeDocs.filter((param: Parameter) => {
+          return !usedAttributeNames.has(param.name.toLowerCase()) && currentWordMatches(param.name);
+        }).forEach((param: Parameter) => {
+          let attributeItem = new CompletionItem(param.name, CompletionItemKind.Property);
+          attributeItem.detail = `${param.required ? "(required) " : ""}${param.name}: ${param.dataType}`;
+          attributeItem.documentation = param.description;
+          attributeItem.insertText = param.name + "=";
+          attributeItem.sortText = `_${param.name}`;
+          result.push(attributeItem);
+        });
+
+        return result;
+      }
+    }
+
     // Snippets
     const shouldProvideSnippetItems = cfmlCompletionSettings.get<boolean>("snippets.enable", true);
     if (shouldProvideSnippetItems && !continuingExpression) {
@@ -91,7 +131,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
           if (currentWordMatches(snippet.prefix)) {
             let componentSnippet = new CompletionItem(snippet.prefix, CompletionItemKind.Snippet);
             componentSnippet.detail = snippet.description;
-            const snippetString: string = typeof snippet.body === "string" ? snippet.body : snippet.body.join("\n");
+            const snippetString: string = Array.isArray(snippet.body) ? snippet.body.join("\n") : snippet.body;
             // componentSnippet.documentation = snippetString;
             componentSnippet.insertText = new SnippetString(snippetString);
             result.push(componentSnippet);
@@ -122,7 +162,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
         comp.functions.forEach((func: UserFunction) => {
           if (func.bodyRange.contains(position) && argPrefixPattern.test(docPrefix)) {
             if (func.signatures && func.signatures.length !== 0) {
-              let argNames = new Set<string>();
+              let argNames = new MySet<string>();
               func.signatures.forEach((signature: UserFunctionSignature) => {
                 signature.parameters.forEach((param: Argument) => {
                   const argName: string = param.name;
@@ -285,40 +325,6 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       }
     }
 
-    // Global tag attributes
-    const cfTagAttributePattern: RegExp = getCfTagAttributePattern();
-    const cfTagAttributeMatch: RegExpExecArray = cfTagAttributePattern.exec(docPrefix);
-    if (cfTagAttributeMatch) {
-      const tagAttributePrefix: string = cfTagAttributeMatch[1];
-      const tagName: string = cfTagAttributeMatch[2];
-      const tagAttributes: string = cfTagAttributeMatch[3];
-      const globalTag: GlobalTag = getGlobalTag(tagName);
-      if (globalTag) {
-        let attributeDocs: MyMap<string, Parameter> = new MyMap<string, Parameter>();
-        globalTag.signatures.forEach((sig: Signature) => {
-          sig.parameters.forEach((param: Parameter) => {
-            attributeDocs.set(param.name.toLowerCase(), param);
-          });
-        });
-        const attributeNames: Set<string> = new Set<string>(attributeDocs.keys());
-        const tagAttributeRange = new Range(
-          document.positionAt(cfTagAttributeMatch.index + tagAttributePrefix.length),
-          document.positionAt(cfTagAttributeMatch.index + tagAttributePrefix.length + tagAttributes.length)
-        );
-        const parsedAttributes: Attributes = parseAttributes(document, tagAttributeRange, attributeNames);
-        const usedAttributeNames: Set<string> = new Set<string>(parsedAttributes.keys());
-
-        attributeDocs.filter((param: Parameter) => {
-          return !usedAttributeNames.has(param.name.toLowerCase()) && currentWordMatches(param.name);
-        }).forEach((param: Parameter) => {
-          let attributeItem = new CompletionItem(param.name, CompletionItemKind.Property);
-          attributeItem.documentation = param.description;
-          attributeItem.insertText = param.name + "=";
-          result.push(attributeItem);
-        });
-      }
-    }
-
     if (/\.\s*$/.test(docPrefix)) {
       // TODO: Add member functions
     }
@@ -350,6 +356,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       if (applicationFile) {
         const componentUri: Uri = Uri.file(applicationFile);
         const comp: Component = getComponent(componentUri);
+        // TODO: Cache this information
         workspace.openTextDocument(componentUri).then((document: TextDocument) => {
           const variables = parseVariables(document, comp.isScript);
           variables.filter((variable: Variable) => {

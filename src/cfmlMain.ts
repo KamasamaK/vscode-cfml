@@ -1,5 +1,5 @@
 import {
-  commands, languages, TextDocument, ConfigurationTarget, ExtensionContext, WorkspaceConfiguration, workspace, Uri, FileSystemWatcher, extensions
+  commands, languages, TextDocument, ConfigurationTarget, ExtensionContext, WorkspaceConfiguration, workspace, Uri, FileSystemWatcher, extensions, IndentAction
 } from "vscode";
 import CFMLHoverProvider from "./features/hoverProvider";
 import CFMLDocumentSymbolProvider from "./features/documentSymbolProvider";
@@ -16,6 +16,7 @@ import { cacheComponent, clearCachedComponent } from "./features/cachedEntities"
 import CFMLDefinitionProvider from "./features/definitionProvider";
 import * as fs from "fs";
 import * as path from "path";
+import DocBlockCompletions from "./features/docBlocker/docCompletionProvider";
 
 export const LANGUAGE_ID = "cfml";
 export let snippets: Snippets;
@@ -62,7 +63,27 @@ export function activate(context: ExtensionContext): void {
     indentationRules: {
       increaseIndentPattern: new RegExp(`<(?!\\?|(?:${nonIndentingTags.join("|")})\\b|[^>]*/>)([-_.A-Za-z0-9]+)(?=\\s|>)\\b[^>]*>(?!.*</\\1>)|<!--(?!.*-->)|\\{[^}\"']*$`, "i"),
       decreaseIndentPattern: new RegExp(`^\\s*(</[-_.A-Za-z0-9]+\\b[^>]*>|-?-->|\\}|<(${decreasingIndentingTags.join("|")})\\b[^>]*>)`, "i")
-    }
+    },
+    onEnterRules: [
+      {
+        // e.g. /** | */
+        beforeText: /^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/,
+        afterText: /^\s*\*\/$/,
+        action: { indentAction: IndentAction.IndentOutdent, appendText: " * " }
+      }, {
+        // e.g. /** ...|
+        beforeText: /^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/,
+        action: { indentAction: IndentAction.None, appendText: " * " }
+      }, {
+        // e.g.  * ...|
+        beforeText: /^(\t|(\ \ ))*\ \*(\ ([^\*]|\*(?!\/))*)?$/,
+        action: { indentAction: IndentAction.None, appendText: "* " }
+      }, {
+        // e.g.  */|
+        beforeText: /^(\t|(\ \ ))*\ \*\/\s*$/,
+        action: { indentAction: IndentAction.None, removeText: 1 }
+      }
+    ]
   });
 
   context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", () => {
@@ -88,6 +109,7 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(languages.registerDocumentLinkProvider(LANGUAGE_ID, new CFMLDocumentLinkProvider()));
   context.subscriptions.push(languages.registerWorkspaceSymbolProvider(new CFMLWorkspaceSymbolProvider()));
   context.subscriptions.push(languages.registerCompletionItemProvider(LANGUAGE_ID, new CFMLCompletionItemProvider(), "."));
+  context.subscriptions.push(languages.registerCompletionItemProvider(LANGUAGE_ID, new DocBlockCompletions(), "*", "@", "."));
   context.subscriptions.push(languages.registerDefinitionProvider(LANGUAGE_ID, new CFMLDefinitionProvider()));
 
   const fileWatcher: FileSystemWatcher = workspace.createFileSystemWatcher(COMPONENT_FILE_GLOB, false, true, false);

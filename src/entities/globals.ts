@@ -4,8 +4,6 @@ import { Parameter } from "./parameter";
 import { Signature } from "./signature";
 import { MyMap } from "../utils/collections";
 
-const cfTagAttributePattern = /<((cf[a-z_]+)\s+)([^<>]*)$/i;
-
 export interface GlobalEntity {
   name: string;
   syntax: string;
@@ -49,11 +47,4 @@ export interface GlobalTags {
  */
 export function getMemberFunctionType(functionName: string): DataType {
   return DataType.Any;
-}
-
-/**
- * Returns a pattern that matches the most recent unclosed cf-tag, capturing the name and attributes
- */
-export function getCfTagAttributePattern(): RegExp {
-  return cfTagAttributePattern;
 }

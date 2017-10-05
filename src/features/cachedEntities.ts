@@ -148,7 +148,7 @@ export function setUserFunction(userFunction: UserFunction): void {
  */
 export function searchAllFunctionNames(query: string): UserFunction[] {
   let functions: UserFunction[] = [];
-  // let usedFunctionNames = new Set<string>();
+  // let usedFunctionNames = new MySet<string>();
   allFunctionNames.getPrefix(query.toLowerCase()).forEach((funcKey: string) => {
     functions = functions.concat(Object.values(allUserFunctionsByName[funcKey]));
     // usedFunctionNames.add(funcKey);

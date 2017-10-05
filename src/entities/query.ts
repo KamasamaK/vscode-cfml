@@ -1,3 +1,5 @@
+import { MySet } from "../utils/collections";
+
 const cfqueryTagPattern: RegExp = /<cfquery\s+([^>]*)>([\s\S]*?)<\/cfquery>/gi;
 // TODO: Get query name
 const queryScriptPattern: RegExp = /((?:setSql|queryExecute)\s*\(|sql\s*=)\s*(['"])([\s\S]*?)\2\s*[),]/gi;
@@ -51,5 +53,5 @@ export const queryResultProperties = {
 export interface Query {
   name: string;
   result?: string;
-  selectColumnNames: Set<string>;
+  selectColumnNames: MySet<string>;
 }

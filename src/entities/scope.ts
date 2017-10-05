@@ -200,7 +200,7 @@ export const scopes = {
  * @param scopes An array of scopes to include
  * @param optionalScope Whether the scope is optional
  */
-export function getValidScopesPrefixPattern(scopes: Scope[], optionalScope = true) {
+export function getValidScopesPrefixPattern(scopes: Scope[], optionalScope: boolean = true) {
   const validScopes: string = scopes.join("|");
   let pattern: string = `(?:^|[^.\\s])\\s*(?:\\b(${validScopes})\\s*\\.\\s*)`;
   if (optionalScope) {

@@ -9,7 +9,7 @@ import { Property, parseProperties, Properties } from "./property";
 import { parseVariables, Variable } from "./variable";
 import { parseDocBlock, DocBlockKeyValue, getKeyPattern } from "./docblock";
 import { parseAttributes, Attributes, Attribute } from "./attribute";
-import { MyMap } from "../utils/collections";
+import { MyMap, MySet } from "../utils/collections";
 
 export const COMPONENT_EXT: string = ".cfc";
 export const COMPONENT_FILE_GLOB: string = "**/*" + COMPONENT_EXT;
@@ -44,7 +44,8 @@ export const objectReferencePatterns: ReferencePattern[] = [
   },
 ];
 // TODO: variableReferencePatterns
-const componentAttributeNames: Set<string> = new Set([
+
+const componentAttributeNames: MySet<string> = new MySet([
   "accessors",
   "alias",
   "autoindex",
@@ -73,7 +74,7 @@ const componentAttributeNames: Set<string> = new Set([
   "wsdlfile",
   "wsVersion"
 ]);
-const booleanAttributes: Set<string> = new Set([
+const booleanAttributes: MySet<string> = new MySet([
   "accessors",
   "autoindex",
   "indexable",

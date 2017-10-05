@@ -1,4 +1,6 @@
-export const operators = new Set<string>([
+import { MySet } from "../utils/collections";
+
+export const operators = new MySet<string>([
   "+",
   "-",
   "*",
