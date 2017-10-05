@@ -6,7 +6,7 @@ An extension for Visual Studio Code to assist in development with CFML.
 
 - [`vscode-coldfusion`](https://github.com/ilich/vscode-coldfusion/) on which the syntax highlighting is based, which was based on the next extension
 - [`sublimetext-cfml`](https://github.com/jcberquist/sublimetext-cfml) as inspiration for some of the features. "Parsing" logic (including regexes) was also used.
-- [`cfdocs`](https://github.com/foundeo/cfdocs/) as the basis for default documentation and sample images in this README
+- [`cfdocs`](https://github.com/foundeo/cfdocs/) as the default documentation and sample images in this README
 - [`vscode-php-docblocker`](https://github.com/neild3r/vscode-php-docblocker) as the basis for docblock completion
 
 ## Features
@@ -35,7 +35,7 @@ Win/Linux: `Ctrl+T`; Mac: `Cmd+T`
 ![Workspace Symbols](./images/cfdocs_workspace-symbols.png)
 
 1. **Completion Suggestions**  
-Suggestions for global functions and tags, tag attributes, internal user functions, keywords, scopes, component properties, and variables.  
+Suggestions for global functions and tags, tag attributes, internal user functions, keywords, scopes, component properties, variables, and docblocks.  
 Win/Linux: `Ctrl+Space`; Mac: `Cmd+Space`
 ![Completion Suggestions](./images/cfdocs_leaderboard_completion.png)
 
@@ -70,7 +70,7 @@ The following are the configurable Settings (Win/Linux: `Ctrl+Comma`; Mac: `Cmd+
 - `cfml.docBlock.extra`: Extra tags you would like to include in every docblock  
   **Example**
     ```json
-    "extra": [
+    "cfml.docBlock.extra": [
         {
             "name": "output",
             "default": "false",
