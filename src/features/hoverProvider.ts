@@ -1,11 +1,11 @@
 // TODO: Replace deprecated MarkedString with MarkdownString
 import {
-  Hover, HoverProvider, Position, Range, TextDocument, TextLine, CancellationToken, MarkedString, ExtensionContext, WorkspaceConfiguration, workspace
+  Hover, HoverProvider, Position, Range, TextDocument, TextLine, CancellationToken, MarkedString, ExtensionContext, WorkspaceConfiguration, workspace, MarkdownString
 } from "vscode";
 
 import * as fs from "fs";
 import * as cachedEntity from "./cachedEntities";
-import { textToMarkedString } from "../utils/markedTextUtil";
+import { textToMarkdownString } from "../utils/textUtil";
 import { GlobalFunction, GlobalTag } from "../entities/globals";
 import { Parameter } from "../entities/parameter";
 import { LANGUAGE_ID } from "../cfmlMain";
@@ -79,11 +79,11 @@ export default class CFMLHoverProvider implements HoverProvider {
     return new Promise<MarkedString[]>((resolve, reject) => {
       let definition: HoverProviderItem;
       if (isGlobalFunction) {
-        definition = this.FunctionToHoverProviderItem(cachedEntity.getGlobalFunction(word.toLowerCase()));
+        definition = this.functionToHoverProviderItem(cachedEntity.getGlobalFunction(word.toLowerCase()));
       } else if (isGlobalTag) {
-        definition = this.GTtoHoverProviderItem(cachedEntity.getGlobalTag(word.toLowerCase()));
+        definition = this.globalTagToHoverProviderItem(cachedEntity.getGlobalTag(word.toLowerCase()));
       } else if (isUserFunction) {
-        definition = this.FunctionToHoverProviderItem(comp.functions.get(word.toLowerCase()));
+        definition = this.functionToHoverProviderItem(comp.functions.get(word.toLowerCase()));
       }
 
       if (!definition) {
@@ -104,7 +104,7 @@ export default class CFMLHoverProvider implements HoverProvider {
    * Creates HoverProviderItem from given global tag
    * @param tag Global tag to convert
    */
-  public GTtoHoverProviderItem(tag: GlobalTag): HoverProviderItem {
+  public globalTagToHoverProviderItem(tag: GlobalTag): HoverProviderItem {
     let paramArr: Parameter[] = [];
     let paramNames = new MySet<string>();
 
@@ -133,7 +133,7 @@ export default class CFMLHoverProvider implements HoverProvider {
    * Creates HoverProviderItem from given function
    * @param func Function to convert
    */
-  public FunctionToHoverProviderItem(func: Function): HoverProviderItem {
+  public functionToHoverProviderItem(func: Function): HoverProviderItem {
     let paramArr: Parameter[] = [];
     let paramNames = new MySet<string>();
     func.signatures.forEach((s: Signature) => {
@@ -202,14 +202,14 @@ export default class CFMLHoverProvider implements HoverProvider {
     hoverTexts.push({ language, value: syntax });
 
     if (definition.description) {
-      hoverTexts.push(textToMarkedString(definition.description));
+      hoverTexts.push(textToMarkdownString(definition.description));
     } else {
-      hoverTexts.push("_No " + symbolType.toLowerCase() + " description_");
+      hoverTexts.push(new MarkdownString("_No " + symbolType.toLowerCase() + " description_"));
     }
 
     const paramList: Parameter[] = definition.params;
     if (paramList.length > 0) {
-      hoverTexts.push("**" + paramKind + " Reference**");
+      hoverTexts.push(new MarkdownString("**" + paramKind + " Reference**"));
     }
 
     paramList.forEach((param: Parameter) => {
@@ -221,14 +221,14 @@ export default class CFMLHoverProvider implements HoverProvider {
 
       if (param.description) {
         // textToMarkedString?
-        hoverTexts.push(param.description);
+        hoverTexts.push(textToMarkdownString(param.description));
       } else {
         hoverTexts.push("_No " + paramKind.toLowerCase() + " description_");
       }
     });
 
     if (definition.externalLink) {
-      hoverTexts.push("Link: " + definition.externalLink);
+      hoverTexts.push(new MarkdownString("Link: " + definition.externalLink));
     }
 
     return hoverTexts;

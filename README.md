@@ -61,7 +61,7 @@ The following are the configurable Settings (Win/Linux: `Ctrl+Comma`; Mac: `Cmd+
 - `cfml.suggest.snippets.enable`: Whether snippets are part of completion help. [*Default*: `true`]
 - `cfml.suggest.snippets.exclude`: Set of snippet keys you would like excluded from suggestions. See [snippets.json](./snippets/snippets.json).
 - `cfml.suggest.globalFunctions.enable`: Whether global functions are part of completion help. [*Default*: `true`]
-- `cfml.indexComponents.enable`: Whether to index all components in workspace. This is done on each startup and takes several seconds. It is currently required for most features regarding components. [*Default*: `true`]
+- `cfml.indexComponents.enable`: Whether to index all components in workspace on startup. This is done on each startup and duration depends on number and complexity of components as well as hardware specifications. Editor may be unresponsive during this period. It is currently required for most features involving components. [*Default*: `true`]
 - `cfml.autoCloseTags.enable`: Whether to enable auto-closing tags for CFML. This uses the third-party extension `auto-close-tag`. Changing this requires a restart. [*Default*: `true`]
 - `cfml.autoCloseTags.configurationTarget`: Auto-configuration target for auto-closing tags. [*Default*: `Global`]
 - `cfml.emmet.enable`: Whether to enable Emmet for CFML. Changing this requires a restart. [*Default*: `false`]

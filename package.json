@@ -2,13 +2,13 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.15.0"
+    "vscode": "^1.17.0"
   },
   "repository": {
     "type": "git",
@@ -202,7 +202,9 @@
               "default": "coldfusion",
               "enum": [
                 "coldfusion",
-                "lucee"
+                "lucee",
+                "railo",
+                "openbd"
               ]
             },
             "version": {
@@ -269,15 +271,16 @@
   },
   "dependencies": {
     "trie-prefix-tree": "1.4.0",
-    "request": "^2.81.0",
-    "find-config": "1.0.0"
+    "request": "^2.83.0",
+    "find-config": "1.0.0",
+    "semver": "^5.4.1"
   },
   "devDependencies": {
-    "typescript": "^2.5.3",
-    "tslint": "^5.7.0",
-    "vscode": "^1.1.5",
-    "mocha": "^3.5.3",
-    "@types/node": "^8.0.31",
-    "@types/mocha": "^2.2.43"
+    "typescript": "^2.6.1",
+    "tslint": "^5.8.0",
+    "vscode": "^1.1.6",
+    "mocha": "^4.0.1",
+    "@types/node": "^8.0.51",
+    "@types/mocha": "^2.2.44"
   }
 }

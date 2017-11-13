@@ -9,6 +9,8 @@ import { Signature, constructSignatureLabel } from "../entities/signature";
 import { Component } from "../entities/component";
 import { getComponent } from "./cachedEntities";
 import { Parameter } from "../entities/parameter";
+import { textToMarkdownString } from "../utils/textUtil";
+import { UserFunction } from "../entities/userFunction";
 
 const NEW_LINE = "\n".charCodeAt(0);
 const LEFT_BRACKET = "[".charCodeAt(0);
@@ -113,7 +115,11 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
     if (!entry) {
       const comp: Component = getComponent(document.uri);
       if (comp && comp.functions.has(ident.toLowerCase())) {
-        entry = comp.functions.get(ident.toLowerCase());
+        const userFun: UserFunction = comp.functions.get(ident.toLowerCase());
+        // Ensure this does not trigger on function definition
+        if (!userFun.location.range.contains(position) || userFun.bodyRange.contains(position)) {
+          entry = userFun;
+        }
       }
     }
 
@@ -125,10 +131,10 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
 
     entry.signatures.forEach((signature: Signature) => {
       const sigLabel: string = constructSignatureLabel(signature);
-      const sigDesc: string = signature.description && signature.description.length > 0 ? signature.description : entry.description;
-      let signatureInfo = new SignatureInformation(`${entry.name}( ${sigLabel} )`, sigDesc);
+      const sigDesc: string = signature.description  ? signature.description : entry.description;
+      let signatureInfo = new SignatureInformation(`${entry.name}( ${sigLabel} )`, textToMarkdownString(sigDesc));
       signatureInfo.parameters = signature.parameters.map((param: Parameter) => {
-        return new ParameterInformation(param.dataType + " " + param.name, param.description);
+        return new ParameterInformation(param.dataType + " " + param.name, textToMarkdownString(param.description));
       });
       ret.signatures.push(signatureInfo);
     });

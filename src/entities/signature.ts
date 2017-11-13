@@ -12,6 +12,7 @@ export interface Signature  {
 export function constructSignatureLabel(signature: Signature): string {
   let sigString = "";
   let startOptional = false;
+  // TODO: Account for non-sequential optional parameters
   signature.parameters.forEach((param: Parameter, i: number) => {
     if (!param.required && !startOptional) {
       startOptional = true;

@@ -7,12 +7,43 @@ import { Parameter } from "../../entities/parameter";
 import { DataType } from "../../entities/dataType";
 import { multiSigGlobalFunctions } from "./multiSignatures";
 import { equalsIgnoreCase } from "../textUtil";
+import { MyMap } from "../collections";
+import { CFMLEngineVendor } from "./cfmlEngine";
+
+export interface Param {
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+  default?: string;
+  values?: string[];
+}
+
+export interface EngineCompatibilityDetail {
+  minimum_version?: string;
+  deprecated?: string;
+  removed?: string;
+  notes?: string;
+  docs?: string;
+}
+
+export interface EngineInfo {
+  [vendor: string]: EngineCompatibilityDetail;
+}
+
+export interface Example {
+  title: string;
+  description: string;
+  code: string;
+  result: string;
+  runnable?: boolean;
+}
 
 /**
  * Resolves a string value of data type to an enumeration member
  * @param type The data type string to resolve
  */
-function getDataType(type: string): DataType {
+function getParamDataType(type: string): DataType {
   switch (type) {
     case "any":
       return DataType.Any;
@@ -24,13 +55,53 @@ function getDataType(type: string): DataType {
       return DataType.Boolean;
     case "component":
       return DataType.Component;
-    case "date": case "datetime":
+    case "date":
       return DataType.Date;
-    case "function": case "closure":
+    case "function":
       return DataType.Function;
     case "guid":
       return DataType.GUID;
-    case "numeric": case "number":
+    case "numeric":
+      return DataType.Numeric;
+    case "query":
+      return DataType.Query;
+    case "string":
+      return DataType.String;
+    case "struct":
+      return DataType.Struct;
+    case "uuid":
+      return DataType.UUID;
+    case "variablename":
+      return DataType.VariableName;
+    case "xml":
+      return DataType.XML;
+    default:
+      // console.log("Unknown param type: " + type);
+      return DataType.Any;
+  }
+}
+
+/**
+ * Resolves a string value of data type to an enumeration member
+ * @param type The data type string to resolve
+ */
+function getReturnDataType(type: string): DataType {
+  switch (type) {
+    case "any":
+      return DataType.Any;
+    case "array":
+      return DataType.Array;
+    case "binary":
+      return DataType.Binary;
+    case "boolean":
+      return DataType.Boolean;
+    case "date":
+      return DataType.Date;
+    case "function":
+      return DataType.Function;
+    case "guid":
+      return DataType.GUID;
+    case "numeric":
       return DataType.Numeric;
     case "query":
       return DataType.Query;
@@ -47,8 +118,7 @@ function getDataType(type: string): DataType {
     case "xml":
       return DataType.XML;
     default:
-      // console.log("Unknown type: " + type);
-      return DataType.Any;
+      return DataType.Any; // DataType.Void?
   }
 }
 
@@ -66,12 +136,13 @@ export class CFDocsDefinitionInfo {
   public description?: string;
   public discouraged?: string;
   public params?: Param[];
+  public engines?: EngineInfo;
   public links?: string[];
   public examples?: Example[];
 
   constructor(
     name: string, type: string, syntax: string, member: string, script: string, returns: string, related: string[],
-    description: string, discouraged: string, params: Param[], links: string[], examples: Example[]
+    description: string, discouraged: string, params: Param[], engines: EngineInfo, links: string[], examples: Example[]
   ) {
     this.name = name;
     this.type = type;
@@ -83,6 +154,7 @@ export class CFDocsDefinitionInfo {
     this.description = description;
     this.discouraged = discouraged;
     this.params = params;
+    this.engines = engines;
     this.links = links;
     this.examples = examples;
   }
@@ -117,7 +189,7 @@ export class CFDocsDefinitionInfo {
             if (param.name === multiSigParamParsed) {
               let parameter: Parameter = {
                 name: multiSigParam,
-                dataType: getDataType(param.type.toLowerCase()),
+                dataType: getParamDataType(param.type.toLowerCase()),
                 required: param.required,
                 description: param.description,
                 default: param.default,
@@ -147,7 +219,7 @@ export class CFDocsDefinitionInfo {
       let parameters: Parameter[] = this.params.map((param: Param) => {
         return {
           name: param.name,
-          dataType: getDataType(param.type.toLowerCase()),
+          dataType: getParamDataType(param.type.toLowerCase()),
           required: param.required,
           description: param.description,
           default: param.default,
@@ -164,7 +236,7 @@ export class CFDocsDefinitionInfo {
       name: this.name,
       syntax: this.syntax,
       description: (this.description ? this.description : ""),
-      returntype: this.returns ? getDataType(this.returns.toLowerCase()) : DataType.Void,
+      returntype: getReturnDataType(this.returns.toLowerCase()),
       signatures: signatures
     };
   }
@@ -178,7 +250,7 @@ export class CFDocsDefinitionInfo {
     let parameters: Parameter[] = this.params.map((param: Param) => {
       return {
         name: param.name,
-        dataType: getDataType(param.type.toLowerCase()),
+        dataType: getParamDataType(param.type.toLowerCase()),
         required: param.required,
         description: param.description,
         default: param.default,
@@ -249,21 +321,4 @@ export class CFDocsDefinitionInfo {
   public static async isIdentifier(name: string): Promise<boolean> {
     return (CFDocsDefinitionInfo.isFunctionName(name) || CFDocsDefinitionInfo.isTagName(name));
   }
-}
-
-export interface Param {
-  name: string;
-  type: string;
-  required: boolean;
-  description?: string;
-  default?: string;
-  values?: string[];
-}
-
-export interface Example {
-  title: string;
-  description: string;
-  code: string;
-  result: string;
-  runnable?: boolean;
 }

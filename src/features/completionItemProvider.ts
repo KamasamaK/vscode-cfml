@@ -1,8 +1,9 @@
 import { CompletionItemProvider, CompletionItem, CompletionItemKind, CancellationToken, TextDocument, Position, Range,
-  workspace, WorkspaceConfiguration, Uri, SnippetString } from "vscode";
-import { equalsIgnoreCase } from "../utils/textUtil";
+  workspace, WorkspaceConfiguration, Uri, SnippetString, CompletionContext } from "vscode";
+import { equalsIgnoreCase, textToMarkdownString } from "../utils/textUtil";
 import { keywords } from "../entities/keyword";
 import { cgiVariables } from "../entities/cgi";
+import { cfcatchVariables } from "../entities/cfcatch";
 import { getAllGlobalFunctions, getAllGlobalTags, getComponent, getGlobalTag } from "./cachedEntities";
 import { GlobalFunction, GlobalTag, GlobalFunctions, GlobalTags } from "../entities/globals";
 import { inlineFunctionPattern, UserFunction, UserFunctionSignature, Argument, Access, getLocalVariables } from "../entities/userFunction";
@@ -36,7 +37,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
    * @param position The position at which the command was invoked.
    * @param token A cancellation token.
    */
-  public async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): Promise<CompletionItem[]> {
+  public async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): Promise<CompletionItem[]> {
     let result: CompletionItem[] = [];
 
     const cfmlCompletionSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.suggest");
@@ -65,7 +66,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       const proposal: CompletionItem = new CompletionItem(name, kind);
       if (entry) {
         if (entry.description) {
-          proposal.documentation = entry.description;
+          proposal.documentation = textToMarkdownString(entry.description);
         }
         if (entry.detail) {
           proposal.detail = entry.detail;
@@ -202,8 +203,10 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       const variableScopePrefixMatch: RegExpExecArray = variableScopePrefixPattern.exec(docPrefix);
       if (variableScopePrefixMatch) {
         parseVariables(document, false).filter((variable: Variable) => {
-          return currentWordMatches(variable.identifier);
-        }).filter((variable: Variable) => {
+          if (!currentWordMatches(variable.identifier)) {
+            return false;
+          }
+
           if (variableScopePrefixMatch[1]) {
             const currentScope = Scope.valueOf(variableScopePrefixMatch[1]);
             return [currentScope, Scope.Unknown].includes(variable.scope);
@@ -212,7 +215,11 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
           return true;
         }).forEach((variable: Variable) => {
           const kind: CompletionItemKind = usesConstantConvention(variable.identifier) ? CompletionItemKind.Constant : CompletionItemKind.Variable;
-          result.push(createNewProposal(variable.identifier, kind, { detail: `(${variable.scope}) ${variable.identifier}`, description: variable.description }));
+          let varType: string = variable.dataType;
+          if (variable.dataTypeComponentUri) {
+            varType = path.basename(variable.dataTypeComponentUri.fsPath, COMPONENT_EXT);
+          }
+          result.push(createNewProposal(variable.identifier, kind, { detail: `(${variable.scope}) ${variable.identifier}: ${varType}`, description: variable.description }));
         });
       }
     } else if (docIsCfcFile) {
@@ -373,6 +380,15 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       for (let name in cgiVariables) {
         if (currentWordMatches(name)) {
           result.push(createNewProposal(name, CompletionItemKind.Property, cgiVariables[name]));
+        }
+      }
+    }
+
+    // cfcatch variables
+    if (/\bcfcatch\s*(?:\.\s*|\[\s*['"])$/.test(docPrefix)) {
+      for (let name in cfcatchVariables) {
+        if (currentWordMatches(name)) {
+          result.push(createNewProposal(name, CompletionItemKind.Property, cfcatchVariables[name]));
         }
       }
     }

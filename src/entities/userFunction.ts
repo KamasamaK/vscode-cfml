@@ -47,6 +47,8 @@ const accessArr: string[] = ["public", "private", "package", "remote"];
 
 export const inlineFunctionPattern = /([a-zA-Z_$][$\w.\[\]'"]*)\s*=\s*function\s*\(|function\s+([a-zA-Z_$][$\w]*)\s*\(/gi;
 
+// TODO: Add pattern for arrow function
+
 export enum Access {
   Public = "public",
   Private = "private",

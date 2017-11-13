@@ -2240,7 +2240,7 @@
           "match": "##"
         },
         {
-          "contentName": "source.cfml.script",
+          "contentName": "meta.embedded.line.cfml source.cfml.script",
           "endCaptures": {
             "0": {
               "name": "constant.character.hash.cfml.end"
@@ -4949,7 +4949,7 @@
           "match": "##"
         },
         {
-          "contentName": "source.cfml.script",
+          "contentName": "meta.embedded.line.cfml source.cfml.script",
           "endCaptures": {
             "0": {
               "name": "constant.character.hash.cfml.end"
@@ -6135,7 +6135,7 @@
           "match": "##"
         },
         {
-          "contentName": "source.cfml.script",
+          "contentName": "meta.embedded.line.cfml source.cfml.script",
           "endCaptures": {
             "0": {
               "name": "constant.character.hash.cfml.end"

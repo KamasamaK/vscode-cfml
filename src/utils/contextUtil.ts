@@ -95,6 +95,8 @@ export function getCfScriptRanges(document: TextDocument, range?: Range): Range[
 
 // TODO: getJavaScriptRanges
 
+// TODO: getCfOutputRanges
+
 /**
  * Returns whether the given position is within a CFScript block
  * @param document The document to check
@@ -103,11 +105,10 @@ export function getCfScriptRanges(document: TextDocument, range?: Range): Range[
 export function isInCfScript(document: TextDocument, position: Position): boolean {
   let inCFScript = false;
   const cfScriptRanges = getCfScriptRanges(document);
-  const containedRanges = cfScriptRanges.filter((range: Range) => {
+
+  return cfScriptRanges.some((range: Range) => {
     return range.contains(position);
   });
-
-  return containedRanges.length > 0;
 }
 
 /**

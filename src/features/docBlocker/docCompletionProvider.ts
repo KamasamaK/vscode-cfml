@@ -156,11 +156,9 @@ export default class DocBlockCompletions implements CompletionItemProvider {
     }
 
     if (suggestions) {
-      let potential: MyMap<string, string> = suggestions.filter((suggestDesc: string, suggestionName: string) => {
+      suggestions.filter((suggestDesc: string, suggestionName: string) => {
         return suggestionName.match(search) !== null;
-      });
-
-      potential.forEach((suggestDesc: string, suggestionName: string) => {
+      }).forEach((suggestDesc: string, suggestionName: string) => {
         let item = new CompletionItem(suggestionName, CompletionItemKind.Property);
         item.documentation = suggestDesc;
         result.push(item);

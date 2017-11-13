@@ -43,7 +43,7 @@
 		],
 		"space-before-function-paren": [
 			true,
-			"never"
+			{"anonymous": "always", "named": "never"}
 		],
 		"triple-equals": true
 	}

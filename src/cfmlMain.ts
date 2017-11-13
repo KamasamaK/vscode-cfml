@@ -10,7 +10,7 @@ import CFMLCompletionItemProvider from "./features/completionItemProvider";
 import { CFDocsService } from "./utils/cfdocs/cfDocsService";
 import { CommentType, toggleComment } from "./features/comment";
 import * as cachedEntity from "./features/cachedEntities";
-import { nonIndentingTags, decreasingIndentingTags, nonClosingTags } from "./utils/nonClosingTags";
+import { nonIndentingTags, decreasingIndentingTags, nonClosingTags } from "./entities/tag";
 import { COMPONENT_FILE_GLOB, parseComponent } from "./entities/component";
 import { cacheComponent, clearCachedComponent } from "./features/cachedEntities";
 import CFMLDefinitionProvider from "./features/definitionProvider";

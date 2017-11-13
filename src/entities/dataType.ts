@@ -66,11 +66,59 @@ export namespace DataType {
   }
 
   /**
+   * Resolves a string value of param type to an enumeration member
+   * @param paramType The param type string to resolve
+   */
+  export function paramTypeToDataType(paramType: string): DataType {
+    switch (paramType.toLowerCase()) {
+      case "any":
+        return DataType.Any;
+      case "array":
+        return DataType.Array;
+      case "binary":
+        return DataType.Binary;
+      case "boolean":
+        return DataType.Boolean;
+      /*
+      case "component":
+        return DataType.Component;
+      */
+      case "date": case "eurodate": case "usdate":
+        return DataType.Date;
+      case "function":
+        return DataType.Function;
+      case "guid":
+        return DataType.GUID;
+      case "numeric": case "float": case "integer": case "range":
+        return DataType.Numeric;
+      case "query":
+        return DataType.Query;
+      case "string": case "creditcard": case "email": case "regex": case "regular_expression":
+      case "ssn": case "social_security_number": case "telephone": case "url": case "zipcode":
+        return DataType.String;
+      case "struct":
+        return DataType.Struct;
+      case "uuid":
+        return DataType.UUID;
+      case "variablename":
+        return DataType.VariableName;
+      case "xml":
+        return DataType.XML;
+      default:
+        return DataType.Any;
+    }
+  }
+
+  /**
    * Validates whether a string is numeric
    * @param numStr A string to check
    */
   export function isNumeric(numStr: string): boolean {
-    return (!isNaN(parseFloat(numStr)) && isFinite(parseFloat(numStr)));
+    let numStrTest = numStr;
+    if (/^(["'])[0-9.]+\1$/.test(numStrTest)) {
+      numStrTest = numStrTest.slice(1, -1);
+    }
+    return (!isNaN(parseFloat(numStrTest)) && isFinite(parseFloat(numStrTest)));
   }
 
   /**
@@ -119,6 +167,10 @@ export namespace DataType {
    * @param value
    */
   export function inferDataTypeFromValue(value: string): DataType {
+    if (value.length === 0) {
+      return DataType.String;
+    }
+
     if (/^(['"])?(false|true|no|yes)\1$/i.test(value)) {
       return DataType.Boolean;
     }
@@ -127,12 +179,24 @@ export namespace DataType {
       return DataType.Numeric;
     }
 
-    if (/^["'](?!#)/.test(value)) {
+    if (/^(["'])(?!#)/.test(value)) {
       return DataType.String;
     }
 
-    if (/^(arrayNew\(|\[)/.test(value)) {
+    if (/^(?:["']\s*#\s*)?(arrayNew\(|\[)/i.test(value)) {
       return DataType.Array;
+    }
+
+    if (/^(?:["']\s*#\s*)?query(?:New|Execute)?\(/i.test(value)) {
+      return DataType.Query;
+    }
+
+    if (/^(?:["']\s*#\s*)?(structNew\(|\{)/i.test(value)) {
+      return DataType.Struct;
+    }
+
+    if (/^(?:["']\s*#\s*)?(createDate(Time)?\()/i.test(value)) {
+      return DataType.Date;
     }
 
     return DataType.Any;
