@@ -1,12 +1,12 @@
-import { TextDocument, Uri, Location, Range } from "vscode";
+import { TextDocument, Uri, Range } from "vscode";
 import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
-import { parseAttributes, Attribute } from "./attribute";
+import { parseAttributes, Attribute, Attributes } from "./attribute";
 import { getComponentNameFromDotPath } from "./component";
 import { MyMap, MySet } from "../utils/collections";
 
 const propertyPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:<cf)?property\b)([^;>]*)/gi;
-const attributePattern = /\b(\w+)\b(?:\s*=\s*(?:(['"])(.*?)\2|([a-z0-9:.]+)))?/gi;
+// const attributePattern: RegExp = /\b(\w+)\b(?:\s*=\s*(?:(['"])(.*?)\2|([a-z0-9:.]+)))?/gi;
 
 const propertyAttributeNames: MySet<string> = new MySet([
   "name",
@@ -48,10 +48,10 @@ export function parseProperties(document: TextDocument): Properties {
   const componentText: string = document.getText();
   let propertyMatch: RegExpExecArray = null;
   while (propertyMatch = propertyPattern.exec(componentText)) {
-    const propertyAttributePrefix = propertyMatch[1];
-    const propertyFullDoc = propertyMatch[2];
-    const propertyDocContent = propertyMatch[3];
-    const propertyAttrs = propertyMatch[4];
+    const propertyAttributePrefix: string = propertyMatch[1];
+    const propertyFullDoc: string = propertyMatch[2];
+    const propertyDocContent: string = propertyMatch[3];
+    const propertyAttrs: string = propertyMatch[4];
     let property: Property = {
       name: "",
       dataType: DataType.Any,
@@ -75,9 +75,9 @@ export function parseProperties(document: TextDocument): Properties {
       );
 
       propertyDocBlockParsed.forEach((docElem: DocBlockKeyValue) => {
-        const activeKey = docElem.key;
+        const activeKey: string = docElem.key;
         if (activeKey === "type") {
-          const checkDataType = DataType.getDataTypeAndUri(docElem.value, document.uri);
+          const checkDataType: [DataType, Uri] = DataType.getDataTypeAndUri(docElem.value, document.uri);
           if (checkDataType) {
             property.dataType = checkDataType[0];
             if (checkDataType[1]) {
@@ -97,12 +97,12 @@ export function parseProperties(document: TextDocument): Properties {
     }
 
     if (/=/.test(propertyAttrs)) {
-      const propertyAttributesOffset = propertyMatch.index + propertyAttributePrefix.length;
+      const propertyAttributesOffset: number = propertyMatch.index + propertyAttributePrefix.length;
       const propertyAttributeRange = new Range(
         document.positionAt(propertyAttributesOffset),
         document.positionAt(propertyAttributesOffset + propertyAttrs.length)
       );
-      const parsedPropertyAttributes = parseAttributes(document, propertyAttributeRange, propertyAttributeNames);
+      const parsedPropertyAttributes: Attributes = parseAttributes(document, propertyAttributeRange, propertyAttributeNames);
       if (!parsedPropertyAttributes.has("name")) {
         continue;
       }
@@ -112,7 +112,7 @@ export function parseProperties(document: TextDocument): Properties {
           property.name = attr.value;
           property.nameRange = attr.valueRange;
         } else if (attrKey === "type") {
-          const checkDataType = DataType.getDataTypeAndUri(attr.value, document.uri);
+          const checkDataType: [DataType, Uri] = DataType.getDataTypeAndUri(attr.value, document.uri);
           if (checkDataType) {
             property.dataType = checkDataType[0];
             if (checkDataType[1]) {
@@ -130,13 +130,13 @@ export function parseProperties(document: TextDocument): Properties {
         }
       });
     } else {
-      const parsedPropertyAttributes = /\s*(\S+)\s+([\w$]+)\s*$/.exec(propertyAttrs);
+      const parsedPropertyAttributes: RegExpExecArray = /\s*(\S+)\s+([\w$]+)\s*$/.exec(propertyAttrs);
       if (!parsedPropertyAttributes) {
         continue;
       }
 
       const dataTypeString: string = parsedPropertyAttributes[1];
-      const checkDataType = DataType.getDataTypeAndUri(dataTypeString, document.uri);
+      const checkDataType: [DataType, Uri] = DataType.getDataTypeAndUri(dataTypeString, document.uri);
       if (checkDataType) {
         property.dataType = checkDataType[0];
         if (checkDataType[1]) {
@@ -145,7 +145,7 @@ export function parseProperties(document: TextDocument): Properties {
       }
       property.name = parsedPropertyAttributes[2];
 
-      const removedName = propertyMatch[0].slice(0, -property.name.length);
+      const removedName: string = propertyMatch[0].slice(0, -property.name.length);
       const nameAttributeOffset: number = removedName.lastIndexOf(property.name);
       property.nameRange = new Range(
         document.positionAt(nameAttributeOffset),

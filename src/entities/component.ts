@@ -1,13 +1,13 @@
-import { Uri, TextDocument, workspace, Position, Range, Location } from "vscode";
+import { Uri, TextDocument, workspace, Position, Range, Location, WorkspaceFolder } from "vscode";
 import { UserFunction, ComponentFunctions, parseScriptFunctions, parseTagFunctions, UserFunctionSignature } from "./userFunction";
 import { Function } from "./function";
 import { DataType } from "./dataType";
 import * as path from "path";
 import * as fs from "fs";
 import * as cachedEntities from "../features/cachedEntities";
-import { Property, parseProperties, Properties } from "./property";
-import { parseVariables, Variable } from "./variable";
-import { parseDocBlock, DocBlockKeyValue, getKeyPattern } from "./docblock";
+import { parseProperties, Properties } from "./property";
+import { parseVariableAssignments, Variable } from "./variable";
+import { parseDocBlock, DocBlockKeyValue } from "./docblock";
 import { parseAttributes, Attributes, Attribute } from "./attribute";
 import { MyMap, MySet } from "../utils/collections";
 
@@ -24,12 +24,12 @@ export interface ReferencePattern {
 export const objectReferencePatterns: ReferencePattern[] = [
   // new object
   {
-    pattern: /new\s+(['"])?([^(\1]+?)\1\(/gi,
+    pattern: /new\s+(['"])?([^('"]+?)\1\(/gi,
     refIndex: 2
   },
   // createObject
   {
-    pattern: /createObject\s*\(\s*(['"])component\1\s*,\s*(['"])([^\2]+?)\2/gi,
+    pattern: /createObject\s*\(\s*(['"])component\1\s*,\s*(['"])([^'"]+?)\2/gi,
     refIndex: 3
   },
   // cfobject or cfinvoke
@@ -200,7 +200,7 @@ export function parseComponent(document: TextDocument): Component {
           document.positionAt(componentMatch.index + 3 + componentDoc.length)
         )
       );
-      const docBlockAttributes = processDocBlock(parsedDocBlock, document);
+      const docBlockAttributes: ComponentAttributes = processDocBlock(parsedDocBlock);
       Object.assign(componentAttributes, docBlockAttributes);
 
       parsedDocBlock.filter((docAttribute: DocBlockKeyValue) => {
@@ -215,7 +215,7 @@ export function parseComponent(document: TextDocument): Component {
     }
 
     if (componentAttr) {
-      const componentAttributePrefixOffset = componentMatch.index + attributePrefix.length;
+      const componentAttributePrefixOffset: number = componentMatch.index + attributePrefix.length;
       const componentAttributeRange = new Range(
         document.positionAt(componentAttributePrefixOffset),
         document.positionAt(componentAttributePrefixOffset + componentAttr.length)
@@ -223,7 +223,7 @@ export function parseComponent(document: TextDocument): Component {
 
       const parsedAttributes: Attributes = parseAttributes(document, componentAttributeRange, componentAttributeNames);
 
-      const tagAttributes = processAttributes(parsedAttributes);
+      const tagAttributes: ComponentAttributes = processAttributes(parsedAttributes);
       Object.assign(componentAttributes, tagAttributes);
 
       if (parsedAttributes.has("extends")) {
@@ -242,7 +242,7 @@ export function parseComponent(document: TextDocument): Component {
           component.extends = componentPathToUri(componentAttributes.extends, document.uri);
         } else if (propName === "implements") {
           componentAttributes.implements.split(",").forEach((element: string) => {
-            const implementsUri = componentPathToUri(element.trim(), document.uri);
+            const implementsUri: Uri = componentPathToUri(element.trim(), document.uri);
             if (implementsUri) {
               if (!component.implements) {
                 component.implements = [];
@@ -261,7 +261,7 @@ export function parseComponent(document: TextDocument): Component {
     let componentFunctions = new ComponentFunctions();
     let userFunctions: UserFunction[] = parseScriptFunctions(document);
     userFunctions = userFunctions.concat(parseTagFunctions(document));
-    let earliestFunctionRangeStart = document.positionAt(documentText.length);
+    let earliestFunctionRangeStart: Position = document.positionAt(documentText.length);
     userFunctions.forEach((compFun: UserFunction) => {
       if (compFun.location.range.start.isBefore(earliestFunctionRangeStart)) {
         earliestFunctionRangeStart = compFun.location.range.start;
@@ -274,7 +274,7 @@ export function parseComponent(document: TextDocument): Component {
     // TODO: ImplicitFunctions
 
     const componentDefinitionRange = new Range(document.positionAt(head.length), earliestFunctionRangeStart);
-    component.variables = parseVariables(document, componentIsScript, componentDefinitionRange);
+    component.variables = parseVariableAssignments(document, componentIsScript, componentDefinitionRange);
 
     return component;
   }
@@ -286,7 +286,7 @@ export function parseComponent(document: TextDocument): Component {
  * Parses a documentation block for a component and returns an object conforming to the ComponentAttributes interface
  * @param docBlock The documentation block to be processed
  */
-function processDocBlock(docBlock: DocBlockKeyValue[], document: TextDocument): ComponentAttributes {
+function processDocBlock(docBlock: DocBlockKeyValue[]): ComponentAttributes {
   let docBlockObj: ComponentAttributes = {};
   docBlock.forEach((docElem: DocBlockKeyValue) => {
     const activeKey = docElem.key;
@@ -324,23 +324,23 @@ function processAttributes(attributes: Attributes): ComponentAttributes {
  * @param baseUri The URI from which the component path will be resolved
  */
 export function componentPathToUri(dotPath: string, baseUri: Uri): Uri {
-  const cachedResult = cachedEntities.componentPathToUri(dotPath, baseUri);
+  const cachedResult: Uri = cachedEntities.componentPathToUri(dotPath, baseUri);
   if (cachedResult) {
     return cachedResult;
   }
 
-  const normalizedPath = dotPath.replace(/\./g, path.sep) + COMPONENT_EXT;
+  const normalizedPath: string = dotPath.replace(/\./g, path.sep) + COMPONENT_EXT;
 
   // relative to local directory
-  const baseDir = path.dirname(baseUri.fsPath);
-  const localPath = path.join(baseDir, normalizedPath);
+  const baseDir: string = path.dirname(baseUri.fsPath);
+  const localPath: string = path.join(baseDir, normalizedPath);
   if (fs.existsSync(localPath)) {
     return Uri.file(localPath);
   }
 
   // relative to web root
-  const root = workspace.getWorkspaceFolder(baseUri);
-  const rootPath = path.join(root.uri.fsPath, normalizedPath);
+  const root: WorkspaceFolder = workspace.getWorkspaceFolder(baseUri);
+  const rootPath: string = path.join(root.uri.fsPath, normalizedPath);
   if (fs.existsSync(rootPath)) {
     return Uri.file(rootPath);
   }

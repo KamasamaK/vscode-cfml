@@ -1,4 +1,4 @@
-import { Range, Position, TextEditor, workspace, SnippetString, TextDocument } from "vscode";
+import { Range, Position, TextDocument } from "vscode";
 import { Doc } from "./doc";
 import { Component } from "../../entities/component";
 import { getComponent } from "../cachedEntities";

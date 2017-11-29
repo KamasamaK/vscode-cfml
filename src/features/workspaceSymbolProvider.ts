@@ -1,4 +1,4 @@
-import { workspace, window, Uri, WorkspaceSymbolProvider, SymbolInformation, SymbolKind, Range, Location, CancellationToken, Position, TextEditor, TextDocument } from "vscode";
+import { workspace, window, Uri, WorkspaceSymbolProvider, SymbolInformation, SymbolKind, Location, CancellationToken, Position, TextEditor, TextDocument } from "vscode";
 import * as cachedEntity from "./cachedEntities";
 import { UserFunction } from "../entities/userFunction";
 import { COMPONENT_EXT, Component } from "../entities/component";

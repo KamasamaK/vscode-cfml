@@ -1,65 +1,77 @@
 import { DataType } from "../../entities/dataType";
-import { MyMap } from "../collections";
 
 const semver = require("semver");
 
-export enum CFMLEngineVendor {
-  ColdFusion = "ColdFusion",
-  Lucee = "Lucee",
-  Railo = "Railo",
-  OpenBD = "OpenBD",
-  Unknown = "Unknown"
+export enum CFMLEngineName {
+  ColdFusion = "coldfusion",
+  Lucee = "lucee",
+  Railo = "railo",
+  OpenBD = "openbd",
+  Unknown = "unknown"
 }
 
-export namespace CFMLEngineVendor {
+export namespace CFMLEngineName {
   /**
-   * Resolves a string value of vendor to an enumeration member
-   * @param vendor The vendor string to resolve
+   * Resolves a string value of name to an enumeration member
+   * @param name The name string to resolve
    */
-  export function valueOf(vendor: string): CFMLEngineVendor {
-    switch (vendor.toLowerCase()) {
+  export function valueOf(name: string): CFMLEngineName {
+    switch (name.toLowerCase()) {
       case "coldfusion":
-        return CFMLEngineVendor.ColdFusion;
+        return CFMLEngineName.ColdFusion;
       case "lucee":
-        return CFMLEngineVendor.Lucee;
+        return CFMLEngineName.Lucee;
       case "railo":
-        return CFMLEngineVendor.Railo;
+        return CFMLEngineName.Railo;
       case "openbd":
-        return CFMLEngineVendor.OpenBD;
+        return CFMLEngineName.OpenBD;
       default:
-        return CFMLEngineVendor.Unknown;
+        return CFMLEngineName.Unknown;
     }
   }
 }
 
 export class CFMLEngine {
-  private static readonly defaultVendor: CFMLEngineVendor = CFMLEngineVendor.ColdFusion;
-  private vendor: CFMLEngineVendor;
+  private name: CFMLEngineName;
   private version: string;
 
-  constructor(vendor: CFMLEngineVendor, version: string) {
-    if (vendor === CFMLEngineVendor.Unknown) {
-      this.vendor = CFMLEngine.defaultVendor;
-    } else {
-      this.vendor = vendor;
-      if (semver.valid(version)) {
-        this.version = version;
-      } else if (DataType.isNumeric(version)) {
-        this.version = CFMLEngine.toSemVer(version);
-      }
+  constructor(name: CFMLEngineName, version: string|undefined) {
+    this.name = name;
+    if (semver.valid(version)) {
+      this.version = version;
+    } else if (DataType.isNumeric(version)) {
+      this.version = CFMLEngine.toSemVer(version);
     }
   }
 
   /**
-   * Check if `other` is equal to this engine.
+   * Getter for CFML engine name
+   */
+  public getName(): CFMLEngineName {
+    return this.name;
+  }
+
+  /**
+   * Getter for CFML engine version
+   */
+  public getVersion(): string {
+    return this.version;
+  }
+
+  /**
+   * Check if this engine is equal to `other`.
    * @param other A CFML engine.
    */
   public equals(other: CFMLEngine): boolean {
-    if (this.vendor === other.vendor) {
-      if (this.version === undefined || other.version === undefined) {
+    if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown) {
+      return false;
+    }
+
+    if (this.name === other.name) {
+      if (!this.version && !other.version) {
         return true;
-      } else if (this.vendor === CFMLEngineVendor.ColdFusion) {
-        return parseFloat(this.version) === parseFloat(other.version);
+      } else if (!this.version || !other.version) {
+        return false;
       } else {
         return semver.eq(this.version, other.version);
       }
@@ -69,46 +81,74 @@ export class CFMLEngine {
   }
 
   /**
-   * Check if `other` is older than this engine version. Returns undefined if they have different vendor.
+   * Check if this engine is older than `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
   public isOlder(other: CFMLEngine): boolean|undefined {
-    return (this.vendor === other.vendor && parseFloat(this.version) < parseFloat(other.version));
+    if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
+      return undefined;
+    }
+    return semver.lt(this.version, other.version);
   }
 
   /**
-   * Check if `other` is older than or equals this engine version. Returns undefined if they have different vendor.
+   * Check if this engine is older than or equals `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
   public isOlderOrEquals(other: CFMLEngine): boolean|undefined {
-    return (this.vendor === other.vendor && parseFloat(this.version) <= parseFloat(other.version));
+    if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
+      return undefined;
+    }
+    return semver.lte(this.version, other.version);
   }
 
   /**
-   * Check if `other` is newer than this engine version. Returns undefined if they have different vendor.
+   * Check if this engine is newer than `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
   public isNewer(other: CFMLEngine): boolean|undefined {
-    return (this.vendor === other.vendor && parseFloat(this.version) > parseFloat(other.version));
+    if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
+      return undefined;
+    }
+    return semver.gt(this.version, other.version);
   }
 
   /**
-   * Check if `other` is newer than or equals this engine version. Returns undefined if they have different vendor.
+   * Check if this engine is newer than or equals `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
   public isNewerOrEquals(other: CFMLEngine): boolean|undefined {
-    return (this.vendor === other.vendor && parseFloat(this.version) >= parseFloat(other.version));
+    if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
+      return undefined;
+    }
+    return semver.gte(this.version, other.version);
   }
 
   /**
-   * Check if `other` is newer than or equals this engine version. Returns undefined if they have different vendor.
+   * Returns whether this engine supports tags in script format
+   */
+  public supportsScriptTags(): boolean {
+    return (
+      this.name === CFMLEngineName.Unknown
+      || (this.name === CFMLEngineName.ColdFusion && semver.gte(this.version, "11.0.0"))
+      || this.name === CFMLEngineName.Lucee
+      || (this.name === CFMLEngineName.Railo && semver.gte(this.version, "4.2.0"))
+    );
+  }
+
+  /**
+   * Check if `other` is newer than or equals this engine version. Returns undefined if they have different name.
    * @param version A version string.
    */
   public static toSemVer(version: string): string|undefined {
     if (semver.clean(version)) {
       return semver.clean(version);
     } else if (DataType.isNumeric(version)) {
-
+      const splitVer: string[] = version.split(".");
+      while (splitVer.length < 3) {
+        splitVer.push("0");
+      }
+      return splitVer.join(".");
     } else {
       return undefined;
     }

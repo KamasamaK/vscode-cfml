@@ -2,6 +2,17 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.2.0] - 2017-11-29
+
+- Added global definition filtering based on engine
+- Improved type inference
+- Changed signature format
+- Argument type now indicates component name
+- Improved syntax highlighting for properties
+- Now able to ignore CFML comments
+- Added variables assigned from tag attributes
+- Added option to tsconfig
+
 ## [0.1.4] - 2017-11-13
 
 - Added `cfcatch` help

@@ -1,9 +1,8 @@
 import { DocumentSymbolProvider, SymbolInformation, SymbolKind, TextDocument, Range, Location, CancellationToken, Position } from "vscode";
-import * as path from "path";
 import * as cachedEntity from "./cachedEntities";
-import { Component, ComponentsByUri, COMPONENT_EXT, parseComponent } from "../entities/component";
-import { isCfcFile, isCfmFile, getCfScriptRanges } from "../utils/contextUtil";
-import { Variable, usesConstantConvention, parseVariables } from "../entities/variable";
+import { Component, parseComponent } from "../entities/component";
+import { isCfcFile, isCfmFile } from "../utils/contextUtil";
+import { Variable, usesConstantConvention, parseVariableAssignments } from "../entities/variable";
 import { getLocalVariables, UserFunction } from "../entities/userFunction";
 import { Property } from "../entities/property";
 
@@ -15,17 +14,15 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
    */
   public async provideDocumentSymbols(document: TextDocument, token: CancellationToken): Promise<SymbolInformation[]> {
     let documentSymbols: SymbolInformation[] = [];
-    const filePath: string = document.fileName;
-    if (!filePath) {
+
+    if (!document.fileName) {
       return documentSymbols;
     }
 
     if (isCfcFile(document)) {
-      const componentSymbols: SymbolInformation[] = CFMLDocumentSymbolProvider.getComponentSymbols(document);
-      documentSymbols = documentSymbols.concat(componentSymbols);
+      documentSymbols = documentSymbols.concat(CFMLDocumentSymbolProvider.getComponentSymbols(document));
     } else if (isCfmFile(document)) {
-      const templateSymbols: SymbolInformation[] = CFMLDocumentSymbolProvider.getTemplateSymbols(document);
-      documentSymbols = documentSymbols.concat(templateSymbols);
+      documentSymbols = documentSymbols.concat(CFMLDocumentSymbolProvider.getTemplateSymbols(document));
     }
 
     return documentSymbols;
@@ -49,6 +46,7 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
       new Location(document.uri, new Range(new Position(0, 0), document.positionAt(document.getText().length)))
     ));
 
+    // Component properties
     component.properties.forEach((property: Property, propertyKey: string) => {
       componentSymbols.push(new SymbolInformation(
         property.name,
@@ -58,16 +56,17 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
       ));
     });
 
+    // Component variables
     component.variables.forEach((variable: Variable) => {
-      const kind: SymbolKind = usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable;
       componentSymbols.push(new SymbolInformation(
         variable.identifier,
-        kind,
+        usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable,
         component.name,
         variable.declarationLocation
       ));
     });
 
+    // Component functions
     component.functions.forEach((userFunction: UserFunction, functionKey: string) => {
       componentSymbols.push(new SymbolInformation(
         userFunction.name,
@@ -76,11 +75,12 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
         userFunction.location
       ));
 
+      // Component function local variables
       const localVariables: Variable[] = getLocalVariables(userFunction, document, component.isScript);
       localVariables.forEach((variable: Variable) => {
         componentSymbols.push(new SymbolInformation(
           variable.identifier,
-          SymbolKind.Variable,
+          usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable,
           userFunction.name,
           variable.declarationLocation
         ));
@@ -96,7 +96,8 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
    */
   private static getTemplateSymbols(document: TextDocument): SymbolInformation[] {
     let templateSymbols: SymbolInformation[] = [];
-    const allVariables: Variable[] = parseVariables(document, false);
+    // TODO: Cache template variables
+    const allVariables: Variable[] = parseVariableAssignments(document, false);
     allVariables.forEach((variable: Variable) => {
       const kind: SymbolKind = usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable;
       templateSymbols.push(new SymbolInformation(

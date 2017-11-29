@@ -2,15 +2,15 @@ import {
   SignatureHelpProvider, SignatureHelp, SignatureInformation, ParameterInformation, CancellationToken,
   TextDocument, Position, Range, WorkspaceConfiguration, workspace
 } from "vscode";
-import * as fs from "fs";
 import * as cachedEntity from "./cachedEntities";
 import { Function } from "../entities/function";
 import { Signature, constructSignatureLabel } from "../entities/signature";
 import { Component } from "../entities/component";
 import { getComponent } from "./cachedEntities";
-import { Parameter } from "../entities/parameter";
+import { Parameter, constructParameterLabel } from "../entities/parameter";
 import { textToMarkdownString } from "../utils/textUtil";
 import { UserFunction } from "../entities/userFunction";
+import { isInComment } from "../utils/contextUtil";
 
 const NEW_LINE = "\n".charCodeAt(0);
 const LEFT_BRACKET = "[".charCodeAt(0);
@@ -24,8 +24,8 @@ const SINGLE_QUOTE = "'".charCodeAt(0);
 const DOUBLE_QUOTE = '"'.charCodeAt(0);
 const BOF = 0;
 
-const identRegex = /[$A-Za-z_][$\w]*/;
-const identPartRegex = /[$\w]/;
+const identPattern = /[$A-Za-z_][$\w]*/;
+const identPartPattern = /[$\w]/;
 
 class BackwardIterator {
   private model: TextDocument;
@@ -95,6 +95,14 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
       return null;
     }
 
+    const comp: Component = getComponent(document.uri);
+    // let isUserFunction = false;
+
+    const isScript: boolean = (comp && comp.isScript) ? true : false;
+    if (isInComment(document, position, isScript)) {
+      return null;
+    }
+
     let iterator = new BackwardIterator(document, position.character - 1, position.line);
 
     let functionArgs: string[] = this.readArguments(iterator);
@@ -113,11 +121,12 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
 
     // Check if component function
     if (!entry) {
-      const comp: Component = getComponent(document.uri);
+      // Check current component
       if (comp && comp.functions.has(ident.toLowerCase())) {
         const userFun: UserFunction = comp.functions.get(ident.toLowerCase());
         // Ensure this does not trigger on function definition
         if (!userFun.location.range.contains(position) || userFun.bodyRange.contains(position)) {
+          // isUserFunction = true;
           entry = userFun;
         }
       }
@@ -132,9 +141,9 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
     entry.signatures.forEach((signature: Signature) => {
       const sigLabel: string = constructSignatureLabel(signature);
       const sigDesc: string = signature.description  ? signature.description : entry.description;
-      let signatureInfo = new SignatureInformation(`${entry.name}( ${sigLabel} )`, textToMarkdownString(sigDesc));
+      let signatureInfo = new SignatureInformation(`${entry.name}(${sigLabel})`, textToMarkdownString(sigDesc));
       signatureInfo.parameters = signature.parameters.map((param: Parameter) => {
-        return new ParameterInformation(param.dataType + " " + param.name, textToMarkdownString(param.description));
+        return new ParameterInformation(constructParameterLabel(param), textToMarkdownString(param.description));
       });
       ret.signatures.push(signatureInfo);
     });
@@ -209,7 +218,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
    * @param char Character to test
    */
   private isIdentPart(char: string): boolean {
-    return identPartRegex.test(char);
+    return identPartPattern.test(char);
   }
 
   /**
@@ -245,7 +254,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
       const document: TextDocument = iterator.getDocument();
       const currentWordRange: Range = document.getWordRangeAtPosition(iterator.getPosition());
       const currentWord: string = document.getText(currentWordRange);
-      if (identRegex.test(currentWord) && this.getPrefixChar(document, currentWordRange.start) !== ".") {
+      if (identPattern.test(currentWord) && this.getPrefixChar(document, currentWordRange.start) !== ".") {
         ident = currentWord;
       }
     }

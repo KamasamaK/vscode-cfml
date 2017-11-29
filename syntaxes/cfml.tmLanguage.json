@@ -5657,7 +5657,7 @@
         {
           "endCaptures": {
             "4": {
-              "name": "meta.property.cfml"
+              "name": "meta.property.cfml variable.other.property.cfml"
             },
             "1": {
               "name": "meta.function.body.cfml punctuation.definition.block.end.cfml"
@@ -5666,7 +5666,7 @@
               "name": "punctuation.terminator.statement.cfml"
             },
             "3": {
-              "name": "meta.property.constant.cfml"
+              "name": "meta.property.constant.cfml variable.other.property.cfml"
             }
           },
           "beginCaptures": {

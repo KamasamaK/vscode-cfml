@@ -49,12 +49,12 @@ _Peek Definition:_ Win/Linux: `Alt+F12` (`Ctrl`+hover provides a smaller, altern
 
 The following are the configurable Settings (Win/Linux: `Ctrl+Comma`; Mac: `Cmd+Comma`) that this extension contributes to VS Code:
 
-- `cfml.globalDefinitions.source`: The source of the global definitions. Currently only supports CFDocs. [*Default*: `cfdocs`].
-- `cfml.cfDocs.localPath`: [*Optional*] Absolute path to the data directory of CFDocs.
+- `cfml.globalDefinitions.source`: The source of the global definitions. Currently only supports CFDocs. [*Default*: `cfdocs`]
 - `cfml.cfDocs.source`: Indicates which source will be used for CFDocs.  
 **Values**
   - `remote`: Retrieve resources remotely from GitHub. [*Default*]
   - `local`: Retrieve resources locally using `cfml.cfDocs.localPath`.
+- `cfml.cfDocs.localPath`: [*Optional*] Absolute path to the data directory of CFDocs.
 - `cfml.hover.enable`: Whether hover is enabled. [*Default*: `true`]
 - `cfml.signature.enable`: Whether signature help is enabled. [*Default*: `true`]
 - `cfml.suggest.enable`: Whether completion help is enabled. [*Default*: `true`]
@@ -81,6 +81,8 @@ The following are the configurable Settings (Win/Linux: `Ctrl+Comma`; Mac: `Cmd+
         }
     ]
     ```
+- `cfml.engine.name`: Name of the CFML engine against which to filter.
+- `cfml.engine.version`: Version of the CFML engine against which to filter. SemVer format is preferred.
 
 ## Commands
 
@@ -95,28 +97,25 @@ Used in Command Palette (Win/Linux: `Ctrl+Shift+P`; Mac: `Cmd+Shift+P`). Can als
 
 1. As currently implemented, there is no embedded language support. Unfortunately, VS Code does not currently seem to have this native capability. This means that you will not get robust HTML/CSS/JS assistance within CFML files. You will still get syntax highlighting and you can use user snippets and Emmet to supplement somewhat.
 1. An extension of the issue above is that as implemented there is only one language defined for CFML. This can cause a number of issues where functionality or settings are based on language ID. For example, with Emmet enabled, you will get the Emmet functionality throughout the CFML files and contexts.
-1. Removing, moving, or renaming folders does not update the workspace definitions or symbols and will cause discrepancies with those resources. For now, you can use the command to refresh workspace definitions at any time.
+1. Removing, moving, or renaming folders does not update the workspace definitions or symbols and will cause discrepancies with those resources. To rectify this, you may use the command to refresh workspace definitions at any time.
 1. Completion suggestions are not always properly contextual.
-1. The "parsing" is done with regular expressions without considering context in most cases, which means you will get non-CFML being parsed as CFML. This also means that strings and comments will often be parsed as if they were part of code.
+1. The "parsing" is mostly done with regular expressions without considering context in most cases, which can result in occasional issues. One way this manifests is that you may get non-CFML being parsed as CFML. This can also result in strings and comments being parsed as if they were part of code. To simplify the expressions, semicolons are expected as terminators in CFScript even though they are optional in some engines.
 
 ## Future Plans
 
 Feel free to open issues for these or any other features you would find helpful so we can discuss.
 
-- Filter global functions and tags based on engine setting
 - Signature help for external component functions
 - Hover documentation for external component functions
 - Provide additional completion suggestions
-  - Enumerated values
   - Script-based tag functions
-  - Script-based tag attribute names
   - External component functions
   - Component paths
   - Global member functions
+  - Enumerated values
 - Definitions for more contexts
 - Type Definitions
 - References
-- Add additional formats to supported global definitions source (e.g. CFBuilder)
 - Custom mapping
 - Use proper parser ([CFParser](https://github.com/cfparser/cfparser))
 - Utilize a CFML language server

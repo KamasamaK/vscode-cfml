@@ -1,7 +1,6 @@
 import { DocumentLinkProvider, TextDocument, CancellationToken, DocumentLink, Range, Uri, workspace, Position, WorkspaceFolder } from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import { DataType } from "../entities/dataType";
 
 export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
 
@@ -18,8 +17,6 @@ export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
     },
   ];
 
-  constructor() { }
-
   /**
    * Provide links for the given document.
    * @param document The document in which the command was invoked.
@@ -27,13 +24,13 @@ export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
    */
   public async provideDocumentLinks(document: TextDocument, token: CancellationToken): Promise<DocumentLink[]> {
     const results: DocumentLink[] = [];
-    const text = document.getText();
+    const documentText: string = document.getText();
 
     let match: RegExpExecArray | null;
 
     this.linkPatterns.forEach((element: LinkPattern) => {
       const pattern: RegExp = element.pattern;
-      while ((match = pattern.exec(text))) {
+      while ((match = pattern.exec(documentText))) {
         const link: string = match[element.linkIndex];
         const preLen: number = match[0].indexOf(link);
         const offset: number = (match.index || 0) + preLen;
@@ -64,7 +61,7 @@ export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
    * @param link The link text to resolve
    */
   private resolveLink(document: TextDocument, link: string): Uri {
-    const uri = Uri.parse(link);
+    const uri: Uri = Uri.parse(link);
     if (uri.scheme) {
       return uri;
     }

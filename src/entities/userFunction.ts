@@ -3,22 +3,22 @@ import { Location, Uri, TextDocument, Position, Range } from "vscode";
 import { Function } from "./function";
 import { Parameter } from "./parameter";
 import { Signature } from "./signature";
-import { componentPathToUri, getComponentNameFromDotPath, Component } from "./component";
-import { Variable, parseVariables } from "./variable";
-import { getCfScriptRanges } from "../utils/contextUtil";
+import { getComponentNameFromDotPath, Component } from "./component";
+import { Variable, parseVariableAssignments } from "./variable";
 import { Scope } from "./scope";
 import { DocBlockKeyValue, parseDocBlock, getKeyPattern } from "./docblock";
-import { ATTRIBUTES_PATTERN, Attributes, Attribute, parseAttributes } from "./attribute";
+import { Attributes, Attribute, parseAttributes } from "./attribute";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
 import { getComponent } from "../features/cachedEntities";
+import { getTagPattern } from "./tag";
 
 // TODO: For scriptFunctionPattern, add another capture group that separates arguments from function attributes
 const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*(\((?:=\s*\{|[^{])*)[\{;]/gi;
 // TODO: For scriptFunctionArgsPattern, prevent comma or close paren within string from delimiting arguments
 const scriptFunctionArgsPattern: RegExp = /((?:^\(|,)\s*(?:(required)\s+)?(?:\b([\w.]+)\b\s+)?(\b[\w$]+\b)(?:\s*=\s*(\{[^\}]*\}|\[[^\]]*\]|\([^\)]*\)|(?:[^,\)](?!\b\w+\s*=))+))?)([^,\)]*)?/gi;
-const tagFunctionPattern: RegExp = /((<cffunction\s+)([^>]*)>)([\s\S]*?)<\/cffunction>/gi;
-const tagFunctionArgPattern: RegExp = /(<cfargument\s+)([^>]*)>/gi;
+const tagFunctionPattern: RegExp = getTagPattern("cffunction");
+const tagFunctionArgPattern: RegExp = getTagPattern("cfargument");
 
 const userFunctionAttributeNames: MySet<string> = new MySet([
   "name",
@@ -92,12 +92,14 @@ interface ArgumentAttributes {
   restargsource?: string;
   restargname?: string;
 }
+/*
 const argumentAttributesToInterfaceMapping = {
   type: "dataType",
   default: "default",
   hint: "description",
   required: "required"
 };
+*/
 const argumentAttributeNames: MySet<string> = new MySet([
   "name",
   "type",
@@ -108,10 +110,11 @@ const argumentAttributeNames: MySet<string> = new MySet([
   "restargsource",
   "restargname"
 ]);
+/*
 const argumentBooleanAttributes: MySet<string> = new MySet([
   "required"
 ]);
-
+*/
 export interface UserFunctionSignature extends Signature {
   parameters: Argument[];
 }
@@ -489,10 +492,10 @@ export function parseTagFunctions(document: TextDocument): UserFunction[] {
   let tagFunctionMatch: RegExpExecArray = null;
 
   while (tagFunctionMatch = tagFunctionPattern.exec(componentText)) {
-    const head = tagFunctionMatch[1];
-    const attributePrefix = tagFunctionMatch[2];
-    const attributes = tagFunctionMatch[3];
-    const body = tagFunctionMatch[4];
+    const attributePrefix: string = tagFunctionMatch[1];
+    const attributes: string = tagFunctionMatch[2];
+    const body: string = tagFunctionMatch[3];
+    const headLength: number = attributePrefix.length + 1;
 
     const functionEndPosition: Position = document.positionAt(tagFunctionMatch.index + tagFunctionMatch[0].length);
     const functionRange: Range = new Range(
@@ -501,8 +504,8 @@ export function parseTagFunctions(document: TextDocument): UserFunction[] {
     );
 
     const functionBodyRange: Range = new Range(
-      document.positionAt(tagFunctionMatch.index + head.length),
-      document.positionAt(tagFunctionMatch.index + head.length + body.length)
+      document.positionAt(tagFunctionMatch.index + headLength),
+      document.positionAt(tagFunctionMatch.index + headLength + body.length)
     );
 
     let userFunction: UserFunction = {
@@ -516,7 +519,7 @@ export function parseTagFunctions(document: TextDocument): UserFunction[] {
       signatures: [],
       nameRange: new Range(
         document.positionAt(tagFunctionMatch.index),
-        document.positionAt(tagFunctionMatch.index + head.length)
+        document.positionAt(tagFunctionMatch.index + headLength)
       ),
       bodyRange: functionBodyRange,
       location: new Location(document.uri, functionRange)
@@ -704,9 +707,7 @@ function processArgumentAttributes(attributes: Attributes): ArgumentAttributes {
  * @param isScript Whether this function is defined entirely in CFScript
  */
 export function getLocalVariables(func: UserFunction, document: TextDocument, isScript: boolean): Variable[] {
-  let allVariables: Variable[] = [];
-
-  allVariables = parseVariables(document, isScript, func.bodyRange);
+  const allVariables: Variable[] = parseVariableAssignments(document, isScript, func.bodyRange);
 
   return allVariables.filter((variable: Variable) => {
     return (variable.scope === Scope.Local);

@@ -1,17 +1,14 @@
 import { Uri, workspace, TextDocument, WorkspaceFolder, WorkspaceConfiguration, ConfigurationTarget, extensions } from "vscode";
-import { DataType } from "../entities/dataType";
-import { GlobalFunctions, GlobalTags, MemberFunctionsByType, GlobalFunction, GlobalTag, MemberFunction } from "../entities/globals";
+import { GlobalFunctions, GlobalTags, GlobalFunction, GlobalTag } from "../entities/globals";
 import { UserFunction, UserFunctionsByName, ComponentFunctions, UserFunctionByUri } from "../entities/userFunction";
 import { Component, ComponentsByUri, ComponentsByName, COMPONENT_EXT, COMPONENT_FILE_GLOB, parseComponent } from "../entities/component";
 import * as path from "path";
-import * as fs from "fs";
-import { MyMap } from "../utils/collections";
 
 const trie = require("trie-prefix-tree");
 
 let allGlobalFunctions: GlobalFunctions = {};
 let allGlobalTags: GlobalTags = {};
-let allMemberFunctions: MemberFunctionsByType = new MyMap<DataType, Set<MemberFunction>>();
+// let allMemberFunctions: MemberFunctionsByType = new MyMap<DataType, Set<MemberFunction>>();
 
 let allComponentsByUri: ComponentsByUri = {};
 let allComponentsByName: ComponentsByName = {};

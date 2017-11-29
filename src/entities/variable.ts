@@ -1,18 +1,19 @@
 import { DataType } from "./dataType";
 import { Scope } from "./scope";
-import { Location, TextDocument, Range, Uri } from "vscode";
-import { getCfScriptRanges, isCfcFile } from "../utils/contextUtil";
+import { Location, TextDocument, Range, Uri, Position } from "vscode";
+import { getCfScriptRanges, isCfcFile, getCommentRanges } from "../utils/contextUtil";
 import { Component } from "./component";
 import { UserFunction, UserFunctionSignature, Argument } from "./userFunction";
 import { getComponent } from "../features/cachedEntities";
-import { equalsIgnoreCase } from "../utils/textUtil";
+import { equalsIgnoreCase, replaceRangeWithSpaces } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
 import { parseAttributes, Attributes } from "./attribute";
+import { getTagPattern, outputVariableTags, TagOutputAttribute } from "./tag";
 
-// Mistakenly matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
-const cfscriptVariableAssignmentPattern = /((?:^|[;{}]|\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=[^=]/gi;
-const tagVariableAssignmentPattern = /(<cfset\s+(var\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=[^=]/gi;
-const tagParamPattern = /(<cfparam\s+)([^>]*)>/gi;
+// Erroneously matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
+const cfscriptVariableAssignmentPattern = /((?:^|[;{}]|\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=\s*([^=][^;]*)/gi;
+const tagVariableAssignmentPattern = /(<cfset\s+(var\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=\s*([^=][^>]*)/gi;
+const tagParamPattern =  getTagPattern("cfparam");
 const scriptParamPattern = /\b(cfparam\s*\(\s*|param\s+)([^;]*);/gi;
 // Does not match when a function is part of the expression
 const variableExpression = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*/i;
@@ -32,16 +33,15 @@ export function usesConstantConvention(ident: string): boolean {
  * @param isScript Whether this document or range is defined entirely in CFScript
  * @param docRange Range within which to check
  */
-export function parseVariables(document: TextDocument, isScript: boolean, docRange?: Range): Variable[] {
+export function parseVariableAssignments(document: TextDocument, isScript: boolean, docRange?: Range): Variable[] {
   let variables: Variable[] = [];
-  let documentText: string;
-  let textOffset: number;
+  const documentUri: Uri = document.uri;
+  let textOffset: number = 0;
+  let documentText: string = replaceRangeWithSpaces(document, getCommentRanges(document, isScript));
+
   if (docRange && document.validateRange(docRange)) {
-    documentText = document.getText(docRange);
     textOffset = document.offsetAt(docRange.start);
-  } else {
-    documentText = document.getText();
-    textOffset = 0;
+    documentText = documentText.substring(textOffset, document.offsetAt(docRange.end));
   }
 
   // Add function arguments
@@ -75,15 +75,15 @@ export function parseVariables(document: TextDocument, isScript: boolean, docRan
   }
 
   // params
-  let paramMatch: RegExpExecArray = null;
+  let outputVariableMatch: RegExpExecArray = null;
   const paramPattern: RegExp = isScript ? scriptParamPattern : tagParamPattern;
-  while (paramMatch = paramPattern.exec(documentText)) {
-    const paramPrefix: string = paramMatch[1];
-    const paramAttr: string = paramMatch[2];
+  while (outputVariableMatch = paramPattern.exec(documentText)) {
+    const paramPrefix: string = outputVariableMatch[1];
+    const paramAttr: string = outputVariableMatch[2];
 
     const paramAttributeRange = new Range(
-      document.positionAt(textOffset + paramMatch.index + paramPrefix.length),
-      document.positionAt(textOffset + paramMatch.index + paramPrefix.length + paramAttr.length)
+      document.positionAt(textOffset + outputVariableMatch.index + paramPrefix.length),
+      document.positionAt(textOffset + outputVariableMatch.index + paramPrefix.length + paramAttr.length)
     );
 
     const parsedAttr: Attributes = parseAttributes(document, paramAttributeRange);
@@ -92,10 +92,13 @@ export function parseVariables(document: TextDocument, isScript: boolean, docRan
     }
 
     let paramType: DataType = DataType.Any;
+    let paramTypeComponentUri: Uri = undefined;
     if (parsedAttr.has("type")) {
       paramType = DataType.paramTypeToDataType(parsedAttr.get("type").value);
     } else if (parsedAttr.has("default")) {
-      paramType = DataType.inferDataTypeFromValue(parsedAttr.get("default").value);
+      const inferredType: [DataType, Uri] = DataType.inferDataTypeFromValue(parsedAttr.get("default").value, documentUri);
+      paramType = inferredType[0];
+      paramTypeComponentUri = inferredType[1];
     }
 
     const paramName = parsedAttr.get("name").value;
@@ -134,6 +137,7 @@ export function parseVariables(document: TextDocument, isScript: boolean, docRan
     variables.push({
       identifier: varName,
       dataType: paramType,
+      dataTypeComponentUri: paramTypeComponentUri,
       scope: scopeVal,
       declarationLocation: new Location(
         document.uri,
@@ -150,6 +154,7 @@ export function parseVariables(document: TextDocument, isScript: boolean, docRan
     const varScope: string = variableMatch[2];
     const scope: string = variableMatch[3];
     const varName: string = variableMatch[5];
+    const initValue: string = variableMatch[7];
 
     // TODO: Does not account for arguments being overridden. Does not account for variables created in attributes.
     let scopeVal: Scope = Scope.Unknown;
@@ -180,10 +185,11 @@ export function parseVariables(document: TextDocument, isScript: boolean, docRan
     if (scopeVal === Scope.Unknown) {
       scopeVal = Scope.Variables;
     }
-
+    const inferredType: [DataType, Uri] = DataType.inferDataTypeFromValue(initValue, documentUri);
     variables.push({
       identifier: varName,
-      dataType: DataType.Any,
+      dataType: inferredType[0],
+      dataTypeComponentUri: inferredType[1],
       scope: scopeVal,
       declarationLocation: new Location(
         document.uri,
@@ -193,13 +199,83 @@ export function parseVariables(document: TextDocument, isScript: boolean, docRan
   }
 
   if (!isScript) {
+    // Tags with output attributes
+    for (let tagName in outputVariableTags) {
+      const tagOutputAttributes: TagOutputAttribute[] = outputVariableTags[tagName];
+      let outputVariableMatch: RegExpExecArray = null;
+      const outputVariablePattern: RegExp = getTagPattern(tagName);
+      while (outputVariableMatch = outputVariablePattern.exec(documentText)) {
+        const outputTagPrefix: string = outputVariableMatch[1];
+        const outputTagAttr: string = outputVariableMatch[2];
+
+        const outputTagAttributeRange = new Range(
+          document.positionAt(textOffset + outputVariableMatch.index + outputTagPrefix.length),
+          document.positionAt(textOffset + outputVariableMatch.index + outputTagPrefix.length + outputTagAttr.length)
+        );
+
+        const parsedAttr: Attributes = parseAttributes(document, outputTagAttributeRange);
+
+        tagOutputAttributes.filter((tagOutputAttribute: TagOutputAttribute) => {
+          return parsedAttr.has(tagOutputAttribute.attributeName);
+        }).forEach((tagOutputAttribute: TagOutputAttribute) => {
+          const attributeName: string = tagOutputAttribute.attributeName;
+          const attributeVal: string = parsedAttr.get(attributeName).value;
+          const varExpressionMatch: RegExpExecArray = variableExpression.exec(attributeVal);
+          if (!varExpressionMatch) {
+            return;
+          }
+          const varNamePrefix: string = varExpressionMatch[1];
+          const varNamePrefixLen: number = varNamePrefix ? varNamePrefix.length : 0;
+          const scope: string = varExpressionMatch[2];
+          const varName: string = varExpressionMatch[4];
+
+          let scopeVal: Scope = Scope.Unknown;
+          if (scope) {
+            scopeVal = Scope.valueOf(scope);
+          }
+
+          const varRangeStart: Position = parsedAttr.get(attributeName).valueRange.start.translate(0, varNamePrefixLen);
+          const varRange = new Range(
+            varRangeStart,
+            varRangeStart.translate(0, varName.length)
+          );
+
+          const matchingVars: Variable[] = getMatchingVariables(variables, varName, scopeVal);
+          if (matchingVars.length > 0) {
+            if (matchingVars.length > 1 || matchingVars[0].declarationLocation.range.start.isBefore(varRange.start)) {
+              return;
+            } else {
+              // Remove entry
+              variables = variables.filter((variable: Variable) => {
+                return variable !== matchingVars[0];
+              });
+            }
+          }
+
+          if (scopeVal === Scope.Unknown) {
+            scopeVal = Scope.Variables;
+          }
+
+          variables.push({
+            identifier: varName,
+            dataType: tagOutputAttribute.dataType,
+            scope: scopeVal,
+            declarationLocation: new Location(
+              document.uri,
+              varRange
+            )
+          });
+        });
+      }
+    }
+
     // Check cfscript sections
     const cfScriptRanges: Range[] = getCfScriptRanges(document, docRange);
     cfScriptRanges.forEach((range: Range) => {
-      const cfscriptVars = parseVariables(document, true, range);
+      const cfscriptVars: Variable[] = parseVariableAssignments(document, true, range);
 
       cfscriptVars.forEach((scriptVar: Variable) => {
-        const matchingVars = getMatchingVariables(variables, scriptVar.identifier, scriptVar.scope);
+        const matchingVars: Variable[] = getMatchingVariables(variables, scriptVar.identifier, scriptVar.scope);
         if (matchingVars.length === 0) {
           variables.push(scriptVar);
         } else if (matchingVars.length === 1 && scriptVar.declarationLocation.range.start.isBefore(matchingVars[0].declarationLocation.range.start)) {

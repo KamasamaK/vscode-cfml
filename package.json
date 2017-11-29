@@ -2,13 +2,13 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.17.0"
+    "vscode": "^1.18.0"
   },
   "repository": {
     "type": "git",
@@ -190,39 +190,20 @@
           },
           "description": "Extra tags you wish to include in every DocBlock"
         },
-        "cfml.engine": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": "Engine name.",
-              "default": "coldfusion",
-              "enum": [
-                "coldfusion",
-                "lucee",
-                "railo",
-                "openbd"
-              ]
-            },
-            "version": {
-              "type": "string",
-              "description": "Engine version.",
-              "default": "2016",
-              "enum": [
-                "9",
-                "10",
-                "11",
-                "2016",
-                "4.5",
-                "5"
-              ]
-            }
-          },
-          "description": "CFML engine to validate against. Currently ignored.",
-          "default": null
+        "cfml.engine.name": {
+          "type": "string",
+          "description": "Name of the CFML engine against which to filter.",
+          "enum": [
+            "coldfusion",
+            "lucee",
+            "railo",
+            "openbd"
+          ]
+        },
+        "cfml.engine.version": {
+          "type": "string",
+          "pattern": "^((0|[1-9]\\d*)(\\.(0|[1-9]\\d*)(\\.(0|[1-9]\\d*))?)?)?$",
+          "description": "Version of the CFML engine against which to filter. SemVer format is preferred."
         }
       }
     },
@@ -276,11 +257,11 @@
     "semver": "^5.4.1"
   },
   "devDependencies": {
-    "typescript": "^2.6.1",
+    "typescript": "^2.6.2",
     "tslint": "^5.8.0",
-    "vscode": "^1.1.6",
+    "vscode": "^1.1.8",
     "mocha": "^4.0.1",
-    "@types/node": "^8.0.51",
+    "@types/node": "^8.0.53",
     "@types/mocha": "^2.2.44"
   }
 }

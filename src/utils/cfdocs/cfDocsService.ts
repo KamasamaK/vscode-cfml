@@ -1,12 +1,9 @@
 import { CFDocsDefinitionInfo } from "./definitionInfo";
 import * as path from "path";
 import * as fs from "fs";
-import { WorkspaceConfiguration, workspace, Uri } from "vscode";
-import { GlobalFunction, GlobalFunctions, GlobalTag, GlobalTags } from "../../entities/globals";
-import { Parameter } from "../../entities/parameter";
-import { Signature } from "../../entities/signature";
-import { DataType } from "../../entities/dataType";
+import { WorkspaceConfiguration, workspace } from "vscode";
 import * as cachedEntity from "../../features/cachedEntities";
+import { CFMLEngineName, CFMLEngine } from "./cfmlEngine";
 
 const request = require("request");
 
@@ -42,7 +39,7 @@ export class CFDocsService {
 
     return new Promise<CFDocsDefinitionInfo>((resolve, reject) => {
       try {
-        const docFilePath = path.join(cfdocsPath, CFDocsService.getJsonFileName(identifier));
+        const docFilePath: string = path.join(cfdocsPath, CFDocsService.getJsonFileName(identifier));
         fs.readFile(docFilePath, "utf8", (err, data) => {
           if (err) {
             reject(err);
@@ -190,7 +187,10 @@ export class CFDocsService {
    * @param definition The definition object to cache
    */
   public static setGlobalFunction(definition: CFDocsDefinitionInfo): boolean {
-    if (definition.type === "function") {
+    const cfmlEngineSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.engine");
+    const userEngineName: CFMLEngineName = CFMLEngineName.valueOf(cfmlEngineSettings.get<string>("name"));
+    const userEngine: CFMLEngine = new CFMLEngine(userEngineName, cfmlEngineSettings.get<string>("version"));
+    if (definition.type === "function" && definition.isCompatible(userEngine)) {
       cachedEntity.setGlobalFunction(definition.toGlobalFunction());
       // TODO: Add member function also
       return true;
@@ -203,9 +203,11 @@ export class CFDocsService {
    * @param definition The definition object to cache
    */
   public static setGlobalTag(definition: CFDocsDefinitionInfo): boolean {
-    if (definition.type === "tag") {
+    const cfmlEngineSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.engine");
+    const userEngineName: CFMLEngineName = CFMLEngineName.valueOf(cfmlEngineSettings.get<string>("name"));
+    const userEngine: CFMLEngine = new CFMLEngine(userEngineName, cfmlEngineSettings.get<string>("version"));
+    if (definition.type === "tag" && definition.isCompatible(userEngine)) {
       cachedEntity.setGlobalTag(definition.toGlobalTag());
-      // TODO: Add script syntax function also
       return true;
     }
     return false;

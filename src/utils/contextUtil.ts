@@ -5,8 +5,11 @@ import { COMPONENT_EXT } from "../entities/component";
 
 const CFM_FILE_EXTS: string[] = [".cfm", ".cfml"];
 const cfscriptTagPattern: RegExp = /<cfscript>([\s\S]*?)<\/cfscript>/gi;
-const notContinuingExpressionPattern: RegExp = /(?:^|[^\w$.\s])\s*$/;
+// const notContinuingExpressionPattern: RegExp = /(?:^|[^\w$.\s])\s*$/;
 const continuingExpressionPattern: RegExp = /(?:\.\s*|[\w$])$/;
+const cfscriptLineCommentPattern: RegExp = /\/\/[^\r\n]*/g;
+const cfscriptBlockCommentPattern: RegExp = /\/\*[\s\S]*?\*\//g;
+const tagBlockCommentPattern: RegExp = /<!--[\s\S]*?-->/g;
 
 /**
  * Checks whether the given document is a CFM file
@@ -89,7 +92,64 @@ export function getCfScriptRanges(document: TextDocument, range?: Range): Range[
   return ranges;
 }
 
-// TODO: getCommentRanges
+/**
+ * Returns all of the ranges for comments
+ * @param document The document to check
+ * @param isScript Whether the document or given range is CFScript
+ * @param docRange Range within which to check
+ */
+export function getCommentRanges(document: TextDocument, isScript: boolean = false, docRange?: Range): Range[] {
+  let ranges: Range[] = [];
+  let documentText: string;
+  let textOffset: number;
+  if (docRange && document.validateRange(docRange)) {
+    documentText = document.getText(docRange);
+    textOffset = document.offsetAt(docRange.start);
+  } else {
+    documentText = document.getText();
+    textOffset = 0;
+  }
+
+  if (isScript) {
+    let scriptBlockCommentMatch: RegExpExecArray = null;
+    while (scriptBlockCommentMatch = cfscriptBlockCommentPattern.exec(documentText)) {
+      const scriptBlockCommentText = scriptBlockCommentMatch[0];
+      const scriptBlockCommentStartOffset = textOffset + scriptBlockCommentMatch.index;
+      ranges.push(new Range(
+        document.positionAt(scriptBlockCommentStartOffset),
+        document.positionAt(scriptBlockCommentStartOffset + scriptBlockCommentText.length)
+      ));
+    }
+
+    let scriptLineCommentMatch: RegExpExecArray = null;
+    while (scriptLineCommentMatch = cfscriptLineCommentPattern.exec(documentText)) {
+      const scriptLineCommentText = scriptLineCommentMatch[0];
+      const scriptLineCommentStartOffset = textOffset + scriptLineCommentMatch.index;
+      ranges.push(new Range(
+        document.positionAt(scriptLineCommentStartOffset),
+        document.positionAt(scriptLineCommentStartOffset + scriptLineCommentText.length)
+      ));
+    }
+  } else {
+    let tagBlockCommentMatch: RegExpExecArray = null;
+    while (tagBlockCommentMatch = tagBlockCommentPattern.exec(documentText)) {
+      const tagBlockCommentText = tagBlockCommentMatch[0];
+      const tagBlockCommentStartOffset = textOffset + tagBlockCommentMatch.index;
+      ranges.push(new Range(
+        document.positionAt(tagBlockCommentStartOffset),
+        document.positionAt(tagBlockCommentStartOffset + tagBlockCommentText.length)
+      ));
+    }
+
+    const cfScriptRanges: Range[] = getCfScriptRanges(document, docRange);
+    cfScriptRanges.forEach((range: Range) => {
+      const cfscriptCommentRanges: Range[] = getCommentRanges(document, true, range);
+      ranges = ranges.concat(cfscriptCommentRanges);
+    });
+  }
+
+  return ranges;
+}
 
 // TODO: getStringRanges
 
@@ -103,10 +163,26 @@ export function getCfScriptRanges(document: TextDocument, range?: Range): Range[
  * @param position Position at which to check
  */
 export function isInCfScript(document: TextDocument, position: Position): boolean {
-  let inCFScript = false;
-  const cfScriptRanges = getCfScriptRanges(document);
+  return isInRanges(getCfScriptRanges(document), position);
+}
 
-  return cfScriptRanges.some((range: Range) => {
+/**
+ * Returns whether the given position is within a comment
+ * @param document The document to check
+ * @param position Position at which to check
+ * @param isScript Whether the document is CFScript
+ */
+export function isInComment(document: TextDocument, position: Position, isScript: boolean = false): boolean {
+  return isInRanges(getCommentRanges(document, isScript), position);
+}
+
+/**
+ * Returns whether the given position is within a set of ranges
+ * @param ranges The set of ranges within which to check
+ * @param position Position at which to check
+ */
+export function isInRanges(ranges: Range[], position: Position): boolean {
+  return ranges.some((range: Range) => {
     return range.contains(position);
   });
 }

@@ -1,5 +1,4 @@
-import { workspace, SnippetString, WorkspaceConfiguration } from "vscode";
-import { DataType } from "../../entities/dataType";
+import { workspace, SnippetString } from "vscode";
 
 interface Config {
   gap: boolean;
@@ -83,15 +82,13 @@ export class Doc {
    */
   public build(isEmpty: boolean = false): SnippetString {
     let snippet = new SnippetString();
-    let extra = this.getConfig().extra;
-    let gap = !this.getConfig().gap;
+    let extra: ConfigExtra[] = this.getConfig().extra;
+    let gap: boolean = !this.getConfig().gap;
 
     if (isEmpty) {
       gap = true;
       extra = [];
     }
-
-    let stop = 2;
 
     snippet.appendText("/**");
     snippet.appendText("\n * ");

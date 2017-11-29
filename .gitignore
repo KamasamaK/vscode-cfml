@@ -1,3 +1,4 @@
 .vscode/cSpell.json
 node_modules/
 out/
+npm-debug.log

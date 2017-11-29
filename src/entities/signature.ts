@@ -1,4 +1,4 @@
-import { Parameter } from "./parameter";
+import { Parameter, constructParameterLabel } from "./parameter";
 
 export interface Signature  {
   parameters: Parameter[];
@@ -11,23 +11,24 @@ export interface Signature  {
  */
 export function constructSignatureLabel(signature: Signature): string {
   let sigString = "";
-  let startOptional = false;
-  // TODO: Account for non-sequential optional parameters
   signature.parameters.forEach((param: Parameter, i: number) => {
-    if (!param.required && !startOptional) {
-      startOptional = true;
+    const optional = !param.required;
+    if (optional) {
+      if (i > 0) {
+        sigString += " ";
+      }
       sigString += "[";
     }
     if (i > 0) {
       sigString += ", ";
     }
-    sigString += param.dataType + " " + param.name + " ";
+
+    sigString += constructParameterLabel(param);
+
+    if (optional) {
+      sigString += "]";
+    }
   });
-
-
-  if (sigString.length > 0 && startOptional) {
-    sigString += "]";
-  }
 
   return sigString;
 }

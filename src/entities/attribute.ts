@@ -1,7 +1,7 @@
 import { Range, TextDocument } from "vscode";
 import { MyMap, MySet } from "../utils/collections";
 
-export const ATTRIBUTES_PATTERN = /\b(\w+)\b(?:(\s*=\s*)(?:(['"])(.*?)\3|([\w$:.]+)))?/gi;
+const ATTRIBUTES_PATTERN = /\b(\w+)\b(?:(\s*=\s*)(?:(['"])(.*?)\3|([\w$:.]+)))?/gi;
 export const VALUE_PATTERN = /=\s*(?:(['"])?(?:(?!\1).)*|[^\s]*)$/;
 
 export interface Attribute {

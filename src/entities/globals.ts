@@ -1,6 +1,5 @@
 import { DataType } from "./dataType";
 import { Function } from "./function";
-import { Parameter } from "./parameter";
 import { Signature } from "./signature";
 import { MyMap } from "../utils/collections";
 
@@ -31,9 +30,9 @@ export interface MemberFunctionsByType extends MyMap<DataType, Set<MemberFunctio
 export interface GlobalTag extends GlobalEntity {
   name: string;
   syntax: string;
+  scriptSyntax?: string;
   description: string;
   signatures: Signature[];
-  hasScript: boolean;
   hasBody: boolean;
 }
 export interface GlobalTags {

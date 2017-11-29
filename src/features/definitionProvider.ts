@@ -1,18 +1,18 @@
-import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, workspace, TextLine } from "vscode";
+import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, TextLine } from "vscode";
 import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath } from "../entities/component";
 import { componentPathToUri, getComponent } from "./cachedEntities";
-import { isCfmFile, isCfcFile, isContinuingExpressionPattern } from "../utils/contextUtil";
+import { isCfcFile } from "../utils/contextUtil";
 import { Scope, getValidScopesPrefixPattern } from "../entities/scope";
 import { Access, UserFunction, UserFunctionSignature, Argument } from "../entities/userFunction";
 import { Property } from "../entities/property";
 import { equalsIgnoreCase } from "../utils/textUtil";
+import { getFunctionSuffixPattern } from "../entities/function";
 
 export default class CFMLDefinitionProvider implements DefinitionProvider {
 
   public async provideDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition> {
     const results: Definition = [];
 
-    const docIsCfmFile: boolean = isCfmFile(document);
     const docIsCfcFile: boolean = isCfcFile(document);
     const documentText: string = document.getText();
     const documentUri: Uri = document.uri;
@@ -24,11 +24,11 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       wordRange = new Range(position, position);
     }
 
-    const docPrefix: string = documentText.slice(0, document.offsetAt(wordRange.start));
+    // const docPrefix: string = documentText.slice(0, document.offsetAt(wordRange.start));
     const linePrefix: string = lineText.slice(0, wordRange.start.character);
     const lineSuffix: string = lineText.slice(wordRange.end.character, textLine.range.end.character);
-    const prefixChr: string = wordRange.start.character !== 0 ? linePrefix.substr(linePrefix.length-1, 1) : "";
-    const continuingExpression: boolean = isContinuingExpressionPattern(linePrefix);
+    // const prefixChr: string = docPrefix.trim().length ? docPrefix.trim().slice(-1) : "";
+    // const continuingExpression: boolean = isContinuingExpressionPattern(docPrefix);
 
     // TODO: These references should ideally be in cachedEntities.
     let referenceMatch: RegExpExecArray | null;
@@ -62,7 +62,8 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       const comp: Component = getComponent(documentUri);
       if (comp) {
         // Internal functions
-        if (/^\s*\(/.test(lineSuffix)) {
+        const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
+        if (functionSuffixPattern.test(lineSuffix)) {
           const functionKey: string = currentWord.toLowerCase();
           if (comp.functions.has(functionKey)) {
             const userFunc = comp.functions.get(functionKey);
@@ -109,7 +110,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             });
           });
         });
-        // Properties
+        // Component properties
         comp.properties.forEach((prop: Property) => {
           // Property types
           if (prop.dataTypeComponentUri && prop.dataTypeRange.contains(position)) {

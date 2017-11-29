@@ -1,6 +1,8 @@
 import { DataType } from "./dataType";
 import { Signature, constructSignatureLabel } from "./signature";
 
+const functionSuffixPattern: RegExp = /^\s*\(([^)]*)/;
+
 export interface Function {
   name: string;
   description: string;
@@ -26,5 +28,12 @@ export enum MemberType {
  */
 export function getSyntaxString(func: Function): string {
   const funcDefaultSignature = func.signatures.length !== 0 ? constructSignatureLabel(func.signatures[0]) : "";
-  return `${func.name}( ${funcDefaultSignature})`;
+  return `${func.name}(${funcDefaultSignature})`;
+}
+
+/**
+ * Gets the pattern for a function identifier suffix
+ */
+export function getFunctionSuffixPattern(): RegExp {
+  return functionSuffixPattern;
 }

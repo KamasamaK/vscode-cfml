@@ -1,5 +1,3 @@
-import * as fs from "fs";
-import * as path from "path";
 import { CFDocsService } from "./cfDocsService";
 import { GlobalFunction, GlobalTag } from "../../entities/globals";
 import { Signature } from "../../entities/signature";
@@ -7,8 +5,7 @@ import { Parameter } from "../../entities/parameter";
 import { DataType } from "../../entities/dataType";
 import { multiSigGlobalFunctions } from "./multiSignatures";
 import { equalsIgnoreCase } from "../textUtil";
-import { MyMap } from "../collections";
-import { CFMLEngineVendor } from "./cfmlEngine";
+import { CFMLEngineName, CFMLEngine } from "./cfmlEngine";
 
 export interface Param {
   name: string;
@@ -28,7 +25,7 @@ export interface EngineCompatibilityDetail {
 }
 
 export interface EngineInfo {
-  [vendor: string]: EngineCompatibilityDetail;
+  [name: string]: EngineCompatibilityDetail;
 }
 
 export interface Example {
@@ -267,11 +264,48 @@ export class CFDocsDefinitionInfo {
     return {
       name: this.name,
       syntax: this.syntax,
+      scriptSyntax: this.script,
       description: this.description,
       signatures: signatures,
-      hasScript: (this.script && this.script.length !== 0),
       hasBody: true
     };
+  }
+
+  /**
+   * Checks if this definition is compatible with given engine
+   * @param engine The CFML engine with which to check compatibility
+   */
+  public isCompatible(engine: CFMLEngine): boolean {
+    const engineVendor: CFMLEngineName = engine.getName();
+    if (engineVendor === CFMLEngineName.Unknown || !this.engines) {
+      return true;
+    }
+
+    const engineCompat: EngineCompatibilityDetail = this.engines[engineVendor];
+    if (!engineCompat) {
+      return false;
+    }
+
+    const engineVersion: string = engine.getVersion();
+    if (!engineVersion) {
+      return true;
+    }
+
+    if (engineCompat.minimum_version) {
+      const minEngine: CFMLEngine = new CFMLEngine(engineVendor, engineCompat.minimum_version);
+      if (engine.isOlder(minEngine)) {
+        return false;
+      }
+    }
+
+    if (engineCompat.removed) {
+      const maxEngine: CFMLEngine = new CFMLEngine(engineVendor, engineCompat.removed);
+      if (engine.isNewerOrEquals(maxEngine)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**

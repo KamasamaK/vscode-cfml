@@ -1,5 +1,5 @@
 import {
-  commands, languages, TextDocument, ConfigurationTarget, ExtensionContext, WorkspaceConfiguration, workspace, Uri, FileSystemWatcher, extensions, IndentAction
+  commands, languages, TextDocument, ConfigurationTarget, ExtensionContext, WorkspaceConfiguration, workspace, Uri, FileSystemWatcher, extensions, IndentAction, ConfigurationChangeEvent
 } from "vscode";
 import CFMLHoverProvider from "./features/hoverProvider";
 import CFMLDocumentSymbolProvider from "./features/documentSymbolProvider";
@@ -15,7 +15,6 @@ import { COMPONENT_FILE_GLOB, parseComponent } from "./entities/component";
 import { cacheComponent, clearCachedComponent } from "./features/cachedEntities";
 import CFMLDefinitionProvider from "./features/definitionProvider";
 import * as fs from "fs";
-import * as path from "path";
 import DocBlockCompletions from "./features/docBlocker/docCompletionProvider";
 
 export const LANGUAGE_ID = "cfml";
@@ -123,13 +122,19 @@ export function activate(context: ExtensionContext): void {
     clearCachedComponent(componentUri);
   });
 
+  context.subscriptions.push(workspace.onDidChangeConfiguration((evt: ConfigurationChangeEvent) => {
+    if (evt.affectsConfiguration("cfml.globalDefinitions") || evt.affectsConfiguration("cfml.cfDocs") || evt.affectsConfiguration("cfml.engine")) {
+      commands.executeCommand("cfml.refreshGlobalDefinitionCache");
+    }
+  }));
+
   const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
   const autoCloseTagExt = extensions.getExtension("formulahendry.auto-close-tag");
   if (autoCloseTagExt) {
     const autoCloseTagsSettings: WorkspaceConfiguration = workspace.getConfiguration("auto-close-tag");
     const autoCloseLanguages = autoCloseTagsSettings.get<string[]>("activationOnLanguage");
     const autoCloseExcludedTags = autoCloseTagsSettings.get<string[]>("excludedTags");
-    const enableAutoCloseTags = cfmlSettings.get<boolean>("autoCloseTags.enable");
+    // const enableAutoCloseTags = cfmlSettings.get<boolean>("autoCloseTags.enable");
     if (cfmlSettings.get<boolean>("autoCloseTags.enable")) {
       if (!autoCloseLanguages.includes(LANGUAGE_ID)) {
         autoCloseLanguages.push(LANGUAGE_ID);

@@ -145,7 +145,7 @@ export namespace DataType {
   }
 
   /**
-   * Gets either the data type or component URI from given string. If URI, the data type would be Component
+   * Gets the data type and if applicable component URI from given string.
    * @param dataType The string to check
    * @param documentUri The document's URI that contains this type string
    */
@@ -159,46 +159,64 @@ export namespace DataType {
       }
     }
 
-    return null;
+    return undefined;
   }
 
   /**
    * Take the value and parse and try to infer its type
    * @param value
    */
-  export function inferDataTypeFromValue(value: string): DataType {
+  export function inferDataTypeFromValue(value: string, documentUri: Uri): [DataType, Uri] {
     if (value.length === 0) {
-      return DataType.String;
+      return [DataType.String, null];
     }
 
     if (/^(['"])?(false|true|no|yes)\1$/i.test(value)) {
-      return DataType.Boolean;
+      return [DataType.Boolean, null];
     }
 
     if (isNumeric(value)) {
-      return DataType.Numeric;
+      return [DataType.Numeric, null];
     }
 
     if (/^(["'])(?!#)/.test(value)) {
-      return DataType.String;
+      return [DataType.String, null];
     }
 
     if (/^(?:["']\s*#\s*)?(arrayNew\(|\[)/i.test(value)) {
-      return DataType.Array;
+      return [DataType.Array, null];
     }
 
     if (/^(?:["']\s*#\s*)?query(?:New|Execute)?\(/i.test(value)) {
-      return DataType.Query;
+      return [DataType.Query, null];
     }
 
     if (/^(?:["']\s*#\s*)?(structNew\(|\{)/i.test(value)) {
-      return DataType.Struct;
+      return [DataType.Struct, null];
     }
 
     if (/^(?:["']\s*#\s*)?(createDate(Time)?\()/i.test(value)) {
-      return DataType.Date;
+      return [DataType.Date, null];
     }
 
-    return DataType.Any;
+    const objectMatch1 = /^(?:["']\s*#\s*)?(createObject\((["'])component\2\s*,\s*(["'])([^'"]+)\3)/i.exec(value);
+    if (objectMatch1) {
+      const findUri: [DataType, Uri] = getDataTypeAndUri(objectMatch1[4], documentUri);
+      if (findUri) {
+        return findUri;
+      }
+      return [DataType.Component, null];
+    }
+
+    const objectMatch2 = /^(?:["']\s*#\s*)?(new\s+(["'])?([^'"(]+)\2\()/i.exec(value);
+    if (objectMatch2) {
+      const findUri: [DataType, Uri] = getDataTypeAndUri(objectMatch2[3], documentUri);
+      if (findUri) {
+        return findUri;
+      }
+      return [DataType.Component, null];
+    }
+
+    return [DataType.Any, null];
   }
 }

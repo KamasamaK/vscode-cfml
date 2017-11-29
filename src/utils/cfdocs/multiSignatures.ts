@@ -1,6 +1,5 @@
 // Accommodates for the lack of proper multiple signature support in CFDocs
 
-import { Signature } from "../../entities/signature";
 import { MyMap } from "../collections";
 
 export interface MinMultiSigs extends MyMap<string, string[][]> { }

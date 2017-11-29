@@ -1,4 +1,12 @@
-export const cfcatchVariables = {
+import { CompletionEntry } from "../features/completionItemProvider";
+
+export interface CfcatchPropertyDetails extends CompletionEntry { }
+
+export interface CfcatchProperties {
+  [propertyName: string]: CfcatchPropertyDetails;
+}
+
+export const cfcatchProperties: CfcatchProperties = {
   "type": {
     detail: "cfcatch.type",
     description: "Type: Exception type, as specified in cfcatch."
@@ -60,3 +68,5 @@ export const cfcatchVariables = {
     description: "Applies to type=\"application\" and \"custom\". Custom error message; information that the default exception handler does not display."
   },
 };
+
+export const cfcatchPropertyPrefixPattern: RegExp = /\bcfcatch\s*(?:\.\s*|\[\s*['"])$/;

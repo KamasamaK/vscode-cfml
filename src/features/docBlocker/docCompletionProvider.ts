@@ -1,20 +1,15 @@
 import {
-  TextDocument, Position, CancellationToken, CompletionItem, CompletionItemProvider, Range, SnippetString, CompletionItemKind, window
+  TextDocument, Position, CancellationToken, CompletionItem, CompletionItemProvider, Range, CompletionItemKind
 } from "vscode";
 import Documenter from "./documenter";
 import { Component } from "../../entities/component";
 import { getComponent, getGlobalTag } from "../cachedEntities";
-import { Property } from "../../entities/property";
-import { UserFunction, UserFunctionSignature, Argument } from "../../entities/userFunction";
+import { Property, Properties } from "../../entities/property";
+import { UserFunction, UserFunctionSignature, Argument, ComponentFunctions } from "../../entities/userFunction";
 import { MySet, MyMap } from "../../utils/collections";
 import { GlobalTag } from "../../entities/globals";
 import { Signature } from "../../entities/signature";
 import { Parameter } from "../../entities/parameter";
-
-interface TagElem {
-  tag: string;
-  snippet: string;
-}
 
 /**
  * Completions provider that can be registered to the language
@@ -54,8 +49,8 @@ export default class DocBlockCompletions implements CompletionItemProvider {
       return result;
     }
 
-    const tagKeyPattern = / \* @$/;
-    const tagSubKeyPattern = / \* @[\w$]+\.$/;
+    // const tagKeyPattern = / \* @$/;
+    // const tagSubKeyPattern = / \* @[\w$]+\.$/;
 
     let tagSuggestions: MyMap<string, string> = new MyMap<string, string>();
     let subKeySuggestions: MyMap<string, string> = new MyMap<string, string>();
@@ -75,7 +70,7 @@ export default class DocBlockCompletions implements CompletionItemProvider {
 
     // TODO: Prevent redundant suggestions.
     let argumentNames: MySet<string> = new MySet<string>();
-    const foundProperty = comp.properties.filter((prop: Property) => {
+    const foundProperty: Properties = comp.properties.filter((prop: Property) => {
       return prop.propertyRange.contains(position);
     });
     if (foundProperty.size === 1) {
@@ -88,7 +83,7 @@ export default class DocBlockCompletions implements CompletionItemProvider {
         });
       });
     } else {
-      const foundFunction = comp.functions.filter((func: UserFunction) => {
+      const foundFunction: ComponentFunctions = comp.functions.filter((func: UserFunction) => {
         return func.location.range.contains(position);
       });
       if (foundFunction.size === 1) {
