@@ -91,7 +91,17 @@ export const unscopedPrecedence: Scope[] = [
   Scope.Client
 ];
 
-export const scopes = {
+interface ScopeDetails {
+  detail: string;
+  description: string;
+  prefixRequired: boolean;
+}
+
+interface Scopes {
+  [scope: string]: ScopeDetails;
+}
+
+export const scopes: Scopes = {
   "application": {
     detail: "(scope) application",
     description: "Contains variables that are associated with one, named application on a server. The cfapplication tag name attribute or the Application.cfc This.name variable setting specifies the application name.",
@@ -206,6 +216,7 @@ export function getValidScopesPrefixPattern(scopes: Scope[], optionalScope: bool
   if (optionalScope) {
     pattern += "?";
   }
+
   return new RegExp(pattern + "$", "i");
 }
 

@@ -1,23 +1,269 @@
 import { DataType } from "./dataType";
 import { Scope } from "./scope";
-import { Location, TextDocument, Range, Uri, Position } from "vscode";
-import { getCfScriptRanges, isCfcFile, getCommentRanges } from "../utils/contextUtil";
+import { Location, TextDocument, Range, Uri, Position, WorkspaceConfiguration, workspace } from "vscode";
+import { getCfScriptRanges, isCfcFile } from "../utils/contextUtil";
 import { Component } from "./component";
 import { UserFunction, UserFunctionSignature, Argument } from "./userFunction";
 import { getComponent } from "../features/cachedEntities";
-import { equalsIgnoreCase, replaceRangeWithSpaces } from "../utils/textUtil";
+import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
 import { parseAttributes, Attributes } from "./attribute";
-import { getTagPattern, outputVariableTags, TagOutputAttribute } from "./tag";
+import { getTagPattern, OutputVariableTags, TagOutputAttribute, parseTags, Tag, getCfOpenTagPattern, getCfScriptTagPatternIgnoreBody, parseOpenTags, OpenTag } from "./tag";
+import { Properties, Property } from "./property";
+import { parseQueryText, Query, QueryColumns } from "./query";
+import { CFMLEngineName, CFMLEngine } from "../utils/cfdocs/cfmlEngine";
+import { DocumentStateContext } from "../utils/documentUtil";
 
 // Erroneously matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
 const cfscriptVariableAssignmentPattern = /((?:^|[;{}]|\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=\s*([^=][^;]*)/gi;
+const forInVariableAssignmentPattern = /((?:\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*(?:\s+in\s+)/gi;
 const tagVariableAssignmentPattern = /(<cfset\s+(var\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=\s*([^=][^>]*)/gi;
 const tagParamPattern =  getTagPattern("cfparam");
 const scriptParamPattern = /\b(cfparam\s*\(\s*|param\s+)([^;]*);/gi;
 // Does not match when a function is part of the expression
 const variableExpression = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*/i;
-const variableExpressionPrefix = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*\s*(?:\.\s*|\[\s*['"]?)?$/i;
+export const variableExpressionPrefix = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*\s*(?:\.\s*|\[\s*['"]?)?$/i;
+
+// TODO: Import from tag.ts when bug is found/resolved
+const outputVariableTags: OutputVariableTags =
+{
+  "cfchart": [
+    {
+      attributeName: "name",
+      dataType: DataType.Binary
+    }
+  ],
+  "cfcollection": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    }
+  ],
+  "cfdbinfo": [
+    {
+      attributeName: "name",
+      dataType: DataType.Any
+    }
+  ],
+  "cfdirectory": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    }
+  ],
+  "cfdocument": [
+    {
+      attributeName: "name",
+      dataType: DataType.Binary
+    }
+  ],
+  "cfexecute": [
+    {
+      attributeName: "variable",
+      dataType: DataType.String
+    }
+  ],
+  "cffeed": [
+    {
+      attributeName: "name",
+      dataType: DataType.Struct
+    },
+    {
+      attributeName: "query",
+      dataType: DataType.Query
+    }
+  ],
+  "cffile": [
+    {
+      attributeName: "result",
+      dataType: DataType.Struct
+    },
+    {
+      attributeName: "variable",
+      dataType: DataType.Any
+    }
+  ],
+  "cfftp": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+    {
+      attributeName: "result",
+      dataType: DataType.Struct
+    }
+  ],
+  "cfhtmltopdf": [
+    {
+      attributeName: "name",
+      dataType: DataType.Binary
+    }
+  ],
+  "cfhttp": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+    {
+      attributeName: "result",
+      dataType: DataType.Struct
+    }
+  ],
+  "cfimage": [
+    {
+      attributeName: "name",
+      dataType: DataType.Any
+    },
+    {
+      attributeName: "structName",
+      dataType: DataType.Struct
+    }
+  ],
+  "cfimap": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    }
+  ],
+  // cfinvoke dataType could be taken from function return type
+  "cfinvoke": [
+    {
+      attributeName: "returnvariable",
+      dataType: DataType.Any
+    }
+  ],
+  "cfldap": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    }
+  ],
+  // cfloop dataTypes are conditional
+  "cfloop": [
+    {
+      attributeName: "index",
+      dataType: DataType.Any
+    },
+    {
+      attributeName: "item",
+      dataType: DataType.Any
+    }
+  ],
+  "cfntauthenticate": [
+    {
+      attributeName: "result",
+      dataType: DataType.Any
+    },
+  ],
+  // cfobject excluded and handled elsewhere
+  "cfpdf": [
+    {
+      attributeName: "name",
+      dataType: DataType.Binary
+    },
+  ],
+  "cfpop": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+  ],
+  "cfprocparam": [
+    {
+      attributeName: "variable",
+      dataType: DataType.Any
+    },
+  ],
+  "cfprocresult": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+  ],
+  // cfproperty excluded and handled elsewhere
+  "cfquery": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+    {
+      attributeName: "result",
+      dataType: DataType.Struct
+    }
+  ],
+  "cfregistry": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+    {
+      attributeName: "variable",
+      dataType: DataType.Any
+    }
+  ],
+  "cfreport": [
+    {
+      attributeName: "name",
+      dataType: DataType.Any
+    },
+  ],
+  "cfsavecontent": [
+    {
+      attributeName: "variable",
+      dataType: DataType.String
+    },
+  ],
+  "cfsearch": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+  ],
+  "cfsharepoint": [
+    {
+      attributeName: "name",
+      dataType: DataType.Any
+    },
+  ],
+  "cfspreadsheet": [
+    {
+      attributeName: "name",
+      dataType: DataType.Any
+    },
+    {
+      attributeName: "query",
+      dataType: DataType.Query
+    }
+  ],
+  "cfstoredproc": [
+    {
+      attributeName: "result",
+      dataType: DataType.Struct
+    },
+  ],
+  "cfwddx": [
+    {
+      attributeName: "output",
+      dataType: DataType.Any
+    },
+  ],
+  "cfxml": [
+    {
+      attributeName: "variable",
+      dataType: DataType.XML
+    },
+  ],
+  "cfzip": [
+    {
+      attributeName: "name",
+      dataType: DataType.Query
+    },
+    {
+      attributeName: "variable",
+      dataType: DataType.Any
+    },
+  ],
+};
 
 /**
  * Checks whether the given identifier uses the constant naming convention
@@ -33,16 +279,21 @@ export function usesConstantConvention(ident: string): boolean {
  * @param isScript Whether this document or range is defined entirely in CFScript
  * @param docRange Range within which to check
  */
-export function parseVariableAssignments(document: TextDocument, isScript: boolean, docRange?: Range): Variable[] {
+export function parseVariableAssignments(documentStateContext: DocumentStateContext, isScript: boolean, docRange?: Range): Variable[] {
   let variables: Variable[] = [];
+  const document: TextDocument = documentStateContext.document;
   const documentUri: Uri = document.uri;
   let textOffset: number = 0;
-  let documentText: string = replaceRangeWithSpaces(document, getCommentRanges(document, isScript));
+  let documentText: string = documentStateContext.sanitizedDocumentText;
 
   if (docRange && document.validateRange(docRange)) {
     textOffset = document.offsetAt(docRange.start);
-    documentText = documentText.substring(textOffset, document.offsetAt(docRange.end));
+    documentText = documentText.slice(textOffset, document.offsetAt(docRange.end));
   }
+
+  const cfmlEngineSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.engine");
+  const userEngineName: CFMLEngineName = CFMLEngineName.valueOf(cfmlEngineSettings.get<string>("name"));
+  const userEngine: CFMLEngine = new CFMLEngine(userEngineName, cfmlEngineSettings.get<string>("version"));
 
   // Add function arguments
   if (isCfcFile(document)) {
@@ -75,15 +326,15 @@ export function parseVariableAssignments(document: TextDocument, isScript: boole
   }
 
   // params
-  let outputVariableMatch: RegExpExecArray = null;
+  let paramMatch: RegExpExecArray = null;
   const paramPattern: RegExp = isScript ? scriptParamPattern : tagParamPattern;
-  while (outputVariableMatch = paramPattern.exec(documentText)) {
-    const paramPrefix: string = outputVariableMatch[1];
-    const paramAttr: string = outputVariableMatch[2];
+  while (paramMatch = paramPattern.exec(documentText)) {
+    const paramPrefix: string = paramMatch[1];
+    const paramAttr: string = paramMatch[2];
 
     const paramAttributeRange = new Range(
-      document.positionAt(textOffset + outputVariableMatch.index + paramPrefix.length),
-      document.positionAt(textOffset + outputVariableMatch.index + paramPrefix.length + paramAttr.length)
+      document.positionAt(textOffset + paramMatch.index + paramPrefix.length),
+      document.positionAt(textOffset + paramMatch.index + paramPrefix.length + paramAttr.length)
     );
 
     const parsedAttr: Attributes = parseAttributes(document, paramAttributeRange);
@@ -156,7 +407,7 @@ export function parseVariableAssignments(document: TextDocument, isScript: boole
     const varName: string = variableMatch[5];
     const initValue: string = variableMatch[7];
 
-    // TODO: Does not account for arguments being overridden. Does not account for variables created in attributes.
+    // TODO: Does not account for arguments being overridden.
     let scopeVal: Scope = Scope.Unknown;
     if (scope) {
       scopeVal = Scope.valueOf(scope);
@@ -198,28 +449,28 @@ export function parseVariableAssignments(document: TextDocument, isScript: boole
     });
   }
 
-  if (!isScript) {
+  if (!isScript || userEngine.supportsScriptTags()) {
     // Tags with output attributes
-    for (let tagName in outputVariableTags) {
+    let foundOutputVarTags: MySet<string> = new MySet();
+    let cfTagMatch: RegExpExecArray = null;
+    const cfTagPattern: RegExp = isScript ? getCfScriptTagPatternIgnoreBody() : getCfOpenTagPattern();
+    while (cfTagMatch = cfTagPattern.exec(documentText)) {
+      const tagName = cfTagMatch[2].toLowerCase();
+      if (!foundOutputVarTags.has(tagName) && outputVariableTags.hasOwnProperty(tagName)) {
+        foundOutputVarTags.add(tagName);
+      }
+    }
+
+    foundOutputVarTags.forEach((tagName: string) => {
       const tagOutputAttributes: TagOutputAttribute[] = outputVariableTags[tagName];
-      let outputVariableMatch: RegExpExecArray = null;
-      const outputVariablePattern: RegExp = getTagPattern(tagName);
-      while (outputVariableMatch = outputVariablePattern.exec(documentText)) {
-        const outputTagPrefix: string = outputVariableMatch[1];
-        const outputTagAttr: string = outputVariableMatch[2];
-
-        const outputTagAttributeRange = new Range(
-          document.positionAt(textOffset + outputVariableMatch.index + outputTagPrefix.length),
-          document.positionAt(textOffset + outputVariableMatch.index + outputTagPrefix.length + outputTagAttr.length)
-        );
-
-        const parsedAttr: Attributes = parseAttributes(document, outputTagAttributeRange);
-
+      const parsedOutputVariableTags: OpenTag[] = (tagName === "cfquery" ? parseTags(documentStateContext, tagName, docRange) : parseOpenTags(documentStateContext, tagName, docRange));
+      parsedOutputVariableTags.forEach((tag: OpenTag) => {
+        const tagAttributes: Attributes = tag.attributes;
         tagOutputAttributes.filter((tagOutputAttribute: TagOutputAttribute) => {
-          return parsedAttr.has(tagOutputAttribute.attributeName);
+          return tagAttributes.has(tagOutputAttribute.attributeName);
         }).forEach((tagOutputAttribute: TagOutputAttribute) => {
           const attributeName: string = tagOutputAttribute.attributeName;
-          const attributeVal: string = parsedAttr.get(attributeName).value;
+          const attributeVal: string = tagAttributes.get(attributeName).value;
           const varExpressionMatch: RegExpExecArray = variableExpression.exec(attributeVal);
           if (!varExpressionMatch) {
             return;
@@ -234,7 +485,7 @@ export function parseVariableAssignments(document: TextDocument, isScript: boole
             scopeVal = Scope.valueOf(scope);
           }
 
-          const varRangeStart: Position = parsedAttr.get(attributeName).valueRange.start.translate(0, varNamePrefixLen);
+          const varRangeStart: Position = tagAttributes.get(attributeName).valueRange.start.translate(0, varNamePrefixLen);
           const varRange = new Range(
             varRangeStart,
             varRangeStart.translate(0, varName.length)
@@ -256,7 +507,7 @@ export function parseVariableAssignments(document: TextDocument, isScript: boole
             scopeVal = Scope.Variables;
           }
 
-          variables.push({
+          let outputVar: Variable = {
             identifier: varName,
             dataType: tagOutputAttribute.dataType,
             scope: scopeVal,
@@ -264,15 +515,30 @@ export function parseVariableAssignments(document: TextDocument, isScript: boole
               document.uri,
               varRange
             )
-          });
-        });
-      }
-    }
+          };
 
+          if (tagName === "cfquery" && "bodyText" in tag) {
+            const queryTag = tag as Tag;
+            const columns: QueryColumns = parseQueryText(queryTag.bodyText);
+
+            if (columns.size > 0) {
+              let query: Query = outputVar as Query;
+              query.selectColumnNames = columns;
+              outputVar = query;
+            }
+          }
+
+          variables.push(outputVar);
+        });
+      });
+    });
+  }
+
+  if (!isScript) {
     // Check cfscript sections
     const cfScriptRanges: Range[] = getCfScriptRanges(document, docRange);
     cfScriptRanges.forEach((range: Range) => {
-      const cfscriptVars: Variable[] = parseVariableAssignments(document, true, range);
+      const cfscriptVars: Variable[] = parseVariableAssignments(documentStateContext, true, range);
 
       cfscriptVars.forEach((scriptVar: Variable) => {
         const matchingVars: Variable[] = getMatchingVariables(variables, scriptVar.identifier, scriptVar.scope);
@@ -289,9 +555,101 @@ export function parseVariableAssignments(document: TextDocument, isScript: boole
         }
       });
     });
+  } else {
+    // Check for-in loops
+    let forInVariableMatch: RegExpExecArray = null;
+    while (forInVariableMatch = forInVariableAssignmentPattern.exec(documentText)) {
+      const varPrefix: string = forInVariableMatch[1];
+      const varScope: string = forInVariableMatch[2];
+      const scope: string = forInVariableMatch[3];
+      const varName: string = forInVariableMatch[5];
+
+      let scopeVal: Scope = Scope.Unknown;
+      if (scope) {
+        scopeVal = Scope.valueOf(scope);
+      } else if (varScope) {
+        scopeVal = Scope.Local;
+      }
+
+      const varMatchStartOffset = textOffset + forInVariableMatch.index + varPrefix.length;
+      const varRange = new Range(
+        document.positionAt(varMatchStartOffset),
+        document.positionAt(varMatchStartOffset + varName.length)
+      );
+
+      const matchingVars = getMatchingVariables(variables, varName, scopeVal);
+      if (matchingVars.length > 0) {
+        if (matchingVars.length > 1 || matchingVars[0].declarationLocation.range.start.isBefore(varRange.start)) {
+          continue;
+        } else {
+          // Remove entry
+          variables = variables.filter((variable: Variable) => {
+            return variable !== matchingVars[0];
+          });
+        }
+      }
+
+      if (scopeVal === Scope.Unknown) {
+        scopeVal = Scope.Variables;
+      }
+
+      variables.push({
+        identifier: varName,
+        dataType: DataType.Any,
+        scope: scopeVal,
+        declarationLocation: new Location(
+          document.uri,
+          varRange
+        )
+      });
+    }
   }
 
   return variables;
+}
+
+/**
+ * Returns Variable array representation of Properties
+ * @param properties The properties of a component to convert
+ */
+export function propertiesToVariables(properties: Properties, uri: Uri): Variable[] {
+  let propertyVars: Variable[] = [];
+  properties.forEach((prop: Property) => {
+    propertyVars.push(
+      {
+        identifier: prop.name,
+        dataType: prop.dataType,
+        dataTypeComponentUri: prop.dataTypeComponentUri,
+        scope: Scope.Variables,
+        declarationLocation: new Location(uri, prop.propertyRange),
+        description: prop.description
+      }
+    );
+  });
+
+  return propertyVars;
+}
+
+/**
+ * Returns Variable array representation of Arguments
+ * @param args The arguments of a function to convert
+ */
+export function argumentsToVariables(args: Argument[], uri: Uri): Variable[] {
+  let argVars: Variable[] = [];
+  args.forEach((arg: Argument) => {
+    argVars.push(
+      {
+        identifier: arg.name,
+        dataType: arg.dataType,
+        dataTypeComponentUri: arg.dataTypeComponentUri,
+        scope: Scope.Arguments,
+        declarationLocation: new Location(uri, arg.nameRange),
+        description: arg.description
+      }
+    );
+  });
+
+  return argVars;
 }
 
 /**
@@ -311,13 +669,6 @@ export function getMatchingVariables(variables: Variable[], varName: string, sco
   return variables.filter((variable: Variable) => {
     return checkScopes.includes(variable.scope) && equalsIgnoreCase(variable.identifier, varName);
   });
-}
-
-/**
- * Returns a pattern to match the prefix of an active variable expression
- */
-export function getVariableExpressionPrefixPattern(): RegExp {
-  return variableExpressionPrefix;
 }
 
 export interface Variable {

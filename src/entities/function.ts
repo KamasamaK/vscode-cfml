@@ -1,5 +1,8 @@
 import { DataType } from "./dataType";
 import { Signature, constructSignatureLabel } from "./signature";
+import { UserFunction } from "./userFunction";
+import { COMPONENT_EXT } from "./component";
+import * as path from "path";
 
 const functionSuffixPattern: RegExp = /^\s*\(([^)]*)/;
 
@@ -28,7 +31,16 @@ export enum MemberType {
  */
 export function getSyntaxString(func: Function): string {
   const funcDefaultSignature = func.signatures.length !== 0 ? constructSignatureLabel(func.signatures[0]) : "";
-  return `${func.name}(${funcDefaultSignature})`;
+  let returnType: string = DataType.Any;
+  if ("returnTypeUri" in func) {
+    const userFunction: UserFunction = func as UserFunction;
+    if (userFunction.returnTypeUri) {
+      returnType = path.basename(userFunction.returnTypeUri.fsPath, COMPONENT_EXT);
+    }
+  } else if (func.returntype) {
+    returnType = func.returntype;
+  }
+  return `${func.name}(${funcDefaultSignature}): ${returnType}`;
 }
 
 /**

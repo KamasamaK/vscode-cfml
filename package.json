@@ -2,7 +2,7 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",
@@ -53,7 +53,21 @@
       {
         "language": "cfml",
         "scopeName": "embedding.cfml",
-        "path": "./syntaxes/cfml.tmLanguage.json"
+        "path": "./syntaxes/cfml.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.css": "css",
+          "meta.embedded.block.css": "css",
+          "source.js": "javascript",
+          "meta.embedded.block.js": "javascript",
+          "meta.embedded.line.js": "javascript",
+          "source.sql": "sql",
+          "meta.embedded.block.sql": "sql",
+          "meta.tag.cfml": "cfml",
+          "meta.embedded.line.cfml": "cfml",
+          "meta.embedded.block.cfml": "cfml",
+          "constant.character.escape.hash.cfml": "cfml",
+          "constant.character.hash.cfml": "cfml"
+        }
       }
     ],
     "configuration": {
@@ -254,14 +268,15 @@
     "trie-prefix-tree": "1.4.0",
     "request": "^2.83.0",
     "find-config": "1.0.0",
-    "semver": "^5.4.1"
+    "semver": "^5.4.1",
+    "html-entities": "^1.2.1"
   },
   "devDependencies": {
     "typescript": "^2.6.2",
     "tslint": "^5.8.0",
-    "vscode": "^1.1.8",
+    "vscode": "^1.1.10",
     "mocha": "^4.0.1",
-    "@types/node": "^8.0.53",
+    "@types/node": "^8.5.2",
     "@types/mocha": "^2.2.44"
   }
 }

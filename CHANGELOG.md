@@ -2,6 +2,29 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.3.0] - 2018-01-22
+
+- Added more ways to check context
+- Added completions for external component functions
+- Added completions for query properties
+- Added completions for component dot-paths
+- Added completions for enumerated values for global tag attributes
+- Added completions for script global tags
+- Added definition for arguments
+- Added definition for local variables
+- Added definition for inherited functions
+- Added definition for application variables
+- Added type definitions within components
+- Added hover for global tag attributes
+- Added hover for inherited functions
+- Added signature help for inherited functions
+- Added signature help for constructor when using `new` syntax
+- Added variable parsing for for-in statements
+- Added option `noImplicitReturns` to tsconfig
+- Made some additional functions `async`
+- Fixed some case sensitivity issues in CFML grammar/syntax
+- Updated embedded syntaxes for HTML, CSS, JavaScript, and SQL
+
 ## [0.2.0] - 2017-11-29
 
 - Added global definition filtering based on engine
@@ -11,7 +34,7 @@ All notable changes to the CFML extension will be documented in this file.
 - Improved syntax highlighting for properties
 - Now able to ignore CFML comments
 - Added variables assigned from tag attributes
-- Added option to tsconfig
+- Added option `noUnusedLocals` to tsconfig
 
 ## [0.1.4] - 2017-11-13
 

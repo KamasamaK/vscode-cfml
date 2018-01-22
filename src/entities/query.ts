@@ -1,8 +1,10 @@
 import { MySet } from "../utils/collections";
+import { Variable } from "./variable";
 
-// const cfqueryTagPattern: RegExp = getTagPattern("cfquery");
 // TODO: Get query name
 // const queryScriptPattern: RegExp = /((?:setSql|queryExecute)\s*\(|sql\s*=)\s*(['"])([\s\S]*?)\2\s*[),]/gi;
+
+const selectQueryPattern: RegExp = /^\s*SELECT\s+([\s\S]+?)\s+FROM\s+[\s\S]+/i;
 
 export const queryObjectProperties = {
   "columnList": {
@@ -50,8 +52,39 @@ export const queryResultProperties = {
   },
 };
 
-export interface Query {
-  name: string;
-  result?: string;
-  selectColumnNames: MySet<string>;
+export interface Query extends Variable {
+  selectColumnNames: QueryColumns;
+}
+
+export interface QueryColumns extends MySet<string> { }
+
+export function parseQueryText(sql: string): QueryColumns {
+  let selectColumnNames: QueryColumns = new MySet();
+
+  if (sql) {
+    const selectQueryMatch: RegExpMatchArray = sql.match(selectQueryPattern);
+
+    if (selectQueryMatch) {
+      const columns: string = selectQueryMatch[1];
+      columns.replace(/[\[\]"`]/g, "").split(",").forEach((column: string) => {
+        const splitColumn: string[] = column.trim().split(/[\s.]+/);
+        if (splitColumn.length > 0) {
+          const columnName = splitColumn.pop();
+          if (columnName.length > 0) {
+            selectColumnNames.add(columnName);
+          }
+        }
+      });
+    }
+  }
+
+  return selectColumnNames;
+}
+
+/**
+ * Checks whether a Variable is a Query
+ * @param variable The variable object to check
+ */
+export function isQuery(variable: Variable): variable is Query {
+  return "selectColumnNames" in variable;
 }

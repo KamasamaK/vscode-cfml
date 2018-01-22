@@ -11,11 +11,14 @@ import { CFDocsService } from "./utils/cfdocs/cfDocsService";
 import { CommentType, toggleComment } from "./features/comment";
 import * as cachedEntity from "./features/cachedEntities";
 import { nonIndentingTags, decreasingIndentingTags, nonClosingTags } from "./entities/tag";
-import { COMPONENT_FILE_GLOB, parseComponent } from "./entities/component";
+import { COMPONENT_FILE_GLOB, parseComponent, Component } from "./entities/component";
 import { cacheComponent, clearCachedComponent } from "./features/cachedEntities";
 import CFMLDefinitionProvider from "./features/definitionProvider";
 import * as fs from "fs";
 import DocBlockCompletions from "./features/docBlocker/docCompletionProvider";
+import { getDocumentStateContext, DocumentStateContext } from "./utils/documentUtil";
+import { isCfcFile } from "./utils/contextUtil";
+import CFMLTypeDefinitionProvider from "./features/typeDefinitionProvider";
 
 export const LANGUAGE_ID = "cfml";
 export let snippets: Snippets;
@@ -85,14 +88,14 @@ export function activate(context: ExtensionContext): void {
     ]
   });
 
-  context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", () => {
+  context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", async () => {
     const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
     if (cfmlSettings.get<string>("globalDefinitions.source") === "cfdocs") {
       CFDocsService.cacheAll();
     }
   }));
 
-  context.subscriptions.push(commands.registerCommand("cfml.refreshWorkspaceDefinitionCache", () => {
+  context.subscriptions.push(commands.registerCommand("cfml.refreshWorkspaceDefinitionCache", async () => {
     const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
     if (cfmlSettings.get<boolean>("indexComponents.enable")) {
       cachedEntity.cacheAllComponents();
@@ -110,12 +113,22 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(languages.registerCompletionItemProvider(LANGUAGE_ID, new CFMLCompletionItemProvider(), "."));
   context.subscriptions.push(languages.registerCompletionItemProvider(LANGUAGE_ID, new DocBlockCompletions(), "*", "@", "."));
   context.subscriptions.push(languages.registerDefinitionProvider(LANGUAGE_ID, new CFMLDefinitionProvider()));
+  context.subscriptions.push(languages.registerTypeDefinitionProvider(LANGUAGE_ID, new CFMLTypeDefinitionProvider()));
+
+  context.subscriptions.push(workspace.onDidSaveTextDocument((document: TextDocument) => {
+    if (isCfcFile(document)) {
+      const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
+      const component: Component = parseComponent(documentStateContext);
+      cacheComponent(component);
+    }
+  }));
 
   const fileWatcher: FileSystemWatcher = workspace.createFileSystemWatcher(COMPONENT_FILE_GLOB, false, true, false);
   context.subscriptions.push(fileWatcher);
   fileWatcher.onDidCreate((componentUri: Uri) => {
     workspace.openTextDocument(componentUri).then((document: TextDocument) => {
-      cacheComponent(parseComponent(document));
+      const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
+      cacheComponent(parseComponent(documentStateContext));
     });
   });
   fileWatcher.onDidDelete((componentUri: Uri) => {
@@ -131,7 +144,7 @@ export function activate(context: ExtensionContext): void {
   const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
   const autoCloseTagExt = extensions.getExtension("formulahendry.auto-close-tag");
   if (autoCloseTagExt) {
-    const autoCloseTagsSettings: WorkspaceConfiguration = workspace.getConfiguration("auto-close-tag");
+    const autoCloseTagsSettings: WorkspaceConfiguration = workspace.getConfiguration("auto-close-tag", null);
     const autoCloseLanguages = autoCloseTagsSettings.get<string[]>("activationOnLanguage");
     const autoCloseExcludedTags = autoCloseTagsSettings.get<string[]>("excludedTags");
     // const enableAutoCloseTags = cfmlSettings.get<boolean>("autoCloseTags.enable");
@@ -170,7 +183,7 @@ export function activate(context: ExtensionContext): void {
 
   const emmetExt = extensions.getExtension("vscode.emmet");
   if (emmetExt) {
-    const emmetSettings: WorkspaceConfiguration = workspace.getConfiguration("emmet");
+    const emmetSettings: WorkspaceConfiguration = workspace.getConfiguration("emmet", null);
     const emmetIncludeLanguages = emmetSettings.get("includeLanguages", {});
     if (cfmlSettings.get<boolean>("emmet.enable")) {
       emmetIncludeLanguages["cfml"] = "html";

@@ -49,13 +49,19 @@ export function replaceRangeWithSpaces(document: TextDocument, ranges: Range[]):
 /**
  * Returns a text document's text replacing all comment text with whitespace.
  * @param document The text document from which to get text
+ * @param commentRanges Optional ranges in which there are CFML comments
  */
-export function getSanitizedDocumentText(document: TextDocument): string {
-  const docIsScript: boolean = (isCfcFile(document) && getComponent(document.uri).isScript);
+export function getSanitizedDocumentText(document: TextDocument, commentRanges?: Range[]): string {
+  let documentCommentRanges: Range[];
+  if (commentRanges) {
+    documentCommentRanges = commentRanges;
+  } else {
+    const docIsScript: boolean = (isCfcFile(document) && getComponent(document.uri) && getComponent(document.uri).isScript);
+    documentCommentRanges = getCommentRanges(document, docIsScript);
+  }
 
-  return replaceRangeWithSpaces(document, getCommentRanges(document, docIsScript));
+  return replaceRangeWithSpaces(document, documentCommentRanges);
 }
-
 
 /**
  * Returns a text document's text before given position. Optionally replaces all comment text with whitespace.

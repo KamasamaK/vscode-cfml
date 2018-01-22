@@ -3,6 +3,7 @@ import { GlobalFunctions, GlobalTags, GlobalFunction, GlobalTag } from "../entit
 import { UserFunction, UserFunctionsByName, ComponentFunctions, UserFunctionByUri } from "../entities/userFunction";
 import { Component, ComponentsByUri, ComponentsByName, COMPONENT_EXT, COMPONENT_FILE_GLOB, parseComponent } from "../entities/component";
 import * as path from "path";
+import { getDocumentStateContext, DocumentStateContext } from "../utils/documentUtil";
 
 const trie = require("trie-prefix-tree");
 
@@ -93,7 +94,7 @@ export function getAllGlobalTags(): GlobalTags {
  * Sets the given component object into cache
  * @param comp The component to cache
  */
-export function setComponent(comp: Component): void {
+function setComponent(comp: Component): void {
   allComponentsByUri[comp.uri.toString()] = comp;
   const componentKey: string = path.basename(comp.uri.fsPath, COMPONENT_EXT).toLowerCase();
   if (!allComponentsByName[componentKey]) {
@@ -109,6 +110,12 @@ export function setComponent(comp: Component): void {
  * @param uri The URI of the component to be retrieved
  */
 export function getComponent(uri: Uri): Component {
+  if (!allComponentsByUri.hasOwnProperty(uri.toString())) {
+    /* TODO: If not already cached, attempt to parse and cache
+    cacheGivenComponents([uri]);
+    */
+  }
+
   return allComponentsByUri[uri.toString()];
 }
 
@@ -128,7 +135,7 @@ export function searchAllComponentNames(query: string): Component[] {
  * Sets the given user function object into cache
  * @param userFunction The user function to cache
  */
-export function setUserFunction(userFunction: UserFunction): void {
+function setUserFunction(userFunction: UserFunction): void {
   const functionKey: string = userFunction.name.toLowerCase();
 
   if (!allUserFunctionsByName[functionKey]) {
@@ -189,6 +196,7 @@ export function componentPathToUri(dotPath: string, baseUri: Uri): Uri {
  * @param component The component to cache
  */
 export function cacheComponent(component: Component): void {
+  clearCachedComponent(component.uri);
   setComponent(component);
   component.functions.forEach((funcObj: UserFunction) => {
     setUserFunction(funcObj);
@@ -198,7 +206,7 @@ export function cacheComponent(component: Component): void {
 /**
  * Reads and parses all cfc files in the current workspace and caches their definitions
  */
-export function cacheAllComponents(): void {
+export async function cacheAllComponents(): Promise<void> {
   clearAllCachedComponents();
 
   workspace.findFiles(COMPONENT_FILE_GLOB).then((componentUris: Uri[]) => {
@@ -208,8 +216,8 @@ export function cacheAllComponents(): void {
       const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
       const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
       const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
-      cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(() => {
-        cacheGivenComponents(componentUris);
+      cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(async () => {
+        await cacheGivenComponents(componentUris);
         cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
       });
     } else {
@@ -223,11 +231,13 @@ export function cacheAllComponents(): void {
 
 /**
  * Reads and parses given cfc files and caches their definitions
+ * @param componentUris List of URIs to parse and cache
  */
-function cacheGivenComponents(componentUris: Uri[]): void {
+async function cacheGivenComponents(componentUris: Uri[]): Promise<void> {
   componentUris.forEach((componentUri: Uri) => {
     workspace.openTextDocument(componentUri).then((document: TextDocument) => {
-      const parsedComponent = parseComponent(document);
+      const documentStateContext: DocumentStateContext = getDocumentStateContext(document, true);
+      const parsedComponent = parseComponent(documentStateContext);
       if (parsedComponent) {
         cacheComponent(parsedComponent);
       }
@@ -285,7 +295,7 @@ export function clearCachedComponent(componentUri: Uri): void {
 /**
  * Clears all cached references to components and their contents
  */
-export function clearAllCachedComponents(): void {
+function clearAllCachedComponents(): void {
   allComponentsByUri = {};
   allComponentsByName = {};
   allComponentNames = trie([]);

@@ -7,6 +7,10 @@ import { multiSigGlobalFunctions } from "./multiSignatures";
 import { equalsIgnoreCase } from "../textUtil";
 import { CFMLEngineName, CFMLEngine } from "./cfmlEngine";
 
+const Entities = require("html-entities").AllHtmlEntities;
+
+const entities = new Entities();
+
 export interface Param {
   name: string;
   type: string;
@@ -218,9 +222,9 @@ export class CFDocsDefinitionInfo {
           name: param.name,
           dataType: getParamDataType(param.type.toLowerCase()),
           required: param.required,
-          description: param.description,
+          description: entities.decode(param.description),
           default: param.default,
-          values: param.values
+          enumeratedValues: param.values
         };
       });
       let signatureInfo: Signature = {
@@ -232,7 +236,7 @@ export class CFDocsDefinitionInfo {
     return {
       name: this.name,
       syntax: this.syntax,
-      description: (this.description ? this.description : ""),
+      description: (this.description ? entities.decode(this.description) : ""),
       returntype: getReturnDataType(this.returns.toLowerCase()),
       signatures: signatures
     };
@@ -249,9 +253,9 @@ export class CFDocsDefinitionInfo {
         name: param.name,
         dataType: getParamDataType(param.type.toLowerCase()),
         required: param.required,
-        description: param.description,
+        description: entities.decode(param.description),
         default: param.default,
-        values: param.values
+        enumeratedValues: param.values
       };
     });
 
@@ -265,7 +269,7 @@ export class CFDocsDefinitionInfo {
       name: this.name,
       syntax: this.syntax,
       scriptSyntax: this.script,
-      description: this.description,
+      description: entities.decode(this.description),
       signatures: signatures,
       hasBody: true
     };

@@ -1,17 +1,17 @@
-import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, TextLine, workspace } from "vscode";
-import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath, getApplicationUri } from "../entities/component";
-import { componentPathToUri, getComponent } from "./cachedEntities";
+import { TypeDefinitionProvider, TextDocument, Position, CancellationToken, Definition, Range, Location, TextLine } from "vscode";
+import { Component } from "../entities/component";
+import { getComponent } from "./cachedEntities";
 import { Scope, getValidScopesPrefixPattern } from "../entities/scope";
 import { Access, UserFunction, UserFunctionSignature, Argument, getLocalVariables } from "../entities/userFunction";
 import { Property } from "../entities/property";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { getFunctionSuffixPattern } from "../entities/function";
-import { Variable, variableExpressionPrefix, parseVariableAssignments } from "../entities/variable";
-import { DocumentPositionStateContext, getDocumentPositionStateContext, DocumentStateContext, getDocumentStateContext } from "../utils/documentUtil";
+import { Variable, variableExpressionPrefix } from "../entities/variable";
+import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
 
-export default class CFMLDefinitionProvider implements DefinitionProvider {
+export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvider {
 
-  public async provideDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition> {
+  public async provideTypeDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition> {
     const results: Definition = [];
 
     const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
@@ -21,7 +21,6 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
     }
 
     const docIsCfcFile: boolean = documentPositionStateContext.isCfcFile;
-    const documentText: string = documentPositionStateContext.sanitizedDocumentText;
     const textLine: TextLine = document.lineAt(position);
     const lineText: string = textLine.text;
     let wordRange: Range = document.getWordRangeAtPosition(position);
@@ -32,34 +31,6 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
 
     const docPrefix: string = documentPositionStateContext.docPrefix;
     const lineSuffix: string = lineText.slice(wordRange.end.character, textLine.range.end.character);
-
-    // TODO: These references should ideally be in cachedEntities.
-    let referenceMatch: RegExpExecArray | null;
-    objectReferencePatterns.forEach((element: ReferencePattern) => {
-      const pattern: RegExp = element.pattern;
-      while ((referenceMatch = pattern.exec(documentText))) {
-        const path: string = referenceMatch[element.refIndex];
-        const name: string = getComponentNameFromDotPath(path);
-        const offset: number = referenceMatch.index + referenceMatch[0].lastIndexOf(name);
-        const nameRange = new Range(
-          document.positionAt(offset),
-          document.positionAt(offset + name.length)
-        );
-
-        if (nameRange.contains(position)) {
-          const componentUri: Uri = componentPathToUri(path, document.uri);
-          if (componentUri) {
-            const comp: Component = getComponent(componentUri);
-            if (comp) {
-              results.push(new Location(
-                comp.uri,
-                comp.declarationRange
-              ));
-            }
-          }
-        }
-      }
-    });
 
     if (docIsCfcFile) {
       const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(docPrefix);
@@ -88,10 +59,13 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
               const validScopes: Scope[] = userFun.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
               const funcPrefixPattern = getValidScopesPrefixPattern(validScopes, true);
               if (!checkScope || funcPrefixPattern.test(docPrefix)) {
-                results.push(new Location(
-                  currComponent.uri,
-                  userFun.nameRange
-                ));
+                if (userFun.returnTypeUri) {
+                  const returnTypeComponent: Component = getComponent(userFun.returnTypeUri);
+                  results.push(new Location(
+                    returnTypeComponent.uri,
+                    returnTypeComponent.declarationRange
+                  ));
+                }
                 break;
               }
             }
@@ -102,36 +76,21 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             }
           }
         }
-        // Extends
-        if (thisComponent.extendsRange && thisComponent.extendsRange.contains(position)) {
-          const extendsComp: Component = getComponent(thisComponent.extends);
-          if (extendsComp) {
-            results.push(new Location(
-              extendsComp.uri,
-              extendsComp.declarationRange
-            ));
-          }
-        }
+
         // Component functions
         thisComponent.functions.forEach((func: UserFunction) => {
-          // Function return types
-          if (func.returnTypeUri && func.returnTypeRange.contains(position)) {
-            const returnTypeComp: Component = getComponent(func.returnTypeUri);
-            results.push(new Location(
-              returnTypeComp.uri,
-              returnTypeComp.declarationRange
-            ));
-          }
-          // Argument types
+          // Argument declarations
           func.signatures.forEach((signature: UserFunctionSignature) => {
             signature.parameters.filter((arg: Argument) => {
-              return arg.dataTypeComponentUri && arg.dataTypeRange.contains(position);
+              return arg.dataTypeComponentUri && arg.nameRange.contains(position);
             }).forEach((arg: Argument) => {
               const argTypeComp: Component = getComponent(arg.dataTypeComponentUri);
-              results.push(new Location(
-                argTypeComp.uri,
-                argTypeComp.declarationRange
-              ));
+              if (argTypeComp) {
+                results.push(new Location(
+                  argTypeComp.uri,
+                  argTypeComp.declarationRange
+                ));
+              }
             });
           });
           // This function
@@ -141,12 +100,15 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             if (argumentPrefixPattern.test(docPrefix)) {
               func.signatures.forEach((signature: UserFunctionSignature) => {
                 signature.parameters.filter((arg: Argument) => {
-                  return equalsIgnoreCase(arg.name, currentWord);
+                  return equalsIgnoreCase(arg.name, currentWord) && arg.dataTypeComponentUri;
                 }).forEach((arg: Argument) => {
-                  results.push(new Location(
-                    thisComponent.uri,
-                    arg.nameRange
-                  ));
+                  const argTypeComp: Component = getComponent(arg.dataTypeComponentUri);
+                  if (argTypeComp) {
+                    results.push(new Location(
+                      argTypeComp.uri,
+                      argTypeComp.declarationRange
+                    ));
+                  }
                 });
               });
             }
@@ -155,33 +117,43 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             const localVarPrefixPattern = getValidScopesPrefixPattern([Scope.Local], true);
             if (localVarPrefixPattern.test(docPrefix)) {
               localVariables.filter((localVar: Variable) => {
-                return position.isAfterOrEqual(localVar.declarationLocation.range.start) && equalsIgnoreCase(localVar.identifier, currentWord);
+                return position.isAfterOrEqual(localVar.declarationLocation.range.start) && equalsIgnoreCase(localVar.identifier, currentWord) && localVar.dataTypeComponentUri;
               }).forEach((localVar: Variable) => {
-                results.push(localVar.declarationLocation);
+                const localVarTypeComp: Component = getComponent(localVar.dataTypeComponentUri);
+                if (localVarTypeComp) {
+                  results.push(new Location(
+                    localVarTypeComp.uri,
+                    localVarTypeComp.declarationRange
+                  ));
+                }
               });
             }
           }
         });
         // Component properties
         thisComponent.properties.forEach((prop: Property) => {
-          // Property types
-          if (prop.dataTypeComponentUri && prop.dataTypeRange.contains(position)) {
-            const dataTypeComp: Component = getComponent(prop.dataTypeComponentUri);
+          let propTypeComp: Component;
+          if (prop.dataTypeComponentUri) {
+            propTypeComp = getComponent(prop.dataTypeComponentUri);
+          }
+
+          // Property declarations
+          if (propTypeComp && prop.nameRange.contains(position)) {
             results.push(new Location(
-              dataTypeComp.uri,
-              dataTypeComp.declarationRange
+              propTypeComp.uri,
+              propTypeComp.declarationRange
             ));
           }
 
           const getterSetterPrefixPattern = getValidScopesPrefixPattern([Scope.This], true);
           if (thisComponent.accessors && getterSetterPrefixPattern.test(docPrefix) && /^\s*\(/.test(lineSuffix)) {
             // getters
-            if (typeof prop.getter === "undefined" || prop.getter) {
+            if (propTypeComp && (typeof prop.getter === "undefined" || prop.getter)) {
               const getterName = "get" + prop.name;
               if (!thisComponent.functions.has(getterName) && equalsIgnoreCase(getterName, currentWord)) {
                 results.push(new Location(
-                  thisComponent.uri,
-                  prop.nameRange
+                  propTypeComp.uri,
+                  propTypeComp.declarationRange
                 ));
               }
             }
@@ -192,7 +164,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
               if (!thisComponent.functions.has(setterName) && equalsIgnoreCase(setterName, currentWord)) {
                 results.push(new Location(
                   thisComponent.uri,
-                  prop.nameRange
+                  thisComponent.declarationRange
                 ));
               }
             }
@@ -202,28 +174,17 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
         const variablesPrefixPattern = getValidScopesPrefixPattern([Scope.Variables], false);
         if (variablesPrefixPattern.test(docPrefix)) {
           thisComponent.variables.filter((variable: Variable) => {
-            return equalsIgnoreCase(variable.identifier, currentWord);
+            return equalsIgnoreCase(variable.identifier, currentWord) && variable.dataTypeComponentUri;
           }).forEach((variable: Variable) => {
-            results.push(variable.declarationLocation);
+            const varTypeComp: Component = getComponent(variable.dataTypeComponentUri);
+            if (varTypeComp) {
+              results.push(new Location(
+                varTypeComp.uri,
+                varTypeComp.declarationRange
+              ));
+            }
           });
         }
-      }
-    }
-
-    // Application variables
-    const variablesPrefixPattern = getValidScopesPrefixPattern([Scope.Application], false);
-    if (variablesPrefixPattern.test(docPrefix)) {
-      const applicationUri: Uri = getApplicationUri(document.uri);
-
-      if (applicationUri) {
-        const applicationDoc: TextDocument = await workspace.openTextDocument(applicationUri);
-        const applicationDocStateContext: DocumentStateContext = getDocumentStateContext(applicationDoc);
-        const applicationDocVariables = parseVariableAssignments(applicationDocStateContext, applicationDocStateContext.docIsScript);
-        applicationDocVariables.filter((variable: Variable) => {
-          return variable.scope === Scope.Application && equalsIgnoreCase(variable.identifier, currentWord);
-        }).forEach((variable: Variable) => {
-          results.push(variable.declarationLocation);
-        });
       }
     }
 

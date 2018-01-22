@@ -1,4 +1,13 @@
-export const keywords = {
+interface KeywordDetails {
+  description: string;
+  links: string[];
+}
+
+interface Keywords {
+  [keyword: string]: KeywordDetails;
+}
+
+export const keywords: Keywords = {
   "var": {
     description: "",
     links: []

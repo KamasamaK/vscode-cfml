@@ -1,4 +1,14 @@
-export const cgiVariables = {
+interface CGIDetails {
+  detail: string;
+  description: string;
+  links: string[];
+}
+
+interface CGI {
+  [cgi: string]: CGIDetails;
+}
+
+export const cgiVariables: CGI = {
   // Server
   "SERVER_SOFTWARE": {
     detail: "CGI.SERVER_SOFTWARE",

@@ -15,12 +15,12 @@ An extension for Visual Studio Code to assist in development with CFML.
 ![Syntax Highlighting](./images/cfdocs_leaderboard.png)
 
 1. **Signature Help**  
-Automatically triggers within signature of a function or can be manually triggered. Currently limited to CFML global functions and internal component functions.  
+Automatically triggers within signature of a function or can be manually triggered. Currently limited to CFML global functions and internal/inherited component functions.  
 Win/Linux: `Ctrl+Shift+Space`; Mac: `Cmd+Shift+Space`
 ![Signature Help](./images/cfdocs_leaderboard_signature.png)
 
 1. **Hover Documentation**  
-Displays documentation for functions and tags. Currently limited to CFML global functions and tags and internal component functions. Does not consider context, so it may also trigger on SQL or JavaScript functions with the same name.  
+Displays documentation for functions and tags. Currently limited to CFML global functions and tags/attributes as well as internal/inherited component functions. Does not always consider context, so for example it may also trigger on SQL or JavaScript functions with the same name.  
 Win/Linux: `Ctrl+K Ctrl+I`; Mac: `Cmd+K Cmd+I`
 ![Hover Documentation](./images/cfdocs_leaderboard_hover.png)
 
@@ -35,12 +35,12 @@ Win/Linux: `Ctrl+T`; Mac: `Cmd+T`
 ![Workspace Symbols](./images/cfdocs_workspace-symbols.png)
 
 1. **Completion Suggestions**  
-Suggestions for global functions and tags, tag attributes, internal user functions, keywords, scopes, component properties, variables, and docblocks.  
+Suggestions for global functions and tags, tag attributes, user functions, keywords, scopes, component properties, variables, component dot-paths, and docblocks.  
 Win/Linux: `Ctrl+Space`; Mac: `Cmd+Space`
 ![Completion Suggestions](./images/cfdocs_leaderboard_completion.png)
 
 1. **Definition**
-Provides a link to the definition of a symbol. Currently only for object creation, function usage within its same component, function return types, argument types, property types, and component extends.  
+Provides a link to the definition of a symbol. Currently only for object creation, function usage within the same or inherited component, function return types, argument types, property types, component extends, function arguments, function local variables, and application variables.  
 _Go to Definition:_ Win/Linux: `F12`/`Ctrl+Click`; Mac: `F12`  
 _Peek Definition:_ Win/Linux: `Alt+F12` (`Ctrl`+hover provides a smaller, alternate peek); Mac: `Opt+F12`
 ![Peek Definition](./images/cfdocs_definition-peek.png)
@@ -95,11 +95,14 @@ Used in Command Palette (Win/Linux: `Ctrl+Shift+P`; Mac: `Cmd+Shift+P`). Can als
 
 ## Known Issues/Limitations
 
-1. As currently implemented, there is no embedded language support. Unfortunately, VS Code does not currently seem to have this native capability. This means that you will not get robust HTML/CSS/JS assistance within CFML files. You will still get syntax highlighting and you can use user snippets and Emmet to supplement somewhat.
+1. Initial indexing can be a lengthy process depending on how many components you have and your hardware specifications. During this time, features will be unavailable and the editor will be sluggish.
+1. There is no embedded language support, which means that you will not get HTML/CSS/JS/SQL assistance within CFML files. You will still get syntax highlighting and you can use user snippets and Emmet to supplement somewhat.
 1. An extension of the issue above is that as implemented there is only one language defined for CFML. This can cause a number of issues where functionality or settings are based on language ID. For example, with Emmet enabled, you will get the Emmet functionality throughout the CFML files and contexts.
 1. Removing, moving, or renaming folders does not update the workspace definitions or symbols and will cause discrepancies with those resources. To rectify this, you may use the command to refresh workspace definitions at any time.
 1. Completion suggestions are not always properly contextual.
-1. The "parsing" is mostly done with regular expressions without considering context in most cases, which can result in occasional issues. One way this manifests is that you may get non-CFML being parsed as CFML. This can also result in strings and comments being parsed as if they were part of code. To simplify the expressions, semicolons are expected as terminators in CFScript even though they are optional in some engines.
+1. The "parsing" is mostly done with regular expressions without considering context in most cases, which can result in occasional issues. One way this manifests is that you may get non-CFML being parsed as CFML. This can also result in strings and comments being parsed as if they were part of code. To simplify the expressions, semicolons are often expected as terminators in CFScript even though they are optional in some engines.
+1. Type inference is extremely primitive and only based on variable initialization.
+1. Syntax highlighting breaks for embedded grammars (CSS and JavaScript) when only partially wrapped in `<cfoutput>`.
 
 ## Future Plans
 
@@ -108,13 +111,10 @@ Feel free to open issues for these or any other features you would find helpful 
 - Signature help for external component functions
 - Hover documentation for external component functions
 - Provide additional completion suggestions
-  - Script-based tag functions
-  - External component functions
-  - Component paths
   - Global member functions
-  - Enumerated values
+  - Enumerated values for global functions
 - Definitions for more contexts
-- Type Definitions
+- Type Definitions for more contexts
 - References
 - Custom mapping
 - Use proper parser ([CFParser](https://github.com/cfparser/cfparser))

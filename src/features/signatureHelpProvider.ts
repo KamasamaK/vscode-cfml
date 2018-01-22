@@ -1,16 +1,18 @@
 import {
   SignatureHelpProvider, SignatureHelp, SignatureInformation, ParameterInformation, CancellationToken,
-  TextDocument, Position, Range, WorkspaceConfiguration, workspace
+  TextDocument, Position, Range, WorkspaceConfiguration, workspace, Uri
 } from "vscode";
 import * as cachedEntity from "./cachedEntities";
-import { Function } from "../entities/function";
-import { Signature, constructSignatureLabel } from "../entities/signature";
-import { Component } from "../entities/component";
-import { getComponent } from "./cachedEntities";
+import { Function, getSyntaxString } from "../entities/function";
+import { Signature } from "../entities/signature";
+import { Component, objectNewInstanceInitPrefix } from "../entities/component";
+import { getComponent, componentPathToUri } from "./cachedEntities";
 import { Parameter, constructParameterLabel } from "../entities/parameter";
-import { textToMarkdownString } from "../utils/textUtil";
-import { UserFunction } from "../entities/userFunction";
-import { isInComment } from "../utils/contextUtil";
+import { textToMarkdownString, equalsIgnoreCase } from "../utils/textUtil";
+import { UserFunction, Access } from "../entities/userFunction";
+import { getDocumentPositionStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
+import { Scope, getValidScopesPrefixPattern } from "../entities/scope";
+import { variableExpressionPrefix } from "../entities/variable";
 
 const NEW_LINE = "\n".charCodeAt(0);
 const LEFT_BRACKET = "[".charCodeAt(0);
@@ -29,15 +31,15 @@ const identPartPattern = /[$\w]/;
 
 class BackwardIterator {
   private model: TextDocument;
-  private offset: number;
   private lineNumber: number;
+  private offset: number;
   private lineText: string;
 
   constructor(model: TextDocument, offset: number, lineNumber: number) {
+    this.model = model;
     this.lineNumber = lineNumber;
     this.offset = offset;
     this.lineText = model.lineAt(this.lineNumber).text;
-    this.model = model;
   }
 
   /**
@@ -95,15 +97,18 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
       return null;
     }
 
-    const comp: Component = getComponent(document.uri);
+    const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
+
+    const thisComponent: Component = documentPositionStateContext.component;
     // let isUserFunction = false;
 
-    const isScript: boolean = (comp && comp.isScript) ? true : false;
-    if (isInComment(document, position, isScript)) {
+    if (documentPositionStateContext.positionInComment) {
       return null;
     }
 
-    let iterator = new BackwardIterator(document, position.character - 1, position.line);
+    const sanitizedDocumentText: string = documentPositionStateContext.sanitizedDocumentText;
+
+    let iterator: BackwardIterator = new BackwardIterator(document, position.character - 1, position.line);
 
     let functionArgs: string[] = this.readArguments(iterator);
     const paramCount: number = functionArgs.length - 1;
@@ -111,26 +116,86 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
       return null;
     }
 
-    const ident: string = this.readIdent(iterator);
-    if (!ident) {
-      return null;
-    }
+    const startSigPosition: Position = iterator.getPosition();
+    const startSigPositionPrefix: string = sanitizedDocumentText.slice(0, document.offsetAt(startSigPosition) + 2);
 
-    // Initialize as global function
-    let entry: Function = cachedEntity.getGlobalFunction(ident.toLowerCase());
+    let entry: Function;
 
-    // Check if component function
-    if (!entry) {
-      // Check current component
-      if (comp && comp.functions.has(ident.toLowerCase())) {
-        const userFun: UserFunction = comp.functions.get(ident.toLowerCase());
-        // Ensure this does not trigger on function definition
-        if (!userFun.location.range.contains(position) || userFun.bodyRange.contains(position)) {
-          // isUserFunction = true;
-          entry = userFun;
+    // Check if initializing via "new" operator
+    const objectNewInstanceInitPrefixMatch: RegExpExecArray = objectNewInstanceInitPrefix.exec(startSigPositionPrefix);
+    if (objectNewInstanceInitPrefixMatch) {
+      const componentDotPath: string = objectNewInstanceInitPrefixMatch[2];
+      const componentUri: Uri = componentPathToUri(componentDotPath, document.uri);
+      if (componentUri) {
+        const initComponent: Component = getComponent(componentUri);
+        if (initComponent) {
+          const initMethod = initComponent.initmethod ? initComponent.initmethod.toLowerCase() : "init";
+          if (initComponent.functions.has(initMethod)) {
+            entry = initComponent.functions.get(initMethod);
+          }
         }
       }
     }
+
+    if (!entry) {
+      const identWordRange: Range = this.readIdentRange(iterator);
+      if (!identWordRange) {
+        return null;
+      }
+
+      const ident: string = document.getText(identWordRange);
+
+      const startIdentPositionPrefix: string = sanitizedDocumentText.slice(0, document.offsetAt(identWordRange.start));
+
+      // Global function
+      entry = cachedEntity.getGlobalFunction(ident.toLowerCase());
+
+      // Check if component function
+      if (!entry) {
+        const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(startIdentPositionPrefix);
+        // Check current component
+        if (thisComponent) {
+          let currComponent: Component = thisComponent;
+          let checkScope: boolean = true;
+          // If preceded by super keyword, start at base component
+          if (thisComponent.extends && varPrefixMatch) {
+            const varMatchText: string = varPrefixMatch[0];
+            const varScope: string = varPrefixMatch[2];
+            // const varQuote: string = varPrefixMatch[3];
+            const varName: string = varPrefixMatch[4];
+
+            if (varMatchText.split(".").length === 2 && !varScope && equalsIgnoreCase(varName, "super")) {
+              currComponent = getComponent(thisComponent.extends);
+              checkScope = false;
+            }
+          }
+          while (currComponent) {
+            if (currComponent.functions.has(ident.toLowerCase())) {
+              const userFun: UserFunction = currComponent.functions.get(ident.toLowerCase());
+
+              // Ensure this does not trigger on function definition
+              if (userFun.location.range.contains(position) && !userFun.bodyRange.contains(position)) {
+                break;
+              }
+
+              const validScopes: Scope[] = userFun.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
+              const funcPrefixPattern = getValidScopesPrefixPattern(validScopes, true);
+              if (!checkScope || funcPrefixPattern.test(startIdentPositionPrefix)) {
+                entry = userFun;
+                break;
+              }
+            }
+            if (currComponent.extends) {
+              currComponent = getComponent(currComponent.extends);
+            } else {
+              currComponent = undefined;
+            }
+          }
+        }
+      }
+    }
+
+    // TODO: Check if external user function
 
     if (!entry) {
       return null;
@@ -139,9 +204,8 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
     let ret = new SignatureHelp();
 
     entry.signatures.forEach((signature: Signature) => {
-      const sigLabel: string = constructSignatureLabel(signature);
       const sigDesc: string = signature.description  ? signature.description : entry.description;
-      let signatureInfo = new SignatureInformation(`${entry.name}(${sigLabel})`, textToMarkdownString(sigDesc));
+      let signatureInfo = new SignatureInformation(getSyntaxString(entry), textToMarkdownString(sigDesc));
       signatureInfo.parameters = signature.parameters.map((param: Parameter) => {
         return new ParameterInformation(constructParameterLabel(param), textToMarkdownString(param.description));
       });
@@ -190,6 +254,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
         case LEFT_BRACKET: bracketNesting--; break;
         case RIGHT_BRACKET: bracketNesting++; break;
         case DOUBLE_QUOTE: case SINGLE_QUOTE:
+          // FIXME: If position is within string, it breaks the provider
           currArg.unshift(String.fromCharCode(ch));
           while (iterator.hasNext()) {
             const nch: number = iterator.next();
@@ -222,25 +287,11 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
   }
 
   /**
-   * Gets the character immediately preceding the given position within the given document
-   * @param document The document to check
-   * @param position The position to check
-   */
-  private getPrefixChar(document: TextDocument, position: Position): string {
-    let char = "";
-    if (position.character !== 0) {
-      const newPos: Position = position.translate(0, -1);
-      char = document.getText(new Range(newPos, position));
-    }
-    return char;
-  }
-
-  /**
-   * Returns the identifier for the current signature or empty string if invalid
+   * Returns the range of the identifier for the current signature or undefined if invalid
    * @param iterator A BackwardIterator to use
    */
-  private readIdent(iterator: BackwardIterator): string {
-    let ident = "";
+  private readIdentRange(iterator: BackwardIterator): Range | undefined {
+    let identRange: Range;
     let charStr = "";
     while (iterator.hasNext()) {
       const ch: number = iterator.next();
@@ -254,11 +305,11 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
       const document: TextDocument = iterator.getDocument();
       const currentWordRange: Range = document.getWordRangeAtPosition(iterator.getPosition());
       const currentWord: string = document.getText(currentWordRange);
-      if (identPattern.test(currentWord) && this.getPrefixChar(document, currentWordRange.start) !== ".") {
-        ident = currentWord;
+      if (identPattern.test(currentWord)) {
+        identRange = currentWordRange;
       }
     }
 
-    return ident;
+    return identRange;
   }
 }

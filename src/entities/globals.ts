@@ -2,6 +2,8 @@ import { DataType } from "./dataType";
 import { Function } from "./function";
 import { Signature } from "./signature";
 import { MyMap } from "../utils/collections";
+import { getCfOpenTagPattern } from "./tag";
+import { ATTRIBUTES_PATTERN } from "./attribute";
 
 export interface GlobalEntity {
   name: string;
@@ -46,4 +48,24 @@ export interface GlobalTags {
  */
 export function getMemberFunctionType(functionName: string): DataType {
   return DataType.Any;
+}
+
+/**
+ * Transforms the global tag syntax into script syntax
+ */
+export function globalTagSyntaxToScript(globalTag: GlobalTag): string {
+  let scriptSyntax: string = globalTag.name + "(";
+  let attributes: string[] = [];
+  const cfOpenTagPattern = getCfOpenTagPattern();
+  const attributeStr: string = cfOpenTagPattern.exec(globalTag.syntax)[3];
+  if (attributeStr) {
+    let attributeMatch: RegExpExecArray = null;
+    while (attributeMatch = ATTRIBUTES_PATTERN.exec(attributeStr)) {
+      attributes.push(attributeMatch[0]);
+    }
+  }
+
+  scriptSyntax += attributes.join(", ") + ")";
+
+  return scriptSyntax;
 }

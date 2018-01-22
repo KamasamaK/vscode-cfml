@@ -1,45 +1,41 @@
-import { Range, Position, languages, commands, window, TextEditor, LanguageConfiguration, Selection, TextDocument } from "vscode";
+import { Position, languages, commands, window, TextEditor, LanguageConfiguration, TextDocument, CharacterPair } from "vscode";
 import { LANGUAGE_ID } from "../cfmlMain";
-import { isCfmFile, containsCfTag, containsCfScriptTag, isLastTagCFScript } from "../utils/contextUtil";
-
+import { isInCfScript, isCfcFile } from "../utils/contextUtil";
+import { getComponent } from "./cachedEntities";
 
 export enum CommentType {
   Line,
   Block
 }
 
+export interface CFMLCommentRules {
+  scriptBlockComment: CharacterPair;
+  scriptLineComment: string;
+  tagBlockComment: CharacterPair;
+}
+
+export interface CommentContext {
+  inComment: boolean;
+  activeComment: string | CharacterPair;
+  commentType: CommentType;
+  start: Position;
+}
+
+export const cfmlCommentRules: CFMLCommentRules = {
+  scriptBlockComment: ["/*", "*/"],
+  scriptLineComment: "//",
+  tagBlockComment: ["<!---", "--->"]
+};
+
 /**
  * Returns whether to use CFML tag comment
  * @param document The TextDocument in which the selection is made
- * @param beforeSelection The text in the document before the start of the selection
- * @param selection The text in the document that is selected
+ * @param startPosition The position at which the comment starts
  */
-function isTagComment(document: TextDocument, beforeSelection: string, selection: string): boolean {
-  return (
-    (isCfmFile(document) || containsCfTag(document.getText())) &&
-    (containsCfScriptTag(selection) || !isLastTagCFScript(beforeSelection))
-  );
-}
+function isTagComment(document: TextDocument, startPosition: Position): boolean {
+  const docIsScript: boolean = (isCfcFile(document) && getComponent(document.uri) && getComponent(document.uri).isScript);
 
-/**
- * Get selection text for specified context
- * For line comment, we want to consider text outside of the actual comment bounds
- * For block comment, we do not want to consider text outside of the actual comment bounds
- * @param editor The currently active editor
- * @param commentType The comment type for which the selection will be used
- */
-function getSelectionText(editor: TextEditor, commentType: CommentType): string {
-  let range: Range;
-  if (commentType === CommentType.Line) {
-    range = new Range(
-      new Position(editor.selection.start.line, 0),
-      editor.document.lineAt(editor.selection.end).range.end
-    );
-  } else {
-    range = editor.selection;
-  }
-
-  return editor.document.getText(range);
+  return !docIsScript && !isInCfScript(document, startPosition);
 }
 
 /**
@@ -69,22 +65,16 @@ export function toggleComment(commentType: CommentType): () => void {
       // default comment config
       let languageConfig: LanguageConfiguration = {
         comments: {
-          lineComment: "//",
-          blockComment: ["/*", "*/"]
+          lineComment: cfmlCommentRules.scriptLineComment,
+          blockComment: cfmlCommentRules.scriptBlockComment
         }
       };
 
-      const selection: Selection = editor.selection;
-      const textBeforeSelection: string = editor.document.getText(
-        new Range(new Position(0, 0), selection.start)
-      );
-      const selectionText: string = getSelectionText(editor, commentType);
-
       // Changes the comment in language configuration based on the context
-      if (isTagComment(editor.document, textBeforeSelection, selectionText)) {
+      if (isTagComment(editor.document, editor.selection.start)) {
         languageConfig = {
           comments: {
-            blockComment: ["<!---", "--->"]
+            blockComment: cfmlCommentRules.tagBlockComment
           }
         };
       }

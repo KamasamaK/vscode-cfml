@@ -10,11 +10,20 @@ import { parseVariableAssignments, Variable } from "./variable";
 import { parseDocBlock, DocBlockKeyValue } from "./docblock";
 import { parseAttributes, Attributes, Attribute } from "./attribute";
 import { MyMap, MySet } from "../utils/collections";
+import { DocumentStateContext } from "../utils/documentUtil";
+import { getComponent } from "../features/cachedEntities";
+import { isCfcFile } from "../utils/contextUtil";
+
+const findConfig = require("find-config");
 
 export const COMPONENT_EXT: string = ".cfc";
 export const COMPONENT_FILE_GLOB: string = "**/*" + COMPONENT_EXT;
 
 export const COMPONENT_PATTERN: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(<cf)?(component|interface)\b)([^>{]*)/i;
+
+export const componentDottedPathPrefix: RegExp = /\b(import|new)\s+(['"])?([^('"]*?)$/i;
+
+export const objectNewInstanceInitPrefix: RegExp = /\bnew\s+(['"])?([^('"]+?)\1\($/i;
 
 export interface ReferencePattern {
   pattern: RegExp;
@@ -24,22 +33,22 @@ export interface ReferencePattern {
 export const objectReferencePatterns: ReferencePattern[] = [
   // new object
   {
-    pattern: /new\s+(['"])?([^('"]+?)\1\(/gi,
+    pattern: /\bnew\s+(['"])?([^('"]+?)\1\(/gi,
     refIndex: 2
   },
   // createObject
   {
-    pattern: /createObject\s*\(\s*(['"])component\1\s*,\s*(['"])([^'"]+?)\2/gi,
+    pattern: /\bcreateObject\s*\(\s*(['"])component\1\s*,\s*(['"])([^'"]+?)\2/gi,
     refIndex: 3
   },
   // cfobject or cfinvoke
   {
-    pattern: /component\s*=\s*(['"])([^\1]+?)\1/gi,
+    pattern: /\bcomponent\s*=\s*(['"])([^'"]+?)\1/gi,
     refIndex: 2
   },
   // isInstanceOf
   {
-    pattern: /isInstanceOf\s*\(\s*[\w$.]+\s*,\s*(['"])([^\1]+?)\1/gi,
+    pattern: /\bisInstanceOf\s*\(\s*[\w$.]+\s*,\s*(['"])([^'"]+?)\1/gi,
     refIndex: 2
   },
 ];
@@ -89,7 +98,7 @@ export interface Component {
   uri: Uri;
   name: string;
   isScript: boolean;
-  isInterface: boolean; // should be a separate type, but chosen not to be for the purpose of simplification
+  isInterface: boolean; // should be a separate type, but chose this for the purpose of simplification
   declarationRange: Range;
   displayname: string;
   hint: string;
@@ -149,137 +158,155 @@ export interface ComponentsByName {
   [name: string]: ComponentsByUri; // key is Component name lowercased
 }
 
-/**
- * Parses a component document and returns an object conforming to the Component interface
- * @param document The TextDocument to be parsed
- */
-export function parseComponent(document: TextDocument): Component {
-  const documentText: string = document.getText();
-  const componentMatch: RegExpExecArray = COMPONENT_PATTERN.exec(documentText);
-  if (componentMatch) {
-    const head: string = componentMatch[0];
-    const attributePrefix: string = componentMatch[1];
-    const fullPrefix: string = componentMatch[2];
-    const componentDoc: string = componentMatch[3];
-    const checkTag: string = componentMatch[4];
-    const componentType: string = componentMatch[5];
-    const componentAttr: string = componentMatch[6];
-
-    const componentIsScript: boolean = !checkTag;
-
-    let declarationStartOffset: number = componentMatch.index;
-    if (fullPrefix) {
-      declarationStartOffset += fullPrefix.length;
-    }
-    if (checkTag) {
-      declarationStartOffset += checkTag.length;
-    }
-
-    let componentAttributes: ComponentAttributes = {};
-    let component: Component = {
-      uri: document.uri,
-      name: path.basename(document.fileName, COMPONENT_EXT),
-      isScript: componentIsScript,
-      isInterface: componentType === "interface",
-      declarationRange: new Range(document.positionAt(declarationStartOffset), document.positionAt(declarationStartOffset + componentType.length)),
-      displayname: "",
-      hint: "",
-      extends: null,
-      implements: null,
-      accessors: false,
-      functions: new ComponentFunctions(),
-      properties: parseProperties(document),
-      variables: []
-    };
-
-    if (componentDoc) {
-      const parsedDocBlock: DocBlockKeyValue[] = parseDocBlock(
-        document,
-        new Range(
-          document.positionAt(componentMatch.index + 3),
-          document.positionAt(componentMatch.index + 3 + componentDoc.length)
-        )
-      );
-      const docBlockAttributes: ComponentAttributes = processDocBlock(parsedDocBlock);
-      Object.assign(componentAttributes, docBlockAttributes);
-
-      parsedDocBlock.filter((docAttribute: DocBlockKeyValue) => {
-        return docAttribute.key === "extends";
-      }).forEach((docAttr: DocBlockKeyValue) => {
-        const extendsName: string = getComponentNameFromDotPath(docAttr.value);
-        component.extendsRange = new Range(
-          docAttr.valueRange.start.translate(0, docAttr.value.length - extendsName.length),
-          docAttr.valueRange.end
-        );
-      });
-    }
-
-    if (componentAttr) {
-      const componentAttributePrefixOffset: number = componentMatch.index + attributePrefix.length;
-      const componentAttributeRange = new Range(
-        document.positionAt(componentAttributePrefixOffset),
-        document.positionAt(componentAttributePrefixOffset + componentAttr.length)
-      );
-
-      const parsedAttributes: Attributes = parseAttributes(document, componentAttributeRange, componentAttributeNames);
-
-      const tagAttributes: ComponentAttributes = processAttributes(parsedAttributes);
-      Object.assign(componentAttributes, tagAttributes);
-
-      if (parsedAttributes.has("extends")) {
-        const extendsAttr: Attribute = parsedAttributes.get("extends");
-        const extendsName: string = getComponentNameFromDotPath(extendsAttr.value);
-        component.extendsRange = new Range(
-          extendsAttr.valueRange.start.translate(0, extendsAttr.value.length - extendsName.length),
-          extendsAttr.valueRange.end
-        );
-      }
-    }
-
-    Object.getOwnPropertyNames(component).forEach((propName: string) => {
-      if (componentAttributes[propName]) {
-        if (propName === "extends") {
-          component.extends = componentPathToUri(componentAttributes.extends, document.uri);
-        } else if (propName === "implements") {
-          componentAttributes.implements.split(",").forEach((element: string) => {
-            const implementsUri: Uri = componentPathToUri(element.trim(), document.uri);
-            if (implementsUri) {
-              if (!component.implements) {
-                component.implements = [];
-              }
-              component.implements.push(implementsUri);
-            }
-          });
-        } else if (propName === "persistent" && componentAttributes.persistent) {
-          component.accessors = true;
-        } else {
-          component[propName] = componentAttributes[propName];
-        }
-      }
-    });
-
-    let componentFunctions = new ComponentFunctions();
-    let userFunctions: UserFunction[] = parseScriptFunctions(document);
-    userFunctions = userFunctions.concat(parseTagFunctions(document));
-    let earliestFunctionRangeStart: Position = document.positionAt(documentText.length);
-    userFunctions.forEach((compFun: UserFunction) => {
-      if (compFun.location.range.start.isBefore(earliestFunctionRangeStart)) {
-        earliestFunctionRangeStart = compFun.location.range.start;
-      }
-      componentFunctions.set(compFun.name.toLowerCase(), compFun);
-    });
-
-    component.functions = componentFunctions;
-
-    // TODO: ImplicitFunctions
-
-    const componentDefinitionRange = new Range(document.positionAt(head.length), earliestFunctionRangeStart);
-    component.variables = parseVariableAssignments(document, componentIsScript, componentDefinitionRange);
-
-    return component;
+export function isScriptComponent(document: TextDocument): boolean {
+  const component: Component = getComponent(document.uri);
+  if (component) {
+    return component.isScript;
   }
 
-  return undefined;
+  const componentMatch: RegExpExecArray = COMPONENT_PATTERN.exec(document.getText());
+  if (!componentMatch) {
+    return false;
+  }
+  const checkTag: string = componentMatch[4];
+
+  return isCfcFile(document) && !checkTag;
+}
+
+/**
+ * Parses a component document and returns an object conforming to the Component interface
+ * @param documentStateContext The content information for a TextDocument to be parsed
+ */
+export function parseComponent(documentStateContext: DocumentStateContext): Component | undefined {
+  const document: TextDocument = documentStateContext.document;
+  const documentText: string = document.getText();
+  const componentMatch: RegExpExecArray = COMPONENT_PATTERN.exec(documentText);
+
+  if (!componentMatch) {
+    return undefined;
+  }
+
+  const head: string = componentMatch[0];
+  const attributePrefix: string = componentMatch[1];
+  const fullPrefix: string = componentMatch[2];
+  const componentDoc: string = componentMatch[3];
+  const checkTag: string = componentMatch[4];
+  const componentType: string = componentMatch[5];
+  const componentAttr: string = componentMatch[6];
+
+  const componentIsScript: boolean = !checkTag;
+
+  let declarationStartOffset: number = componentMatch.index;
+  if (fullPrefix) {
+    declarationStartOffset += fullPrefix.length;
+  }
+  if (checkTag) {
+    declarationStartOffset += checkTag.length;
+  }
+
+  let componentAttributes: ComponentAttributes = {};
+  let component: Component = {
+    uri: document.uri,
+    name: path.basename(document.fileName, COMPONENT_EXT),
+    isScript: componentIsScript,
+    isInterface: componentType === "interface",
+    declarationRange: new Range(document.positionAt(declarationStartOffset), document.positionAt(declarationStartOffset + componentType.length)),
+    displayname: "",
+    hint: "",
+    extends: null,
+    implements: null,
+    accessors: false,
+    functions: new ComponentFunctions(),
+    properties: parseProperties(document),
+    variables: []
+  };
+
+  if (componentDoc) {
+    const parsedDocBlock: DocBlockKeyValue[] = parseDocBlock(
+      document,
+      new Range(
+        document.positionAt(componentMatch.index + 3),
+        document.positionAt(componentMatch.index + 3 + componentDoc.length)
+      )
+    );
+    const docBlockAttributes: ComponentAttributes = processDocBlock(parsedDocBlock);
+    Object.assign(componentAttributes, docBlockAttributes);
+
+    parsedDocBlock.filter((docAttribute: DocBlockKeyValue) => {
+      return docAttribute.key === "extends";
+    }).forEach((docAttr: DocBlockKeyValue) => {
+      const extendsName: string = getComponentNameFromDotPath(docAttr.value);
+      component.extendsRange = new Range(
+        docAttr.valueRange.start.translate(0, docAttr.value.length - extendsName.length),
+        docAttr.valueRange.end
+      );
+    });
+  }
+
+  if (componentAttr) {
+    const componentAttributePrefixOffset: number = componentMatch.index + attributePrefix.length;
+    const componentAttributeRange = new Range(
+      document.positionAt(componentAttributePrefixOffset),
+      document.positionAt(componentAttributePrefixOffset + componentAttr.length)
+    );
+
+    const parsedAttributes: Attributes = parseAttributes(document, componentAttributeRange, componentAttributeNames);
+
+    const tagAttributes: ComponentAttributes = processAttributes(parsedAttributes);
+    Object.assign(componentAttributes, tagAttributes);
+
+    if (parsedAttributes.has("extends")) {
+      const extendsAttr: Attribute = parsedAttributes.get("extends");
+      const extendsName: string = getComponentNameFromDotPath(extendsAttr.value);
+      component.extendsRange = new Range(
+        extendsAttr.valueRange.start.translate(0, extendsAttr.value.length - extendsName.length),
+        extendsAttr.valueRange.end
+      );
+    }
+  }
+
+  Object.getOwnPropertyNames(component).forEach((propName: string) => {
+    if (componentAttributes[propName]) {
+      if (propName === "extends") {
+        component.extends = componentPathToUri(componentAttributes.extends, document.uri);
+      } else if (propName === "implements") {
+        componentAttributes.implements.split(",").forEach((element: string) => {
+          const implementsUri: Uri = componentPathToUri(element.trim(), document.uri);
+          if (implementsUri) {
+            if (!component.implements) {
+              component.implements = [];
+            }
+            component.implements.push(implementsUri);
+          }
+        });
+      } else if (propName === "persistent" && componentAttributes.persistent) {
+        component.accessors = true;
+      } else {
+        component[propName] = componentAttributes[propName];
+      }
+    }
+  });
+
+  let componentFunctions = new ComponentFunctions();
+  let userFunctions: UserFunction[] = parseScriptFunctions(documentStateContext);
+  userFunctions = userFunctions.concat(parseTagFunctions(documentStateContext));
+  let earliestFunctionRangeStart: Position = document.positionAt(documentText.length);
+  userFunctions.forEach((compFun: UserFunction) => {
+    if (compFun.location.range.start.isBefore(earliestFunctionRangeStart)) {
+      earliestFunctionRangeStart = compFun.location.range.start;
+    }
+    componentFunctions.set(compFun.name.toLowerCase(), compFun);
+  });
+
+  component.functions = componentFunctions;
+
+  // TODO: ImplicitFunctions
+
+  const componentDefinitionRange = new Range(document.positionAt(head.length), earliestFunctionRangeStart);
+  documentStateContext.component = component;
+  component.variables = parseVariableAssignments(documentStateContext, componentIsScript, componentDefinitionRange);
+
+  return component;
 }
 
 /**
@@ -355,5 +382,25 @@ export function componentPathToUri(dotPath: string, baseUri: Uri): Uri {
  * @param path Dot path to a component
  */
 export function getComponentNameFromDotPath(path: string): string {
-  return path.split(".").reverse()[0];
+  return path.split(".").pop();
+}
+
+/**
+ * Finds the applicable Application file for the given file URI
+ * @param baseUri The URI from which the Application file will be searched
+ */
+export function getApplicationUri(baseUri: Uri): Uri | undefined {
+  let componentUri: Uri;
+
+  const fileNames = ["Application.cfc", "Application.cfm"];
+  fileNames.forEach((fileName: string) => {
+    const currentWorkingDir: string = path.dirname(baseUri.fsPath);
+    const applicationFile: string = findConfig(fileName, { cwd: currentWorkingDir });
+    if (applicationFile) {
+      componentUri = Uri.file(applicationFile);
+      return;
+    }
+  });
+
+  return componentUri;
 }

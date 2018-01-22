@@ -11,14 +11,12 @@ import { Attributes, Attribute, parseAttributes } from "./attribute";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
 import { getComponent } from "../features/cachedEntities";
-import { getTagPattern } from "./tag";
+import { parseTags, Tag } from "./tag";
+import { DocumentStateContext } from "../utils/documentUtil";
+import { getClosingPosition, getNextCharacterPosition } from "../utils/contextUtil";
 
-// TODO: For scriptFunctionPattern, add another capture group that separates arguments from function attributes
-const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*(\((?:=\s*\{|[^{])*)[\{;]/gi;
-// TODO: For scriptFunctionArgsPattern, prevent comma or close paren within string from delimiting arguments
-const scriptFunctionArgsPattern: RegExp = /((?:^\(|,)\s*(?:(required)\s+)?(?:\b([\w.]+)\b\s+)?(\b[\w$]+\b)(?:\s*=\s*(\{[^\}]*\}|\[[^\]]*\]|\([^\)]*\)|(?:[^,\)](?!\b\w+\s*=))+))?)([^,\)]*)?/gi;
-const tagFunctionPattern: RegExp = getTagPattern("cffunction");
-const tagFunctionArgPattern: RegExp = getTagPattern("cfargument");
+const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*\(/gi;
+const scriptFunctionArgPattern: RegExp = /((?:(required)\s+)?(?:\b([\w.]+)\b\s+)?(\b[_$a-zA-Z][$\w]*\b)(?:\s*=\s*(\{[^\}]*\}|\[[^\]]*\]|\([^\)]*\)|(?:(?!\b\w+\s*=).)+))?)(.*)?/i;
 
 const userFunctionAttributeNames: MySet<string> = new MySet([
   "name",
@@ -45,7 +43,7 @@ const userFunctionBooleanAttributes: MySet<string> = new MySet([
 
 const accessArr: string[] = ["public", "private", "package", "remote"];
 
-export const inlineFunctionPattern = /([a-zA-Z_$][$\w.\[\]'"]*)\s*=\s*function\s*\(|function\s+([a-zA-Z_$][$\w]*)\s*\(/gi;
+export const inlineScriptFunctionPattern = /([a-zA-Z_$][$\w.\[\]'"]*)\s*=\s*function\s*\(|function\s+([a-zA-Z_$][$\w]*)\s*\(/gi;
 
 // TODO: Add pattern for arrow function
 
@@ -60,7 +58,7 @@ export namespace Access {
    * Resolves a string value of access type to an enumeration member
    * @param access The access type string to resolve
    */
-  export function valueOf(access: string) {
+  export function valueOf(access: string): Access {
     switch (access.toLowerCase()) {
       case "public":
         return Access.Public;
@@ -169,9 +167,10 @@ export interface UserFunctionsByName {
 
 /**
  * Parses the CFScript function definitions and returns an array of UserFunction objects
- * @param document The TextDocument in which to parse the CFScript functions
+ * @param documentStateContext The content information for a TextDocument in which to parse the CFScript functions
  */
-export function parseScriptFunctions(document: TextDocument): UserFunction[] {
+export function parseScriptFunctions(documentStateContext: DocumentStateContext): UserFunction[] {
+  const document: TextDocument = documentStateContext.document;
   let userFunctions: UserFunction[] = [];
   const componentBody: string = document.getText();
   let scriptFunctionMatch: RegExpExecArray = null;
@@ -184,33 +183,44 @@ export function parseScriptFunctions(document: TextDocument): UserFunction[] {
     const modifier2 = scriptFunctionMatch[5];
     const returnType = scriptFunctionMatch[6];
     const functionName = scriptFunctionMatch[7];
-    const functionArgs = scriptFunctionMatch[8]; // Also attributes
 
-    const functionArgsRange = new Range(
-      document.positionAt(scriptFunctionMatch.index + fullMatch.length - 1 - functionArgs.length),
-      document.positionAt(scriptFunctionMatch.index + fullMatch.length - 1)
+    const functionNameStartOffset = scriptFunctionMatch.index + fullMatch.lastIndexOf(functionName);
+    const functionNameRange: Range = new Range(
+      document.positionAt(functionNameStartOffset),
+      document.positionAt(functionNameStartOffset + functionName.length)
     );
 
+    const argumentStartOffset = scriptFunctionMatch.index + fullMatch.length;
+    const argumentEndPosition = getClosingPosition(documentStateContext, argumentStartOffset, ")");
+    const functionArgsRange = new Range(
+      document.positionAt(argumentStartOffset),
+      argumentEndPosition.translate(0, -1)
+    );
+
+    const functionBodyStartPos = getNextCharacterPosition(documentStateContext, document.offsetAt(argumentEndPosition), componentBody.length - 1, "{");
     let functionEndPosition: Position;
     const comp: Component = getComponent(document.uri);
     if (comp && comp.isInterface) {
-      functionEndPosition = document.positionAt(scriptFunctionMatch.index + fullMatch.length);
+      functionEndPosition = functionBodyStartPos;
     } else {
-      functionEndPosition = getScriptFunctionEndPosition(document, scriptFunctionMatch.index + fullMatch.length);
+      functionEndPosition = getClosingPosition(documentStateContext, document.offsetAt(functionBodyStartPos), "}");
     }
 
     const functionRange: Range = new Range(
       document.positionAt(scriptFunctionMatch.index),
       functionEndPosition
     );
-    const removedArgs = fullMatch.slice(0, -functionArgs.length - 1);
-    const functionNameRange: Range = new Range(
-      document.positionAt(scriptFunctionMatch.index + removedArgs.lastIndexOf(functionName)),
-      document.positionAt(scriptFunctionMatch.index + removedArgs.lastIndexOf(functionName) + functionName.length)
+
+    /*
+    const functionAttributeRange: Range = new Range(
+      argumentEndPosition,
+      functionBodyStartPos.translate(0, -1)
     );
+    */
+
     const functionBodyRange: Range = new Range(
-      document.positionAt(scriptFunctionMatch.index + fullMatch.length),
-      functionEndPosition.translate({ characterDelta: -1 })
+      functionBodyStartPos,
+      functionEndPosition.translate(0, -1)
     );
 
     let userFunction: UserFunction = {
@@ -260,7 +270,8 @@ export function parseScriptFunctions(document: TextDocument): UserFunction[] {
       }
     }
 
-    // TODO: Parse function attributes
+    // TODO: Parse text in functionAttributeRange
+
     let scriptDocBlockParsed: DocBlockKeyValue[] = [];
     if (fullDocBlock) {
       scriptDocBlockParsed = parseDocBlock(document,
@@ -302,7 +313,7 @@ export function parseScriptFunctions(document: TextDocument): UserFunction[] {
       });
     }
     const signature: UserFunctionSignature = {
-      parameters: parseScriptFunctionArgs(document, functionArgsRange, scriptDocBlockParsed)
+      parameters: parseScriptFunctionArgs(documentStateContext, functionArgsRange, scriptDocBlockParsed)
     };
     userFunction.signatures = [signature];
 
@@ -313,234 +324,221 @@ export function parseScriptFunctions(document: TextDocument): UserFunction[] {
 }
 
 /**
- * Determines the position at which the CFScript function definition ends
- * @param document The TextDocument containing the CFScript function
- * @param initialOffset A numeric offset representing the position at the beginning of the function body
- */
-function getScriptFunctionEndPosition(document: TextDocument, initialOffset: number): Position {
-  const LEFT_BRACE = "{";
-  const RIGHT_BRACE = "}";
-  const documentText: string = document.getText();
-  let unclosedBraces = 0;
-  for (let offset = initialOffset; offset < documentText.length; offset++) {
-    const characterAtPosition: string = document.getText(new Range(document.positionAt(offset), document.positionAt(offset + 1)));
-    if (characterAtPosition === LEFT_BRACE) {
-      unclosedBraces++;
-    } else if (characterAtPosition === RIGHT_BRACE) {
-      if (unclosedBraces !== 0) {
-        unclosedBraces--;
-      } else {
-        return document.positionAt(offset + 1);
-      }
-    }
-  }
-
-  return document.positionAt(initialOffset);
-}
-
-/**
  * Parses the given arguments into an array of Argument objects that is returned
- * @param document The document containing these function arguments
- * @param argsAttrsRange A range within the given document that contains the CFScript arguments and function attributes
- * @param docBlock The parsed documentation block for the function to which these arguments and attributes belong
+ * @param documentStateContext The context information for a TextDocument possibly containing function arguments
+ * @param argsRange A range within the given document that contains the CFScript arguments
+ * @param docBlock The parsed documentation block for the function to which these arguments belong
  */
-function parseScriptFunctionArgs(document: TextDocument, argsAttrsRange: Range, docBlock: DocBlockKeyValue[]): Argument[] {
+function parseScriptFunctionArgs(documentStateContext: DocumentStateContext, argsRange: Range, docBlock: DocBlockKeyValue[]): Argument[] {
   let args: Argument[] = [];
+  const document: TextDocument = documentStateContext.document;
   const documentUri: Uri = document.uri;
-  const argsAttrs: string = document.getText(argsAttrsRange);
-  let scriptFunctionArgMatch: RegExpExecArray = null;
-  while (scriptFunctionArgMatch = scriptFunctionArgsPattern.exec(argsAttrs)) {
-    const fullArg = scriptFunctionArgMatch[0];
-    const attributePrefix = scriptFunctionArgMatch[1];
-    const argRequired = scriptFunctionArgMatch[2];
-    const argType = scriptFunctionArgMatch[3];
-    const argName = scriptFunctionArgMatch[4];
-    const argDefault = scriptFunctionArgMatch[5];
-    const argAttributes = scriptFunctionArgMatch[6];
-    const argOffset = document.offsetAt(argsAttrsRange.start) + scriptFunctionArgMatch.index;
 
-    if (!argName) {
-      continue;
-    }
+  const scriptArgRanges: Range[] = getScriptFunctionArgRanges(documentStateContext, argsRange);
+  scriptArgRanges.forEach((argRange: Range) => {
+    const argText: string = documentStateContext.sanitizedDocumentText.slice(document.offsetAt(argRange.start), document.offsetAt(argRange.end));
+    const argStartOffset = document.offsetAt(argRange.start);
+    const scriptFunctionArgMatch: RegExpExecArray = scriptFunctionArgPattern.exec(argText);
+    if (scriptFunctionArgMatch) {
+      const fullArg = scriptFunctionArgMatch[0];
+      const attributePrefix = scriptFunctionArgMatch[1];
+      const argRequired = scriptFunctionArgMatch[2];
+      const argType = scriptFunctionArgMatch[3];
+      const argName = scriptFunctionArgMatch[4];
+      let argDefault = scriptFunctionArgMatch[5];
+      const argAttributes = scriptFunctionArgMatch[6];
+      const argOffset = argStartOffset + scriptFunctionArgMatch.index;
 
-    let argDefaultAndAttributesLen = 0;
-    if (argDefault) {
-      argDefaultAndAttributesLen += argDefault.length;
-    }
-    let parsedArgAttributes: Attributes;
-    if (argAttributes) {
-      argDefaultAndAttributesLen += argAttributes.length;
-
-      const functionArgPrefixOffset = argOffset + attributePrefix.length;
-      const functionArgRange = new Range(
-        document.positionAt(functionArgPrefixOffset),
-        document.positionAt(functionArgPrefixOffset + argAttributes.length)
-      );
-      parsedArgAttributes = parseAttributes(document, functionArgRange, argumentAttributeNames);
-    }
-    const removedDefaultAndAttributes = fullArg.slice(0, -argDefaultAndAttributesLen);
-    const argNameOffset = argOffset + removedDefaultAndAttributes.lastIndexOf(argName);
-
-    let convertedArgType: DataType = DataType.Any;
-    let typeUri: Uri;
-    let argTypeRange: Range;
-    if (argType) {
-      const checkDataType = DataType.getDataTypeAndUri(argType, documentUri);
-      if (checkDataType) {
-        convertedArgType = checkDataType[0];
-        if (checkDataType[1]) {
-          typeUri = checkDataType[1];
-        }
-
-        const argTypeName: string = getComponentNameFromDotPath(argType);
-        const argTypeOffset: number = fullArg.indexOf(argType);
-        argTypeRange = new Range(
-          document.positionAt(argOffset + argTypeOffset + argType.length - argTypeName.length),
-          document.positionAt(argOffset + argTypeOffset + argType.length)
-        );
+      if (!argName) {
+        return;
       }
-    }
 
-    let argument: Argument = {
-      name: argName,
-      required: argRequired ? true : false,
-      dataType: convertedArgType,
-      description: "",
-      nameRange: new Range(
-        document.positionAt(argNameOffset),
-        document.positionAt(argNameOffset + argName.length)
-      )
-    };
+      let argDefaultAndAttributesLen = 0;
+      if (argDefault) {
+        argDefaultAndAttributesLen += argDefault.length;
+      }
+      let parsedArgAttributes: Attributes;
+      if (argAttributes) {
+        argDefaultAndAttributesLen += argAttributes.length;
 
-    if (argDefault) {
-      argument.default = argDefault;
-    }
+        const functionArgPrefixOffset = argOffset + attributePrefix.length;
+        // Account for trailing comma?
+        const functionArgRange = new Range(
+          document.positionAt(functionArgPrefixOffset),
+          document.positionAt(functionArgPrefixOffset + argDefaultAndAttributesLen)
+        );
+        parsedArgAttributes = parseAttributes(document, functionArgRange, argumentAttributeNames);
+      }
+      let removedDefaultAndAttributes = fullArg;
+      if (argDefaultAndAttributesLen > 0) {
+        removedDefaultAndAttributes = fullArg.slice(0, -argDefaultAndAttributesLen);
+      }
+      const argNameOffset = argOffset + removedDefaultAndAttributes.lastIndexOf(argName);
 
-    if (typeUri) {
-      argument.dataTypeComponentUri = typeUri;
-    }
+      let convertedArgType: DataType = DataType.Any;
+      let typeUri: Uri;
+      let argTypeRange: Range;
+      if (argType) {
+        const checkDataType = DataType.getDataTypeAndUri(argType, documentUri);
+        if (checkDataType) {
+          convertedArgType = checkDataType[0];
+          if (checkDataType[1]) {
+            typeUri = checkDataType[1];
+          }
 
-    if (argTypeRange) {
-      argument.dataTypeRange = argTypeRange;
-    }
+          const argTypeName: string = getComponentNameFromDotPath(argType);
+          const argTypeOffset: number = fullArg.indexOf(argType);
+          argTypeRange = new Range(
+            document.positionAt(argOffset + argTypeOffset + argType.length - argTypeName.length),
+            document.positionAt(argOffset + argTypeOffset + argType.length)
+          );
+        }
+      }
 
-    if (parsedArgAttributes) {
-      parsedArgAttributes.forEach((attr: Attribute) => {
-        const argAttrName: string = attr.name;
-        const argAttrVal: string = attr.value;
-        if (argAttrName === "required") {
-          argument.required = DataType.isTruthy(argAttrVal);
-        } else if (argAttrName === "hint") {
-          argument.description = argAttrVal;
-        } else if (argAttrName === "default") {
-          argument.default = argAttrVal;
-        } else if (argAttrName === "type") {
-          let checkDataType = DataType.getDataTypeAndUri(argAttrVal, documentUri);
+      let argument: Argument = {
+        name: argName,
+        required: argRequired ? true : false,
+        dataType: convertedArgType,
+        description: "",
+        nameRange: new Range(
+          document.positionAt(argNameOffset),
+          document.positionAt(argNameOffset + argName.length)
+        )
+      };
+
+      if (argDefault) {
+        argDefault = argDefault.trim();
+        if (argDefault.length > 1 && /['"]/.test(argDefault.charAt(0)) && /['"]/.test(argDefault.charAt(argDefault.length - 1))) {
+          argDefault = argDefault.slice(1, -1).trim();
+        }
+        if (argDefault.length > 2 && argDefault.startsWith("#") && argDefault.endsWith("#") && argDefault.slice(1, -1).indexOf("#") === -1) {
+          argDefault = argDefault.slice(1, -1).trim();
+        }
+        argument.default = argDefault;
+      }
+
+      if (typeUri) {
+        argument.dataTypeComponentUri = typeUri;
+      }
+
+      if (argTypeRange) {
+        argument.dataTypeRange = argTypeRange;
+      }
+
+      if (parsedArgAttributes) {
+        parsedArgAttributes.forEach((attr: Attribute) => {
+          const argAttrName: string = attr.name;
+          const argAttrVal: string = attr.value;
+          if (argAttrName === "required") {
+            argument.required = DataType.isTruthy(argAttrVal);
+          } else if (argAttrName === "hint") {
+            argument.description = argAttrVal;
+          } else if (argAttrName === "default") {
+            argument.default = argAttrVal;
+          } else if (argAttrName === "type") {
+            let checkDataType = DataType.getDataTypeAndUri(argAttrVal, documentUri);
+            if (checkDataType) {
+              argument.dataType = checkDataType[0];
+              if (checkDataType[1]) {
+                argument.dataTypeComponentUri = checkDataType[1];
+              }
+              const argTypeName: string = getComponentNameFromDotPath(argAttrVal);
+              argument.dataTypeRange = new Range(
+                attr.valueRange.start.translate(0, argAttrVal.length - argTypeName.length),
+                attr.valueRange.end
+              );
+            }
+          }
+        });
+      }
+
+      docBlock.filter((docElem: DocBlockKeyValue) => {
+        return equalsIgnoreCase(docElem.key, argument.name);
+      }).forEach((docElem: DocBlockKeyValue) => {
+        if (docElem.subkey === "required") {
+          argument.required = DataType.isTruthy(docElem.value);
+        } else if (!docElem.subkey || docElem.subkey === "hint") {
+          argument.description = docElem.value;
+        } else if (docElem.subkey === "default") {
+          argument.default = docElem.value;
+        } else if (docElem.subkey === "type") {
+          let checkDataType = DataType.getDataTypeAndUri(docElem.value, documentUri);
           if (checkDataType) {
             argument.dataType = checkDataType[0];
             if (checkDataType[1]) {
               argument.dataTypeComponentUri = checkDataType[1];
             }
-            const argTypeName: string = getComponentNameFromDotPath(argAttrVal);
+            const argTypeName: string = getComponentNameFromDotPath(docElem.value);
             argument.dataTypeRange = new Range(
-              attr.valueRange.start.translate(0, argAttrVal.length - argTypeName.length),
-              attr.valueRange.end
+              docElem.valueRange.start.translate(0, docElem.value.length - argTypeName.length),
+              docElem.valueRange.end
             );
           }
         }
       });
+
+      args.push(argument);
     }
-
-    docBlock.filter((docElem: DocBlockKeyValue) => {
-      return equalsIgnoreCase(docElem.key, argument.name);
-    }).forEach((docElem: DocBlockKeyValue) => {
-      if (docElem.subkey === "required") {
-        argument.required = DataType.isTruthy(docElem.value);
-      } else if (!docElem.subkey || docElem.subkey === "hint") {
-        argument.description = docElem.value;
-      } else if (docElem.subkey === "default") {
-        argument.default = docElem.value;
-      } else if (docElem.subkey === "type") {
-        let checkDataType = DataType.getDataTypeAndUri(docElem.value, documentUri);
-        if (checkDataType) {
-          argument.dataType = checkDataType[0];
-          if (checkDataType[1]) {
-            argument.dataTypeComponentUri = checkDataType[1];
-          }
-          const argTypeName: string = getComponentNameFromDotPath(docElem.value);
-          argument.dataTypeRange = new Range(
-            docElem.valueRange.start.translate(0, docElem.value.length - argTypeName.length),
-            docElem.valueRange.end
-          );
-        }
-      }
-    });
-
-    args.push(argument);
-  }
+  });
 
   return args;
 }
 
 /**
- * Parses the tag function definitions and returns an array of UserFunction objects
- * @param document The TextDocument in which to parse the tag functions
+ * Parses the given arguments into an array of Argument objects that is returned
+ * @param documentStateContext The context information for a TextDocument possibly containing function arguments
+ * @param argsRange A range within the given document that contains the CFScript arguments
  */
-export function parseTagFunctions(document: TextDocument): UserFunction[] {
+function getScriptFunctionArgRanges(documentStateContext: DocumentStateContext, argsRange: Range): Range[] {
+  let argRanges: Range[] = [];
+  const document: TextDocument = documentStateContext.document;
+  const argsEndOffset: number = document.offsetAt(argsRange.end);
+  const separatorChar: string = ",";
+
+  let argStartPosition = argsRange.start;
+  while (argStartPosition.isBefore(argsRange.end)) {
+    const argSeparatorPos = getNextCharacterPosition(documentStateContext, document.offsetAt(argStartPosition), argsEndOffset, separatorChar, false);
+    const argRange = new Range(argStartPosition, argSeparatorPos);
+    argRanges.push(argRange);
+    argStartPosition = argSeparatorPos.translate(0, 1);
+  }
+
+  return argRanges;
+}
+
+/**
+ * Parses the tag function definitions and returns an array of UserFunction objects
+ * @param documentStateContext The context information for a TextDocument in which to parse the tag functions
+ */
+export function parseTagFunctions(documentStateContext: DocumentStateContext): UserFunction[] {
   let userFunctions: UserFunction[] = [];
-  const componentText: string = document.getText();
-  let tagFunctionMatch: RegExpExecArray = null;
+  const documentUri: Uri = documentStateContext.document.uri;
 
-  while (tagFunctionMatch = tagFunctionPattern.exec(componentText)) {
-    const attributePrefix: string = tagFunctionMatch[1];
-    const attributes: string = tagFunctionMatch[2];
-    const body: string = tagFunctionMatch[3];
-    const headLength: number = attributePrefix.length + 1;
+  const parsedFunctionTags: Tag[] = parseTags(documentStateContext, "cffunction");
 
-    const functionEndPosition: Position = document.positionAt(tagFunctionMatch.index + tagFunctionMatch[0].length);
-    const functionRange: Range = new Range(
-      document.positionAt(tagFunctionMatch.index),
-      functionEndPosition
-    );
+  parsedFunctionTags.forEach((tag: Tag) => {
+    const functionRange: Range = tag.tagRange;
+    const functionBodyRange: Range = tag.bodyRange;
+    const parsedAttributes: Attributes = tag.attributes;
+    let functionAttributes: UserFunctionAttributes = processFunctionAttributes(parsedAttributes);
 
-    const functionBodyRange: Range = new Range(
-      document.positionAt(tagFunctionMatch.index + headLength),
-      document.positionAt(tagFunctionMatch.index + headLength + body.length)
-    );
+    if (!functionAttributes.name) {
+      return;
+    }
 
     let userFunction: UserFunction = {
       access: Access.Public,
       static: false,
       abstract: false,
       final: false,
-      name: "",
+      name: functionAttributes.name,
       description: "",
       returntype: DataType.Any,
       signatures: [],
-      nameRange: new Range(
-        document.positionAt(tagFunctionMatch.index),
-        document.positionAt(tagFunctionMatch.index + headLength)
-      ),
+      nameRange: parsedAttributes.get("name").valueRange,
       bodyRange: functionBodyRange,
-      location: new Location(document.uri, functionRange)
+      location: new Location(documentUri, functionRange)
     };
-
-    const functionAttributesPrefixOffset = tagFunctionMatch.index + attributePrefix.length;
-    const functionAttributesRange = new Range(
-      document.positionAt(functionAttributesPrefixOffset),
-      document.positionAt(functionAttributesPrefixOffset + attributes.length)
-    );
-    const parsedAttributes: Attributes = parseAttributes(document, functionAttributesRange, userFunctionAttributeNames);
-
-    let functionAttributes: UserFunctionAttributes = processFunctionAttributes(parsedAttributes);
-
-    if (!functionAttributes.name || functionAttributes.name.length === 0) {
-      continue;
-    }
-
-    userFunction.name = functionAttributes.name;
-
-    userFunction.nameRange = parsedAttributes.get("name").valueRange;
 
     Object.getOwnPropertyNames(functionAttributes).forEach((attrName: string) => {
       if (functionAttributes[attrName]) {
@@ -548,7 +546,7 @@ export function parseTagFunctions(document: TextDocument): UserFunction[] {
         if (attrName === "access") {
           userFunction.access = Access.valueOf(attrVal);
         } else if (attrName === "returntype") {
-          const checkDataType = DataType.getDataTypeAndUri(attrVal, document.uri);
+          const checkDataType = DataType.getDataTypeAndUri(attrVal, documentUri);
           if (checkDataType) {
             userFunction.returntype = checkDataType[0];
             if (checkDataType[1]) {
@@ -572,42 +570,34 @@ export function parseTagFunctions(document: TextDocument): UserFunction[] {
     });
 
     const signature: UserFunctionSignature = {
-      parameters: parseTagFunctionArguments(document, functionBodyRange)
+      parameters: parseTagFunctionArguments(documentStateContext, functionBodyRange)
     };
     userFunction.signatures = [signature];
 
     userFunctions.push(userFunction);
-  }
+  });
 
   return userFunctions;
 }
 
 /**
  * Parses the given function body to extract the arguments into an array of Argument objects that is returned
- * @param document The document containing these function arguments
+ * @param documentStateContext The context information for a TextDocument containing these function arguments
  * @param functionBodyRange A range in the given document for the function body
  */
-function parseTagFunctionArguments(document: TextDocument, functionBodyRange: Range): Argument[] {
-  const functionBody: string = document.getText(functionBodyRange);
+function parseTagFunctionArguments(documentStateContext: DocumentStateContext, functionBodyRange: Range): Argument[] {
   let args: Argument[] = [];
-  const documentUri: Uri = document.uri;
-  let tagFunctionArgMatch: RegExpExecArray = null;
-  while (tagFunctionArgMatch = tagFunctionArgPattern.exec(functionBody)) {
-    const attributePrefix = tagFunctionArgMatch[1];
-    const argAttributes = tagFunctionArgMatch[2];
-    const argOffset = document.offsetAt(functionBodyRange.start) + tagFunctionArgMatch.index;
+  const documentUri: Uri = documentStateContext.document.uri;
 
-    const argRange = new Range(
-      document.positionAt(argOffset + attributePrefix.length),
-      document.positionAt(argOffset + attributePrefix.length + argAttributes.length)
-    );
+  const parsedArgumentTags: Tag[] = parseTags(documentStateContext, "cfargument", functionBodyRange);
 
-    const parsedAttributes: Attributes = parseAttributes(document, argRange, argumentAttributeNames);
+  parsedArgumentTags.forEach((tag: Tag) => {
+    const parsedAttributes: Attributes = tag.attributes;
 
     const argumentAttributes: ArgumentAttributes = processArgumentAttributes(parsedAttributes);
 
     if (!argumentAttributes) {
-      continue;
+      return;
     }
 
     const argNameRange: Range = parsedAttributes.get("name").valueRange;
@@ -647,8 +637,16 @@ function parseTagFunctionArguments(document: TextDocument, functionBodyRange: Ra
       nameRange: argNameRange
     };
 
-    if (argumentAttributes.default) {
-      argument.default = argumentAttributes.default;
+    let argDefault: string = argumentAttributes.default;
+    if (argDefault) {
+      argDefault = argDefault.trim();
+      if (argDefault.length > 1 && /['"]/.test(argDefault.charAt(0)) && /['"]/.test(argDefault.charAt(argDefault.length - 1))) {
+        argDefault = argDefault.slice(1, -1).trim();
+      }
+      if (argDefault.length > 2 && argDefault.startsWith("#") && argDefault.endsWith("#") && argDefault.slice(1, -1).indexOf("#") === -1) {
+        argDefault = argDefault.slice(1, -1).trim();
+      }
+      argument.default = argDefault;
     }
 
     if (typeUri) {
@@ -660,7 +658,7 @@ function parseTagFunctionArguments(document: TextDocument, functionBodyRange: Ra
     }
 
     args.push(argument);
-  }
+  });
 
   return args;
 }
@@ -697,7 +695,7 @@ function processArgumentAttributes(attributes: Attributes): ArgumentAttributes {
     return null;
   }
 
-  return <ArgumentAttributes>attributeObj;
+  return attributeObj as ArgumentAttributes;
 }
 
 /**
@@ -706,8 +704,8 @@ function processArgumentAttributes(attributes: Attributes): ArgumentAttributes {
  * @param document The document containing the given function
  * @param isScript Whether this function is defined entirely in CFScript
  */
-export function getLocalVariables(func: UserFunction, document: TextDocument, isScript: boolean): Variable[] {
-  const allVariables: Variable[] = parseVariableAssignments(document, isScript, func.bodyRange);
+export function getLocalVariables(func: UserFunction, documentStateContext: DocumentStateContext, isScript: boolean): Variable[] {
+  const allVariables: Variable[] = parseVariableAssignments(documentStateContext, isScript, func.bodyRange);
 
   return allVariables.filter((variable: Variable) => {
     return (variable.scope === Scope.Local);
