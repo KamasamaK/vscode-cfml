@@ -2,7 +2,7 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",
@@ -63,10 +63,11 @@
           "source.sql": "sql",
           "meta.embedded.block.sql": "sql",
           "meta.tag.cfml": "cfml",
+          "constant.character.escape.hash.cfml": "cfml",
+          "punctuation.definition.template-expression.begin.cfml": "cfml",
           "meta.embedded.line.cfml": "cfml",
           "meta.embedded.block.cfml": "cfml",
-          "constant.character.escape.hash.cfml": "cfml",
-          "constant.character.hash.cfml": "cfml"
+          "punctuation.definition.template-expression.end.cfml": "cfml"
         }
       }
     ],
