@@ -18,6 +18,7 @@ import { getClosingPosition, getNextCharacterPosition } from "../utils/contextUt
 const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*\(/gi;
 const scriptFunctionArgPattern: RegExp = /((?:(required)\s+)?(?:\b([\w.]+)\b\s+)?(\b[_$a-zA-Z][$\w]*\b)(?:\s*=\s*(\{[^\}]*\}|\[[^\]]*\]|\([^\)]*\)|(?:(?!\b\w+\s*=).)+))?)(.*)?/i;
 
+/*
 const userFunctionAttributeNames: MySet<string> = new MySet([
   "name",
   "access",
@@ -35,6 +36,8 @@ const userFunctionAttributeNames: MySet<string> = new MySet([
   "produces",
   "consumes"
 ]);
+*/
+
 const userFunctionBooleanAttributes: MySet<string> = new MySet([
   "static",
   "abstract",

@@ -269,15 +269,15 @@
     "trie-prefix-tree": "1.4.0",
     "request": "^2.83.0",
     "find-config": "1.0.0",
-    "semver": "^5.4.1",
+    "semver": "^5.5.0",
     "html-entities": "^1.2.1"
   },
   "devDependencies": {
     "typescript": "^2.6.2",
-    "tslint": "^5.8.0",
+    "tslint": "^5.9.1",
     "vscode": "^1.1.10",
-    "mocha": "^4.0.1",
-    "@types/node": "^8.5.2",
-    "@types/mocha": "^2.2.44"
+    "mocha": "^4.1.0",
+    "@types/node": "^8.5.9",
+    "@types/mocha": "^2.2.47"
   }
 }
