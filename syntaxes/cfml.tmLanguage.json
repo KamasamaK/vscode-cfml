@@ -5308,8 +5308,12 @@
               "include": "#source-sql"
             },
             {
-              "name": "variable.parameter.query.cfml",
-              "match": "(:[_$a-zA-Z][$\\w]*|\\?)"
+              "name": "variable.parameter.query.named.cfml",
+              "match": ":[_$a-zA-Z][$\\w]*"
+            },
+            {
+              "name": "variable.parameter.query.unnamed.cfml",
+              "match": "\\?"
             }
           ]
         },
@@ -9466,7 +9470,7 @@
         },
         {
           "name": "meta.tag.cfml",
-          "begin": "(?i)(<)(cf[a-z]+)",
+          "begin": "(?i)(<)(cf[a-z_]+)",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.tag.begin.cfml"
@@ -9504,7 +9508,7 @@
         },
         {
           "name": "meta.tag.cfml",
-          "match": "(?i)(</)(cf[a-z]+)(>)",
+          "match": "(?i)(</)(cf[a-z_]+)(>)",
           "captures": {
             "1": {
               "name": "punctuation.definition.tag.begin.cfml"
@@ -10383,8 +10387,12 @@
               "include": "#source-sql"
             },
             {
-              "name": "variable.parameter.query.cfml",
-              "match": "(:[_$a-zA-Z][$\\w]*|\\?)"
+              "name": "variable.parameter.query.named.cfml",
+              "match": ":[_$a-zA-Z][$\\w]*"
+            },
+            {
+              "name": "variable.parameter.query.unnamed.cfml",
+              "match": "\\?"
             }
           ]
         },
@@ -10415,8 +10423,12 @@
               "include": "#source-sql"
             },
             {
-              "name": "variable.parameter.query.cfml",
-              "match": "(:[_$a-zA-Z][$\\w]*|\\?)"
+              "name": "variable.parameter.query.named.cfml",
+              "match": ":[_$a-zA-Z][$\\w]*"
+            },
+            {
+              "name": "variable.parameter.query.unnamed.cfml",
+              "match": "\\?"
             }
           ]
         }
@@ -12908,10 +12920,13 @@
     "source-cfml-script-tag-in-script-cf": {
       "patterns": [
         {
-          "begin": "(?x)(?i)\n  (cf\n  (?:ajaximport|ajaxproxy|applet|application|argument|associate|break|cache|calendar\n  |chart|chartdata|chartseries|client|clientsettings|col|collection|content|cookie|dbinfo\n  |directory|div|document|documentitem|documentsection|dump|error|exchangecalendar\n  |exchangeconnection|exchangecontact|exchangefilter|exchangemail|exchangetask\n  |execute|feed|file|fileupload|flush|form|formgroup|formitem|ftp|grid|gridcolumn\n  |gridrow|gridupdate|header|htmlhead|htmltopdf|htmltopdfitem|http|httpparam|image\n  |imap|imapfilter|import|include|index|input|insert|invoke|invokeargument|layout\n  |layoutarea|ldap|location|lock|log|login|loginuser|logout|loop|mail|mailparam|mailpart\n  |map|mapitem|mediaplayer|menu|menuitem|messagebox|module|ntauthenticate|oauth|object\n  |objectcache|output|param|pdf|pdfform|pdfformparam|pdfparam|pdfsubform|pod|pop\n  |presentation|presentationslide|presenter|print|processingdirective|procparam|procresult\n  |progressbar|property|query|queryparam|registry|report|reportparam|savecontent|schedule\n  |search|select|setting|sharepoint|silent|slider|spreadsheet|sprydataset|storedproc\n  |table|textarea|textinput|thread|throw|timer|tooltip|trace|transaction|tree|treeitem|try\n  |update|video|videoplayer|videoplayerparam|wddx|websocket|window|xml|zip|zipparam)\n)\\(",
+          "begin": "(?x)(?i)\n  ((cf\n  (?:ajaximport|ajaxproxy|application|argument|associate|break|cache\n  |chart|chartdata|chartseries|client|clientsettings|col|collection|content|cookie|dbinfo\n  |directory|div|document|documentitem|documentsection|dump|error|exchangecalendar\n  |exchangeconnection|exchangecontact|exchangefilter|exchangemail|exchangetask\n  |execute|feed|file|fileupload|flush|form|formgroup|formitem|ftp|grid|gridcolumn\n  |gridrow|gridupdate|header|htmlhead|htmltopdf|htmltopdfitem|http|httpparam|image\n  |imap|imapfilter|import|include|index|input|insert|invoke|invokeargument|layout\n  |layoutarea|ldap|location|lock|log|login|loginuser|logout|loop|mail|mailparam|mailpart\n  |map|mapitem|menuitem|messagebox|module|ntauthenticate|oauth|object\n  |objectcache|output|param|pdf|pdfform|pdfformparam|pdfparam|pdfsubform|pod|pop\n  |presentation|presentationslide|presenter|print|processingdirective|procparam|procresult\n  |progressbar|property|query|queryparam|registry|report|reportparam|savecontent|schedule\n  |search|select|setting|sharepoint|silent|slider|spreadsheet|storedproc\n  |textarea|thread|throw|timer|tooltip|trace|transaction|treeitem|try\n  |update|video|videoplayer|videoplayerparam|wddx|websocket|window|xml|zip|zipparam)\n)|(cf(?:applet|calendar|mediaplayer|menu|sprydataset|table|textinput|tree)))\\(",
           "beginCaptures": {
             "1": {
               "name": "entity.name.tag.script.cfml"
+            },
+            "3": {
+              "name": "invalid.deprecated.tag.script.cfml"
             }
           },
           "end": "\\)",
@@ -14175,8 +14190,12 @@
               "include": "#source-sql"
             },
             {
-              "name": "variable.parameter.query.cfml",
-              "match": "(:[_$a-zA-Z][$\\w]*|\\?)"
+              "name": "variable.parameter.query.named.cfml",
+              "match": ":[_$a-zA-Z][$\\w]*"
+            },
+            {
+              "name": "variable.parameter.query.unnamed.cfml",
+              "match": "\\?"
             }
           ]
         },
