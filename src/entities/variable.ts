@@ -2,8 +2,8 @@ import { DataType } from "./dataType";
 import { Scope } from "./scope";
 import { Location, TextDocument, Range, Uri, Position, WorkspaceConfiguration, workspace } from "vscode";
 import { getCfScriptRanges, isCfcFile } from "../utils/contextUtil";
-import { Component } from "./component";
-import { UserFunction, UserFunctionSignature, Argument } from "./userFunction";
+import { Component, getApplicationUri } from "./component";
+import { UserFunction, UserFunctionSignature, Argument, getLocalVariables } from "./userFunction";
 import { getComponent } from "../features/cachedEntities";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
@@ -12,7 +12,7 @@ import { getTagPattern, OutputVariableTags, TagOutputAttribute, parseTags, Tag, 
 import { Properties, Property } from "./property";
 import { parseQueryText, Query, QueryColumns } from "./query";
 import { CFMLEngineName, CFMLEngine } from "../utils/cfdocs/cfmlEngine";
-import { DocumentStateContext } from "../utils/documentUtil";
+import { DocumentStateContext, DocumentPositionStateContext, getDocumentStateContext } from "../utils/documentUtil";
 
 // Erroneously matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
 const cfscriptVariableAssignmentPattern = /((?:^|[;{}]|\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=\s*([^=][^;]*)/gi;
@@ -669,6 +669,83 @@ export function getMatchingVariables(variables: Variable[], varName: string, sco
   return variables.filter((variable: Variable) => {
     return checkScopes.includes(variable.scope) && equalsIgnoreCase(variable.identifier, varName);
   });
+}
+
+/**
+ * Gets the application variables for the given document
+ * @param baseUri The URI of the document for which the Application file will be found
+ */
+export async function getApplicationVariables(baseUri: Uri): Promise<Variable[]> {
+  let applicationDocVariables: Variable[] = [];
+  const applicationUri: Uri = getApplicationUri(baseUri);
+  if (applicationUri) {
+    // TODO: Cache this information
+    const applicationDoc: TextDocument = await workspace.openTextDocument(applicationUri);
+    const applicationDocStateContext: DocumentStateContext = getDocumentStateContext(applicationDoc);
+    applicationDocVariables = parseVariableAssignments(applicationDocStateContext, applicationDocStateContext.docIsScript);
+  }
+
+  return applicationDocVariables;
+}
+
+/**
+ * Collects all variable assignments accessible based on the given documentPositionStateContext
+ * @param documentPositionStateContext
+ */
+export function collectDocumentVariableAssignments(documentPositionStateContext: DocumentPositionStateContext): Variable[] {
+  let allVariableAssignments: Variable[] = [];
+  if (documentPositionStateContext.isCfmFile) {
+    const docVariableAssignments: Variable[] = parseVariableAssignments(documentPositionStateContext, false);
+    allVariableAssignments = allVariableAssignments.concat(docVariableAssignments);
+  } else if (documentPositionStateContext.isCfcFile) {
+    const thisComponent = documentPositionStateContext.component;
+    if (thisComponent) {
+      // properties
+      const componentProperties: Properties = thisComponent.properties;
+      allVariableAssignments = allVariableAssignments.concat(propertiesToVariables(componentProperties, documentPositionStateContext.document.uri));
+
+      // component variables
+      let currComponent: Component = thisComponent;
+      let componentVariables: Variable[] = [];
+      while (currComponent) {
+        const currComponentVariables: Variable[] = currComponent.variables.filter((variable: Variable) => {
+          return !componentVariables.some((existingVariable: Variable) => {
+            return existingVariable.scope === variable.scope && equalsIgnoreCase(existingVariable.identifier, variable.identifier);
+          });
+        });
+        componentVariables = componentVariables.concat(currComponentVariables);
+        allVariableAssignments = allVariableAssignments.concat(componentVariables);
+
+        if (currComponent.extends) {
+          currComponent = getComponent(currComponent.extends);
+        } else {
+          currComponent = undefined;
+        }
+      }
+
+      // function arguments
+      let functionArgs: Argument[] = [];
+      thisComponent.functions.filter((func: UserFunction) => {
+        return func.bodyRange.contains(documentPositionStateContext.position) && func.signatures && func.signatures.length !== 0;
+      }).forEach((func: UserFunction) => {
+        func.signatures.forEach((signature: UserFunctionSignature) => {
+          functionArgs = signature.parameters;
+        });
+      });
+      allVariableAssignments = allVariableAssignments.concat(argumentsToVariables(functionArgs, documentPositionStateContext.document.uri));
+
+      // function local variables
+      let localVariables: Variable[] = [];
+      thisComponent.functions.filter((func: UserFunction) => {
+        return func.bodyRange.contains(documentPositionStateContext.position);
+      }).forEach((func: UserFunction) => {
+        localVariables = localVariables.concat(getLocalVariables(func, documentPositionStateContext, thisComponent.isScript));
+      });
+      allVariableAssignments = allVariableAssignments.concat(localVariables);
+    }
+  }
+
+  return allVariableAssignments;
 }
 
 export interface Variable {

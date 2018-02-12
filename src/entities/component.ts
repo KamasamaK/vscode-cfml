@@ -1,6 +1,5 @@
-import { Uri, TextDocument, workspace, Position, Range, Location, WorkspaceFolder } from "vscode";
-import { UserFunction, ComponentFunctions, parseScriptFunctions, parseTagFunctions, UserFunctionSignature } from "./userFunction";
-import { Function } from "./function";
+import { Uri, TextDocument, workspace, Position, Range, WorkspaceFolder } from "vscode";
+import { UserFunction, ComponentFunctions, parseScriptFunctions, parseTagFunctions } from "./userFunction";
 import { DataType } from "./dataType";
 import * as path from "path";
 import * as fs from "fs";
@@ -9,7 +8,7 @@ import { parseProperties, Properties } from "./property";
 import { parseVariableAssignments, Variable } from "./variable";
 import { parseDocBlock, DocBlockKeyValue } from "./docblock";
 import { parseAttributes, Attributes, Attribute } from "./attribute";
-import { MyMap, MySet } from "../utils/collections";
+import { MySet } from "../utils/collections";
 import { DocumentStateContext } from "../utils/documentUtil";
 import { getComponent } from "../features/cachedEntities";
 import { isCfcFile } from "../utils/contextUtil";
@@ -43,7 +42,7 @@ export const objectReferencePatterns: ReferencePattern[] = [
   },
   // cfobject or cfinvoke
   {
-    pattern: /\bcomponent\s*=\s*(['"])([^'"]+?)\1/gi,
+    pattern: /\bcomponent\s*(?:=|:)\s*(['"])([^'"]+?)\1/gi,
     refIndex: 2
   },
   // isInstanceOf
@@ -112,15 +111,6 @@ export interface Component {
   properties: Properties;
   variables: Variable[];
 }
-
-export interface ImplicitFunction extends Function {
-  returnTypeUri?: Uri; // Only when returntype is Component
-  nameRange: Range;
-  signatures: UserFunctionSignature[];
-  location: Location;
-}
-
-export interface ImplicitFunctions extends MyMap<string, ImplicitFunction> {}
 
 interface ComponentAttributes {
   accessors?: boolean;

@@ -1,9 +1,11 @@
-import { TextDocument, Uri, Range } from "vscode";
+import { TextDocument, Uri, Range, Location } from "vscode";
 import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
 import { parseAttributes, Attribute, Attributes } from "./attribute";
-import { getComponentNameFromDotPath } from "./component";
+import { getComponentNameFromDotPath, Component } from "./component";
 import { MyMap, MySet } from "../utils/collections";
+import { getComponent } from "../features/cachedEntities";
+import { Access, UserFunction, ComponentFunctions, UserFunctionSignature } from "./userFunction";
 
 const propertyPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:<cf)?property\b)([^;>]*)/gi;
 // const attributePattern: RegExp = /\b(\w+)\b(?:\s*=\s*(?:(['"])(.*?)\2|([a-z0-9:.]+)))?/gi;
@@ -34,6 +36,7 @@ export interface Property {
   nameRange: Range;
   dataTypeRange?: Range;
   propertyRange: Range;
+  default?: string;
 }
 
 // Collection of properties for a particular component. Key is property name lowercased.
@@ -167,3 +170,90 @@ export function parseProperties(document: TextDocument): Properties {
 
   return properties;
 }
+
+
+export function getImplicitFunctions(component: Component, includeInherited: boolean = false): ComponentFunctions {
+  let implicitFunctions = new ComponentFunctions();
+
+  let currComponent: Component = component;
+  while (currComponent) {
+    if (currComponent.accessors) {
+      currComponent.properties.forEach((prop: Property) => {
+        // getters
+        if (typeof prop.getter === "undefined" || prop.getter) {
+          const getterKey = "get" + prop.name.toLowerCase();
+          if (!implicitFunctions.has(getterKey)) {
+            implicitFunctions.set(getterKey, constructGetter(prop, currComponent.uri));
+          }
+        }
+        // setters
+        if (typeof prop.setter === "undefined" || prop.setter) {
+          const setterKey = "set" + prop.name.toLowerCase();
+          if (!implicitFunctions.has(setterKey)) {
+            implicitFunctions.set(setterKey, constructSetter(prop, currComponent.uri));
+          }
+        }
+      });
+    }
+
+    if (includeInherited && currComponent.extends) {
+      currComponent = getComponent(currComponent.extends);
+    } else {
+      currComponent = undefined;
+    }
+  }
+
+  return implicitFunctions;
+}
+
+
+export function constructGetter(property: Property, componentUri: Uri): UserFunction {
+  let implicitFunctionSignature: UserFunctionSignature = {parameters: []};
+
+  return {
+    access: Access.Public,
+    static: false,
+    abstract: false,
+    final: false,
+    bodyRange: undefined,
+    name: "get" + property.name.charAt(0).toUpperCase() + property.name.slice(1),
+    description: property.description,
+    returntype: property.dataType,
+    returnTypeUri: property.dataTypeComponentUri,
+    nameRange: property.nameRange,
+    signatures: [implicitFunctionSignature],
+    location: new Location(componentUri, property.propertyRange)
+  };
+}
+
+export function constructSetter(property: Property, componentUri: Uri): UserFunction {
+  let implicitFunctionSignature: UserFunctionSignature = {
+    parameters: [
+      {
+        name: property.name,
+        nameRange: undefined,
+        description: property.description,
+        required: true,
+        dataType: property.dataType,
+        dataTypeComponentUri: property.dataTypeComponentUri,
+        default: property.default
+      }
+    ]
+  };
+
+  return {
+    access: Access.Public,
+    static: false,
+    abstract: false,
+    final: false,
+    bodyRange: undefined,
+    name: "set" + property.name.charAt(0).toUpperCase() + property.name.slice(1),
+    description: property.description,
+    returntype: DataType.Component,
+    returnTypeUri: componentUri,
+    nameRange: property.nameRange,
+    signatures: [implicitFunctionSignature],
+    location: new Location(componentUri, property.propertyRange)
+  };
+}
+

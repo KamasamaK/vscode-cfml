@@ -12,6 +12,7 @@ An extension for Visual Studio Code to assist in development with CFML.
 ## Features
 
 1. **Syntax Highlighting**  
+Using the default theme `Dark+`
 ![Syntax Highlighting](./images/cfdocs_leaderboard.png)
 
 1. **Signature Help**  
@@ -102,14 +103,12 @@ Used in Command Palette (Win/Linux: `Ctrl+Shift+P`; Mac: `Cmd+Shift+P`). Can als
 1. Completion suggestions are not always properly contextual.
 1. The "parsing" is mostly done with regular expressions without considering context in most cases, which can result in occasional issues. One way this manifests is that you may get non-CFML being parsed as CFML. This can also result in strings and comments being parsed as if they were part of code. To simplify the expressions, semicolons are often expected as terminators in CFScript even though they are optional in some engines.
 1. Type inference is extremely primitive and only based on variable initialization.
-1. Syntax highlighting breaks for embedded grammars (CSS and JavaScript) when only partially wrapped in `<cfoutput>`.
+1. Using `<cfoutput>` within embedded languages (CSS and JavaScript) reverts the syntax tokenization to the base language which results in incorrect highlighting.
 
 ## Future Plans
 
 Feel free to open issues for these or any other features you would find helpful so we can discuss.
 
-- Signature help for external component functions
-- Hover documentation for external component functions
 - Provide additional completion suggestions
   - Global member functions
   - Enumerated values for global functions

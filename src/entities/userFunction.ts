@@ -4,16 +4,17 @@ import { Function } from "./function";
 import { Parameter } from "./parameter";
 import { Signature } from "./signature";
 import { getComponentNameFromDotPath, Component } from "./component";
-import { Variable, parseVariableAssignments } from "./variable";
-import { Scope } from "./scope";
+import { Variable, parseVariableAssignments, collectDocumentVariableAssignments, variableExpressionPrefix, getApplicationVariables } from "./variable";
+import { Scope, unscopedPrecedence } from "./scope";
 import { DocBlockKeyValue, parseDocBlock, getKeyPattern } from "./docblock";
 import { Attributes, Attribute, parseAttributes } from "./attribute";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
 import { getComponent } from "../features/cachedEntities";
 import { parseTags, Tag } from "./tag";
-import { DocumentStateContext } from "../utils/documentUtil";
+import { DocumentStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
 import { getClosingPosition, getNextCharacterPosition } from "../utils/contextUtil";
+import { getImplicitFunctions } from "./property";
 
 const scriptFunctionPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?(?:\b(private|package|public|remote|static|final|abstract)\s+)?)(?:\b([A-Za-z0-9_\.$]+)\s+)?function\s+([_$a-zA-Z][$\w]*)\s*\(/gi;
 const scriptFunctionArgPattern: RegExp = /((?:(required)\s+)?(?:\b([\w.]+)\b\s+)?(\b[_$a-zA-Z][$\w]*\b)(?:\s*=\s*(\{[^\}]*\}|\[[^\]]*\]|\([^\)]*\)|(?:(?!\b\w+\s*=).)+))?)(.*)?/i;
@@ -725,4 +726,83 @@ function parseModifier(modifier: string): string {
   }
 
   return modifier;
+}
+
+/**
+ * Gets the function based on its key and position in the document
+ * @param documentPositionStateContext The contextual information of the state of a document and the cursor position
+ * @param docPrefix The document prefix of the function as opposed to the position within documentPositionStateContext
+ * @param functionKey The function key for which to get
+ */
+export async function getFunctionFromPrefix(documentPositionStateContext: DocumentPositionStateContext, docPrefix: string, functionKey: string): Promise<UserFunction> {
+  let foundFunction: UserFunction;
+  const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(docPrefix);
+  if (varPrefixMatch) {
+    const varMatchText: string = varPrefixMatch[0];
+    const varScope: string = varPrefixMatch[2];
+    const varQuote: string = varPrefixMatch[3];
+    const varName: string = varPrefixMatch[4];
+
+    let dotSeparatedCount = 2;
+    if (varScope && !varQuote) {
+      dotSeparatedCount++;
+    }
+
+    if (varMatchText.split(".").length === dotSeparatedCount) {
+      let foundVar: Variable;
+      const allDocumentVariableAssignments: Variable[] = collectDocumentVariableAssignments(documentPositionStateContext);
+
+      if (varScope) {
+        const scopeVal: Scope = Scope.valueOf(varScope);
+
+        let variableAssignments: Variable[];
+        if (scopeVal === Scope.Application) {
+          variableAssignments = await getApplicationVariables(documentPositionStateContext.document.uri);
+        } else {
+          variableAssignments = allDocumentVariableAssignments;
+        }
+
+        foundVar = variableAssignments.find((currentVar: Variable) => {
+          return currentVar.scope === scopeVal && equalsIgnoreCase(currentVar.identifier, varName);
+        });
+      } else {
+        for (let checkScope of unscopedPrecedence) {
+          foundVar = allDocumentVariableAssignments.find((currentVar: Variable) => {
+            return currentVar.scope === checkScope && equalsIgnoreCase(currentVar.identifier, varName);
+          });
+          if (foundVar) {
+            break;
+          }
+        }
+      }
+
+      if (foundVar && foundVar.dataTypeComponentUri) {
+        let currComponent: Component = getComponent(foundVar.dataTypeComponentUri);
+        while (currComponent) {
+          if (currComponent.functions.has(functionKey)) {
+            const foundFunc = currComponent.functions.get(functionKey);
+            // TODO: Access.Package
+            if (foundFunc.access === Access.Public || foundFunc.access === Access.Remote) {
+              foundFunction = foundFunc;
+              break;
+            }
+          }
+
+          const implicitFunctions: ComponentFunctions = getImplicitFunctions(currComponent);
+          if (implicitFunctions.has(functionKey)) {
+            foundFunction = implicitFunctions.get(functionKey);
+            break;
+          }
+
+          if (currComponent.extends) {
+            currComponent = getComponent(currComponent.extends);
+          } else {
+            currComponent = undefined;
+          }
+        }
+      }
+    }
+  }
+
+  return foundFunction;
 }

@@ -186,6 +186,8 @@ export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvide
           });
         }
       }
+    } else {
+      // TODO: For templates
     }
 
     return results;

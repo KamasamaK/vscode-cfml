@@ -55,13 +55,16 @@
         },
         {
           "name": "constant.character.entity.html",
-          "match": "(&)([a-zA-Z0-9]+|#[0-9]+|#[xX][0-9a-fA-F]+)(;)",
+          "match": "(&)([a-zA-Z0-9]+|#\\d+|#[xX][0-9a-fA-F]+)(;)",
           "captures": {
             "1": {
-              "name": "punctuation.definition.entity.html"
+              "name": "punctuation.definition.entity.begin.html"
+            },
+            "2": {
+              "name": "entity.name.entity.other.html"
             },
             "3": {
-              "name": "punctuation.definition.entity.html"
+              "name": "punctuation.definition.entity.end.html"
             }
           }
         },
@@ -343,6 +346,9 @@
         },
         {
           "include": "#text-html-cfml-cfoutput-tag-id-attribute"
+        },
+        {
+          "include": "#text-html-cfml-cfoutput-tag-style-attribute"
         },
         {
           "include": "#text-html-cfml-cfoutput-tag-generic-attribute"
@@ -5312,7 +5318,7 @@
               "match": ":[_$a-zA-Z][$\\w]*"
             },
             {
-              "name": "variable.parameter.query.unnamed.cfml",
+              "name": "variable.parameter.query.positional.cfml",
               "match": "\\?"
             }
           ]
@@ -9246,13 +9252,16 @@
         },
         {
           "name": "constant.character.entity.html",
-          "match": "(&)(?:[a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+)(;)",
+          "match": "(&)([a-zA-Z0-9]+|#\\d+|#x[0-9a-fA-F]+)(;)",
           "captures": {
             "1": {
-              "name": "punctuation.definition.entity.html"
+              "name": "punctuation.definition.entity.begin.html"
             },
             "2": {
-              "name": "punctuation.definition.entity.html"
+              "name": "entity.name.entity.other.html"
+            },
+            "3": {
+              "name": "punctuation.definition.entity.end.html"
             }
           }
         },
@@ -9404,8 +9413,15 @@
       "match": "(?<=[^=])\\b([a-zA-Z0-9:-]+)"
     },
     "text-html-cfml-unquoted-attribute": {
-      "name": "string.unquoted.html",
-      "match": "(?<==)(?:[^\\s<>/'\"]|/(?!>))+"
+      "patterns": [
+        {
+          "include": "#text-html-cfml-entities"
+        },
+        {
+          "name": "string.unquoted.html",
+          "match": "(?<==)(?:[^\\s<>/'\"]|/(?!>))+"
+        }
+      ]
     },
     "cfml-tags": {
       "patterns": [
@@ -9684,8 +9700,8 @@
     },
     "text-html-cfml-cfoutput-tag-id-attribute": {
       "name": "meta.attribute-with-value.id.html",
-      "begin": "\\b(id)\\b\\s*(=)",
-      "captures": {
+      "begin": "(?i)\\b(id)\\s*(=)",
+      "beginCaptures": {
         "1": {
           "name": "entity.other.attribute-name.id.html"
         },
@@ -9745,6 +9761,120 @@
               "include": "#text-html-cfml-cfoutput-entities"
             }
           ]
+        }
+      ]
+    },
+    "text-html-cfml-cfoutput-tag-style-attribute": {
+      "name": "meta.attribute-with-value.style.html",
+      "begin": "(?i)\\b(style)\\s*(=)",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.other.attribute-name.style.html"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.html"
+        }
+      },
+      "end": "(?!\\G)|(?=\\s|/?>)",
+      "patterns": [
+        {
+          "name": "string.quoted.double.html",
+          "match": "(\")([^\"]*)(\")",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.html"
+            },
+            "2": {
+              "name": "source.css.style.html",
+              "patterns": [
+                {
+                  "name": "meta.property-list.css",
+                  "match": ".+",
+                  "captures": {
+                    "0": {
+                      "patterns": [
+                        {
+                          "include": "#cfoutput-injection"
+                        },
+                        {
+                          "include": "#text-html-cfml-cfoutput-entities"
+                        },
+                        {
+                          "include": "#source-css-cfoutput-rule-list-innards"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.string.end.html"
+            }
+          }
+        },
+        {
+          "name": "string.quoted.single.html",
+          "match": "(')([^']*)(')",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.html"
+            },
+            "2": {
+              "name": "source.css.style.html",
+              "patterns": [
+                {
+                  "name": "meta.property-list.css",
+                  "match": ".+",
+                  "captures": {
+                    "0": {
+                      "patterns": [
+                        {
+                          "include": "#cfoutput-injection"
+                        },
+                        {
+                          "include": "#text-html-cfml-cfoutput-entities"
+                        },
+                        {
+                          "include": "#source-css-cfoutput-rule-list-innards"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.string.end.html"
+            }
+          }
+        },
+        {
+          "name": "string.unquoted.html",
+          "match": "([^\\s&>\"'<=`]|&(?=>))+",
+          "captures": {
+            "0": {
+              "name": "source.css.style.html",
+              "patterns": [
+                {
+                  "match": ".+",
+                  "name": "meta.property-list.css",
+                  "captures": {
+                    "0": {
+                      "patterns": [
+                        {
+                          "include": "#cfoutput-injection"
+                        },
+                        {
+                          "include": "#source-css-cfoutput-rule-list-innards"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
         }
       ]
     },
@@ -10391,7 +10521,7 @@
               "match": ":[_$a-zA-Z][$\\w]*"
             },
             {
-              "name": "variable.parameter.query.unnamed.cfml",
+              "name": "variable.parameter.query.positional.cfml",
               "match": "\\?"
             }
           ]
@@ -10427,7 +10557,7 @@
               "match": ":[_$a-zA-Z][$\\w]*"
             },
             {
-              "name": "variable.parameter.query.unnamed.cfml",
+              "name": "variable.parameter.query.positional.cfml",
               "match": "\\?"
             }
           ]
@@ -13704,8 +13834,9 @@
       "end": "\\}"
     },
     "text-html-cfml-tag-id-attribute": {
-      "begin": "\\b(id)\\b\\s*(=)",
-      "captures": {
+      "name": "meta.attribute-with-value.id.html",
+      "begin": "(?i)\\b(id)\\s*(=)",
+      "beginCaptures": {
         "1": {
           "name": "entity.other.attribute-name.id.html"
         },
@@ -13714,18 +13845,11 @@
         }
       },
       "end": "(?!\\G)(?<='|\"|[^\\s<>/])",
-      "name": "meta.attribute-with-value.id.html",
       "patterns": [
         {
           "include": "#cfml-tags"
         },
         {
-          "contentName": "meta.toc-list.id.html",
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.string.end.html"
-            }
-          },
           "name": "string.quoted.double.html",
           "begin": "\"",
           "beginCaptures": {
@@ -13733,6 +13857,13 @@
               "name": "punctuation.definition.string.begin.html"
             }
           },
+          "contentName": "meta.toc-list.id.html",
+          "end": "\"",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.html"
+            }
+          },
           "patterns": [
             {
               "include": "#cfml-tags"
@@ -13740,16 +13871,9 @@
             {
               "include": "#text-html-cfml-entities"
             }
-          ],
-          "end": "\""
+          ]
         },
         {
-          "contentName": "meta.toc-list.id.html",
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.string.end.html"
-            }
-          },
           "name": "string.quoted.single.html",
           "begin": "'",
           "beginCaptures": {
@@ -13757,6 +13881,13 @@
               "name": "punctuation.definition.string.begin.html"
             }
           },
+          "contentName": "meta.toc-list.id.html",
+          "end": "'",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.html"
+            }
+          },
           "patterns": [
             {
               "include": "#cfml-tags"
@@ -13764,8 +13895,121 @@
             {
               "include": "#text-html-cfml-entities"
             }
-          ],
-          "end": "'"
+          ]
+        }
+      ]
+    },
+    "text-html-cfml-tag-style-attribute": {
+      "name": "meta.attribute-with-value.style.html",
+      "begin": "(?i)\\b(style)\\s*(=)",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.other.attribute-name.style.html"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.html"
+        }
+      },
+      "end": "(?!\\G)|(?=\\s|/?>)",
+      "patterns": [
+        {
+          "name": "string.quoted.double.html",
+          "match": "(\")([^\"]*)(\")",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.html"
+            },
+            "2": {
+              "name": "source.css.style.html",
+              "patterns": [
+                {
+                  "name": "meta.property-list.css",
+                  "match": ".+",
+                  "captures": {
+                    "0": {
+                      "patterns": [
+                        {
+                          "include": "#cfml-tags"
+                        },
+                        {
+                          "include": "#text-html-cfml-entities"
+                        },
+                        {
+                          "include": "#source-css-rule-list-innards"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.string.end.html"
+            }
+          }
+        },
+        {
+          "name": "string.quoted.single.html",
+          "match": "(')([^']*)(')",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.html"
+            },
+            "2": {
+              "name": "source.css.style.html",
+              "patterns": [
+                {
+                  "name": "meta.property-list.css",
+                  "match": ".+",
+                  "captures": {
+                    "0": {
+                      "patterns": [
+                        {
+                          "include": "#cfml-tags"
+                        },
+                        {
+                          "include": "#text-html-cfml-entities"
+                        },
+                        {
+                          "include": "#source-css-rule-list-innards"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.string.end.html"
+            }
+          }
+        },
+        {
+          "name": "string.unquoted.html",
+          "match": "([^\\s&>\"'<=`]|&(?=>))+",
+          "captures": {
+            "0": {
+              "name": "source.css.style.html",
+              "patterns": [
+                {
+                  "match": ".+",
+                  "name": "meta.property-list.css",
+                  "captures": {
+                    "0": {
+                      "patterns": [
+                        {
+                          "include": "#cfml-tags"
+                        },
+                        {
+                          "include": "#source-css-rule-list-innards"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
         }
       ]
     },
@@ -14070,6 +14314,9 @@
           "include": "#text-html-cfml-tag-id-attribute"
         },
         {
+          "include": "#text-html-cfml-tag-style-attribute"
+        },
+        {
           "include": "#text-html-cfml-tag-generic-attribute"
         },
         {
@@ -14194,7 +14441,7 @@
               "match": ":[_$a-zA-Z][$\\w]*"
             },
             {
-              "name": "variable.parameter.query.unnamed.cfml",
+              "name": "variable.parameter.query.positional.cfml",
               "match": "\\?"
             }
           ]

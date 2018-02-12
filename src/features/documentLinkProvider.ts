@@ -7,7 +7,7 @@ export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
   private linkPatterns: LinkPattern[] = [
     // attribute/value link
     {
-      pattern: /\b(href|src|template|action|url)\s*=\s*(['"])([^'"]+?)\2/gi,
+      pattern: /\b(href|src|template|action|url)\s*(?:=|:)\s*(['"])([^'"]+?)\2/gi,
       linkIndex: 3
     },
     // include script

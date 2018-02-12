@@ -1,9 +1,9 @@
 import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, TextLine, workspace } from "vscode";
 import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath, getApplicationUri } from "../entities/component";
 import { componentPathToUri, getComponent } from "./cachedEntities";
-import { Scope, getValidScopesPrefixPattern } from "../entities/scope";
-import { Access, UserFunction, UserFunctionSignature, Argument, getLocalVariables } from "../entities/userFunction";
-import { Property } from "../entities/property";
+import { Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern } from "../entities/scope";
+import { Access, UserFunction, UserFunctionSignature, Argument, getLocalVariables, getFunctionFromPrefix, ComponentFunctions } from "../entities/userFunction";
+import { Property, getImplicitFunctions } from "../entities/property";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { getFunctionSuffixPattern } from "../entities/function";
 import { Variable, variableExpressionPrefix, parseVariableAssignments } from "../entities/variable";
@@ -21,11 +21,13 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
     }
 
     const docIsCfcFile: boolean = documentPositionStateContext.isCfcFile;
+    const docIsCfmFile: boolean = documentPositionStateContext.isCfmFile;
     const documentText: string = documentPositionStateContext.sanitizedDocumentText;
     const textLine: TextLine = document.lineAt(position);
     const lineText: string = textLine.text;
     let wordRange: Range = document.getWordRangeAtPosition(position);
     const currentWord: string = documentPositionStateContext.currentWord;
+    const lowerCurrentWord: string = currentWord.toLowerCase();
     if (!wordRange) {
       wordRange = new Range(position, position);
     }
@@ -82,9 +84,12 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
               checkScope = false;
             }
           }
+
+          const getterSetterPrefixPattern = getValidScopesPrefixPattern([Scope.This], true);
+
           while (currComponent) {
-            if (currComponent.functions.has(currentWord.toLowerCase())) {
-              const userFun: UserFunction = currComponent.functions.get(currentWord.toLowerCase());
+            if (currComponent.functions.has(lowerCurrentWord)) {
+              const userFun: UserFunction = currComponent.functions.get(lowerCurrentWord);
               const validScopes: Scope[] = userFun.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
               const funcPrefixPattern = getValidScopesPrefixPattern(validScopes, true);
               if (!checkScope || funcPrefixPattern.test(docPrefix)) {
@@ -95,6 +100,19 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
                 break;
               }
             }
+
+            if (getterSetterPrefixPattern.test(docPrefix)) {
+              const implicitFunctions: ComponentFunctions = getImplicitFunctions(currComponent);
+              if (implicitFunctions.has(lowerCurrentWord)) {
+                const implicitFunc: UserFunction = implicitFunctions.get(lowerCurrentWord);
+                results.push(new Location(
+                  implicitFunc.location.uri,
+                  implicitFunc.nameRange
+                ));
+                break;
+              }
+            }
+
             if (currComponent.extends) {
               currComponent = getComponent(currComponent.extends);
             } else {
@@ -172,31 +190,6 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
               dataTypeComp.declarationRange
             ));
           }
-
-          const getterSetterPrefixPattern = getValidScopesPrefixPattern([Scope.This], true);
-          if (thisComponent.accessors && getterSetterPrefixPattern.test(docPrefix) && /^\s*\(/.test(lineSuffix)) {
-            // getters
-            if (typeof prop.getter === "undefined" || prop.getter) {
-              const getterName = "get" + prop.name;
-              if (!thisComponent.functions.has(getterName) && equalsIgnoreCase(getterName, currentWord)) {
-                results.push(new Location(
-                  thisComponent.uri,
-                  prop.nameRange
-                ));
-              }
-            }
-
-            // setters
-            if (typeof prop.setter === "undefined" || prop.setter) {
-              const setterName = "set" + prop.name;
-              if (!thisComponent.functions.has(setterName) && equalsIgnoreCase(setterName, currentWord)) {
-                results.push(new Location(
-                  thisComponent.uri,
-                  prop.nameRange
-                ));
-              }
-            }
-          }
         });
         // Component variables
         const variablesPrefixPattern = getValidScopesPrefixPattern([Scope.Variables], false);
@@ -208,6 +201,37 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
           });
         }
       }
+    } else if (docIsCfmFile) {
+      const docVariableAssignments: Variable[] = parseVariableAssignments(documentPositionStateContext, false);
+
+      const variableScopePrefixPattern: RegExp = getVariableScopePrefixPattern();
+      const variableScopePrefixMatch: RegExpExecArray = variableScopePrefixPattern.exec(docPrefix);
+      if (variableScopePrefixMatch) {
+        const validScope: string = variableScopePrefixMatch[1];
+
+        docVariableAssignments.filter((variable: Variable) => {
+          if (!equalsIgnoreCase(variable.identifier, currentWord)) {
+            return false;
+          }
+          if (validScope) {
+            const currentScope: Scope = Scope.valueOf(validScope);
+            return [currentScope, Scope.Unknown].includes(variable.scope);
+          }
+
+          return true;
+        }).forEach((variable: Variable) => {
+          results.push(variable.declarationLocation);
+        });
+      }
+    }
+
+    // External functions
+    const externalUserFunc: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, docPrefix, lowerCurrentWord);
+    if (externalUserFunc) {
+      results.push(new Location(
+        externalUserFunc.location.uri,
+        externalUserFunc.nameRange
+      ));
     }
 
     // Application variables

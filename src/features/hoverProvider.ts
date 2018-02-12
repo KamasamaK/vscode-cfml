@@ -1,5 +1,5 @@
 import {
-  Hover, HoverProvider, Position, Range, TextDocument, TextLine, CancellationToken, WorkspaceConfiguration, workspace, MarkdownString
+  Hover, HoverProvider, Position, Range, TextDocument, TextLine, CancellationToken, WorkspaceConfiguration, workspace, MarkdownString, Uri
 } from "vscode";
 import * as cachedEntity from "./cachedEntities";
 import { textToMarkdownString, equalsIgnoreCase } from "../utils/textUtil";
@@ -8,11 +8,11 @@ import { Parameter, constructParameterLabel } from "../entities/parameter";
 import { LANGUAGE_ID } from "../cfmlMain";
 import { DataType } from "../entities/dataType";
 import { Function, getSyntaxString, getFunctionSuffixPattern } from "../entities/function";
-import { Component, COMPONENT_EXT } from "../entities/component";
+import { Component, COMPONENT_EXT, objectNewInstanceInitPrefix } from "../entities/component";
 import { getComponent } from "./cachedEntities";
 import { Signature } from "../entities/signature";
 import { getValidScopesPrefixPattern, Scope } from "../entities/scope";
-import { Access, UserFunction } from "../entities/userFunction";
+import { Access, UserFunction, getFunctionFromPrefix } from "../entities/userFunction";
 import * as path from "path";
 import { MySet } from "../utils/collections";
 import { CFMLEngine } from "../utils/cfdocs/cfmlEngine";
@@ -81,11 +81,11 @@ export default class CFMLHoverProvider implements HoverProvider {
     const textLine: TextLine = document.lineAt(position);
     const lineText: string = documentPositionStateContext.sanitizedDocumentText.slice(document.offsetAt(textLine.range.start), document.offsetAt(textLine.range.end));
     const currentWord: string = documentPositionStateContext.currentWord;
+    const lowerCurrentWord = currentWord.toLowerCase();
     const lineSuffix: string = lineText.slice(wordRange.end.character, textLine.range.end.character);
     const docPrefix: string = documentPositionStateContext.docPrefix;
     const positionIsCfScript: boolean = documentPositionStateContext.positionIsScript;
 
-    let isUserFunction = false;
     let userFunc: UserFunction;
 
     const tagPrefixPattern: RegExp = getTagPrefixPattern();
@@ -101,30 +101,48 @@ export default class CFMLHoverProvider implements HoverProvider {
 
     if (cachedEntity.isGlobalTag(currentWord)) {
       if (tagPrefixPattern.test(docPrefix)) {
-        definition = this.globalTagToHoverProviderItem(cachedEntity.getGlobalTag(currentWord.toLowerCase()));
+        definition = this.globalTagToHoverProviderItem(cachedEntity.getGlobalTag(lowerCurrentWord));
         return this.createHover(definition);
       }
 
       if (userEngine.supportsScriptTags() && functionSuffixPattern.test(lineSuffix)) {
-        definition = this.globalScriptTagToHoverProviderItem(cachedEntity.getGlobalTag(currentWord.toLowerCase()));
+        definition = this.globalScriptTagToHoverProviderItem(cachedEntity.getGlobalTag(lowerCurrentWord));
         return this.createHover(definition);
       }
     }
 
     if (functionSuffixPattern.test(lineSuffix)) {
-      // Global function
-      if (cachedEntity.isGlobalFunction(currentWord)) {
-        definition = this.functionToHoverProviderItem(cachedEntity.getGlobalFunction(currentWord.toLowerCase()));
-        return this.createHover(definition);
+      // Check if instantiating via "new" operator
+      const startSigPositionPrefix = `${docPrefix}${currentWord}(`;
+      const objectNewInstanceInitPrefixMatch: RegExpExecArray = objectNewInstanceInitPrefix.exec(startSigPositionPrefix);
+      if (objectNewInstanceInitPrefixMatch) {
+        const componentDotPath: string = objectNewInstanceInitPrefixMatch[2];
+        const componentUri: Uri = cachedEntity.componentPathToUri(componentDotPath, document.uri);
+        if (componentUri) {
+          const initComponent: Component = getComponent(componentUri);
+          if (initComponent) {
+            const initMethod = initComponent.initmethod ? initComponent.initmethod.toLowerCase() : "init";
+            if (initComponent.functions.has(initMethod)) {
+              userFunc = initComponent.functions.get(initMethod);
+              definition = this.functionToHoverProviderItem(userFunc);
+              return this.createHover(definition);
+            }
+          }
+        }
       }
 
-      const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(docPrefix);
+      // Global function
+      if (cachedEntity.isGlobalFunction(currentWord)) {
+        definition = this.functionToHoverProviderItem(cachedEntity.getGlobalFunction(lowerCurrentWord));
+        return this.createHover(definition);
+      }
 
       // Internal function
       if (thisComponent) {
         let currComponent: Component = thisComponent;
         let checkScope: boolean = true;
         // If preceded by super keyword, start at base component
+        const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(docPrefix);
         if (thisComponent.extends && varPrefixMatch) {
           const varMatchText: string = varPrefixMatch[0];
           const varScope: string = varPrefixMatch[2];
@@ -137,12 +155,12 @@ export default class CFMLHoverProvider implements HoverProvider {
           }
         }
         while (currComponent) {
-          if (currComponent.functions.has(currentWord.toLowerCase())) {
-            userFunc = currComponent.functions.get(currentWord.toLowerCase());
-            const validScopes: Scope[] = userFunc.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
+          if (currComponent.functions.has(lowerCurrentWord)) {
+            const thisFunc = currComponent.functions.get(lowerCurrentWord);
+            const validScopes: Scope[] = thisFunc.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
             const funcPrefixPattern = getValidScopesPrefixPattern(validScopes, true);
             if (!checkScope || funcPrefixPattern.test(docPrefix)) {
-              isUserFunction = true;
+              userFunc = thisFunc;
               break;
             }
           }
@@ -154,9 +172,12 @@ export default class CFMLHoverProvider implements HoverProvider {
         }
       }
 
-      // TODO: External function
+      // External function
+      if (!userFunc) {
+        userFunc = await getFunctionFromPrefix(documentPositionStateContext, docPrefix, lowerCurrentWord);
+      }
 
-      if (isUserFunction) {
+      if (userFunc) {
         definition = this.functionToHoverProviderItem(userFunc);
         return this.createHover(definition);
       }
@@ -257,14 +278,18 @@ export default class CFMLHoverProvider implements HoverProvider {
       });
     });
 
-    let returnType: string = DataType.Any;
+    let returnType: string;
     if ("returnTypeUri" in func) {
       const userFunction: UserFunction = func as UserFunction;
       if (userFunction.returnTypeUri) {
         returnType = path.basename(userFunction.returnTypeUri.fsPath, COMPONENT_EXT);
       }
-    } else if (func.returntype) {
+    }
+
+    if (!returnType && func.returntype) {
       returnType = func.returntype;
+    } else {
+      returnType = DataType.Any;
     }
 
     let hoverItem: HoverProviderItem = {
@@ -344,15 +369,15 @@ export default class CFMLHoverProvider implements HoverProvider {
     const symbolType: string = definition.symbolType;
     let language = "";
     let paramKind = "";
-    if (definition.symbolType === "function") {
+    if (symbolType === "function") {
       syntax = "function " + syntax;
 
       language = "typescript"; // cfml not coloring properly
       paramKind = "Argument";
-    } else if (definition.symbolType === "tag") {
+    } else if (symbolType === "tag") {
       language = LANGUAGE_ID;
       paramKind = "Attribute";
-    } else if (definition.symbolType === "attribute") {
+    } else if (symbolType === "attribute") {
       language = "typescript";
     } else {
       return undefined;

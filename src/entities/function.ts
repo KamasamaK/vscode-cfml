@@ -31,15 +31,8 @@ export enum MemberType {
  */
 export function getSyntaxString(func: Function): string {
   const funcDefaultSignature = func.signatures.length !== 0 ? constructSignatureLabel(func.signatures[0]) : "";
-  let returnType: string = DataType.Any;
-  if ("returnTypeUri" in func) {
-    const userFunction: UserFunction = func as UserFunction;
-    if (userFunction.returnTypeUri) {
-      returnType = path.basename(userFunction.returnTypeUri.fsPath, COMPONENT_EXT);
-    }
-  } else if (func.returntype) {
-    returnType = func.returntype;
-  }
+  const returnType: string = getReturnTypeString(func);
+
   return `${func.name}(${funcDefaultSignature}): ${returnType}`;
 }
 
@@ -48,4 +41,24 @@ export function getSyntaxString(func: Function): string {
  */
 export function getFunctionSuffixPattern(): RegExp {
   return functionSuffixPattern;
+}
+
+/**
+ * Gets a display string for the given function's return type
+ * @param func The function for which to get the display return type
+ */
+export function getReturnTypeString(func: Function): string {
+  let returnType: string;
+  if ("returnTypeUri" in func) {
+    const userFunction: UserFunction = func as UserFunction;
+    if (userFunction.returnTypeUri) {
+      returnType = path.basename(userFunction.returnTypeUri.fsPath, COMPONENT_EXT);
+    }
+  }
+
+  if (!returnType) {
+    returnType = func.returntype ? func.returntype : DataType.Any;
+  }
+
+  return returnType;
 }

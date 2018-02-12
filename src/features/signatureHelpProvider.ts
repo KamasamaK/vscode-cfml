@@ -9,10 +9,11 @@ import { Component, objectNewInstanceInitPrefix } from "../entities/component";
 import { getComponent, componentPathToUri } from "./cachedEntities";
 import { Parameter, constructParameterLabel } from "../entities/parameter";
 import { textToMarkdownString, equalsIgnoreCase } from "../utils/textUtil";
-import { UserFunction, Access } from "../entities/userFunction";
+import { UserFunction, Access, getFunctionFromPrefix, ComponentFunctions } from "../entities/userFunction";
 import { getDocumentPositionStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
 import { Scope, getValidScopesPrefixPattern } from "../entities/scope";
 import { variableExpressionPrefix } from "../entities/variable";
+import { getImplicitFunctions } from "../entities/property";
 
 const NEW_LINE = "\n".charCodeAt(0);
 const LEFT_BRACKET = "[".charCodeAt(0);
@@ -144,11 +145,12 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
       }
 
       const ident: string = document.getText(identWordRange);
+      const lowerIdent = ident.toLowerCase();
 
       const startIdentPositionPrefix: string = sanitizedDocumentText.slice(0, document.offsetAt(identWordRange.start));
 
       // Global function
-      entry = cachedEntity.getGlobalFunction(ident.toLowerCase());
+      entry = cachedEntity.getGlobalFunction(lowerIdent);
 
       // Check if component function
       if (!entry) {
@@ -163,15 +165,17 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
             const varScope: string = varPrefixMatch[2];
             // const varQuote: string = varPrefixMatch[3];
             const varName: string = varPrefixMatch[4];
-
             if (varMatchText.split(".").length === 2 && !varScope && equalsIgnoreCase(varName, "super")) {
               currComponent = getComponent(thisComponent.extends);
               checkScope = false;
             }
           }
+
+          const getterSetterPrefixPattern = getValidScopesPrefixPattern([Scope.This], true);
+
           while (currComponent) {
-            if (currComponent.functions.has(ident.toLowerCase())) {
-              const userFun: UserFunction = currComponent.functions.get(ident.toLowerCase());
+            if (currComponent.functions.has(lowerIdent)) {
+              const userFun: UserFunction = currComponent.functions.get(lowerIdent);
 
               // Ensure this does not trigger on function definition
               if (userFun.location.range.contains(position) && !userFun.bodyRange.contains(position)) {
@@ -185,6 +189,15 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
                 break;
               }
             }
+
+            if (getterSetterPrefixPattern.test(startIdentPositionPrefix)) {
+              const implicitFunctions: ComponentFunctions = getImplicitFunctions(currComponent);
+              if (implicitFunctions.has(lowerIdent)) {
+                entry = implicitFunctions.get(lowerIdent);
+                break;
+              }
+            }
+
             if (currComponent.extends) {
               currComponent = getComponent(currComponent.extends);
             } else {
@@ -193,10 +206,12 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
           }
         }
       }
+
+      // Check if external user function
+      if (!entry) {
+        entry = await getFunctionFromPrefix(documentPositionStateContext, startIdentPositionPrefix, lowerIdent);
+      }
     }
-
-    // TODO: Check if external user function
-
     if (!entry) {
       return null;
     }

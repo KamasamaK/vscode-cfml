@@ -6,15 +6,15 @@ import { cgiVariables } from "../entities/cgi";
 import { cfcatchProperties, cfcatchPropertyPrefixPattern } from "../entities/cfcatch";
 import { getAllGlobalFunctions, getAllGlobalTags, getComponent, getGlobalTag } from "./cachedEntities";
 import { GlobalFunction, GlobalTag, GlobalFunctions, GlobalTags, globalTagSyntaxToScript } from "../entities/globals";
-import { inlineScriptFunctionPattern, UserFunction, UserFunctionSignature, Argument, Access, getLocalVariables } from "../entities/userFunction";
+import { inlineScriptFunctionPattern, UserFunction, UserFunctionSignature, Argument, Access, getLocalVariables, ComponentFunctions } from "../entities/userFunction";
 import { getSyntaxString } from "../entities/function";
 import { Signature } from "../entities/signature";
-import { Component, COMPONENT_EXT, componentDottedPathPrefix, getApplicationUri } from "../entities/component";
+import { Component, COMPONENT_EXT, componentDottedPathPrefix } from "../entities/component";
 import * as path from "path";
 import { getCfScriptRanges, isInRanges } from "../utils/contextUtil";
-import { usesConstantConvention, parseVariableAssignments, Variable, propertiesToVariables, argumentsToVariables, variableExpressionPrefix } from "../entities/variable";
+import { usesConstantConvention, parseVariableAssignments, Variable, propertiesToVariables, argumentsToVariables, variableExpressionPrefix, getApplicationVariables } from "../entities/variable";
 import { scopes, Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern, unscopedPrecedence } from "../entities/scope";
-import { Property, Properties } from "../entities/property";
+import { Property, Properties, getImplicitFunctions } from "../entities/property";
 import { snippets, Snippet } from "../cfmlMain";
 import { parseAttributes, Attributes, VALUE_PATTERN } from "../entities/attribute";
 import { Parameter } from "../entities/parameter";
@@ -25,7 +25,7 @@ import { DataType } from "../entities/dataType";
 import { isQuery, queryObjectProperties } from "../entities/query";
 import { resolveDottedPaths, filterDirectories, filterComponents } from "../utils/fileUtil";
 import * as fs from "fs";
-import { DocumentPositionStateContext, getDocumentPositionStateContext, getDocumentStateContext, DocumentStateContext } from "../utils/documentUtil";
+import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
 
 export interface CompletionEntry {
   detail?: string;
@@ -139,7 +139,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       result = result.concat(snippetCompletions);
     }
 
-    // TODO: Add struct keys?
+    // TODO: Add struct keys? Invoke collectVariableAssignments instead?
     // Assigned variables
     let allVariableAssignments: Variable[] = [];
     if (docIsCfmFile) {
@@ -299,7 +299,8 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
             // User functions
             if (foundVar.dataType === DataType.Component) {
               let addedFunctions: MySet<string> = new MySet();
-              let foundComponent: Component = getComponent(foundVar.dataTypeComponentUri);
+              const initialFoundComp: Component = getComponent(foundVar.dataTypeComponentUri);
+              let foundComponent: Component = initialFoundComp;
               // Ensure not to duplicate overridden functions
               while (foundComponent) {
                 foundComponent.functions.filter((func: UserFunction, funcKey: string) => {
@@ -310,43 +311,21 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
                 }).forEach((func: UserFunction, funcKey: string) => {
                   addedFunctions.add(funcKey);
                   result.push(createNewProposal(
-                    func.name, CompletionItemKind.Function, { detail: `(function) ${foundComponent.name}.${getSyntaxString(func)}`, description: func.description }
+                    func.name, CompletionItemKind.Function, { detail: `(function) ${initialFoundComp.name}.${getSyntaxString(func)}`, description: func.description }
                   ));
                 });
 
-                // Implicit property accessors
-                if (foundComponent.accessors) {
-                  foundComponent.properties.forEach((prop: Property) => {
-                    // getters
-                    if (typeof prop.getter === "undefined" || prop.getter) {
-                      const getterName = "get" + prop.name.charAt(0).toUpperCase() + prop.name.slice(1);
-                      if (!addedFunctions.has(getterName.toLowerCase()) && currentWordMatches(getterName)) {
-                        let propertyType: string = prop.dataType;
-                        if (prop.dataTypeComponentUri) {
-                          propertyType = path.basename(prop.dataTypeComponentUri.fsPath, COMPONENT_EXT);
-                        }
-                        result.push(createNewProposal(getterName, CompletionItemKind.Function, {
-                          detail: `(getter) ${foundComponent.name}.${getterName}(): ${propertyType}`,
-                          description: prop.description
-                        }));
-                      }
-                    }
-                    // setters
-                    if (typeof prop.setter === "undefined" || prop.setter) {
-                      const setterName = "set" + prop.name.charAt(0).toUpperCase() + prop.name.slice(1);
-                      if (!addedFunctions.has(setterName.toLowerCase()) && currentWordMatches(setterName)) {
-                        let propertyType: string = prop.dataType;
-                        if (prop.dataTypeComponentUri) {
-                          propertyType = path.basename(prop.dataTypeComponentUri.fsPath, COMPONENT_EXT);
-                        }
-                        result.push(createNewProposal(setterName, CompletionItemKind.Function, {
-                          detail: `(setter) ${foundComponent.name}.${setterName}(${prop.name}: ${propertyType}): ${foundComponent.name}`,
-                          description: prop.description
-                        }));
-                      }
-                    }
-                  });
-                }
+                const implicitFunctions: ComponentFunctions = getImplicitFunctions(foundComponent);
+                implicitFunctions.filter((implFunc: UserFunction, funcKey: string) => {
+                  return !addedFunctions.has(funcKey) && currentWordMatches(funcKey);
+                }).forEach((implFunc: UserFunction, funcKey: string) => {
+                  const firstPart: string = implFunc.name.slice(0, 3);
+                  const completionType = firstPart === "get" ? "getter" : "setter";
+                  result.push(createNewProposal(implFunc.name, CompletionItemKind.Function, {
+                    detail: `(${completionType}) ${initialFoundComp.name}.${getSyntaxString(implFunc)}`,
+                    description: implFunc.description
+                  }));
+                });
 
                 if (foundComponent.extends) {
                   foundComponent = getComponent(foundComponent.extends);
@@ -419,25 +398,18 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
 
     // Application variables
     if (getValidScopesPrefixPattern([Scope.Application], false).test(docPrefix)) {
-      const applicationUri: Uri = getApplicationUri(document.uri);
+      const applicationDocVariables: Variable[] = await getApplicationVariables(document.uri);
+      const applicationVariableCompletions: CompletionItem[] = applicationDocVariables.filter((variable: Variable) => {
+        return variable.scope === Scope.Application && currentWordMatches(variable.identifier);
+      }).map((variable: Variable) => {
+        let varType: string = variable.dataType;
+        if (variable.dataTypeComponentUri) {
+          varType = path.basename(variable.dataTypeComponentUri.fsPath, COMPONENT_EXT);
+        }
+        return createNewProposal(variable.identifier, CompletionItemKind.Variable, { detail: `(${variable.scope}) ${variable.identifier}: ${varType}` });
+      });
 
-      if (applicationUri) {
-        // TODO: Cache this information
-        const applicationDoc: TextDocument = await workspace.openTextDocument(applicationUri);
-        const applicationDocStateContext: DocumentStateContext = getDocumentStateContext(applicationDoc);
-        const applicationDocVariables = parseVariableAssignments(applicationDocStateContext, applicationDocStateContext.docIsScript);
-        const applicationVariableCompletions: CompletionItem[] = applicationDocVariables.filter((variable: Variable) => {
-          return variable.scope === Scope.Application && currentWordMatches(variable.identifier);
-        }).map((variable: Variable) => {
-          let varType: string = variable.dataType;
-          if (variable.dataTypeComponentUri) {
-            varType = path.basename(variable.dataTypeComponentUri.fsPath, COMPONENT_EXT);
-          }
-          return createNewProposal(variable.identifier, CompletionItemKind.Variable, { detail: `(${variable.scope}) ${variable.identifier}: ${varType}` });
-        });
-
-        result = result.concat(applicationVariableCompletions);
-      }
+      result = result.concat(applicationVariableCompletions);
     }
 
     // CGI variables
@@ -589,37 +561,6 @@ function getComponentPropertyCompletions(state: CompletionState, componentProper
         description: prop.description
       }));
     }
-    const getterSetterPrefixPattern = getValidScopesPrefixPattern([Scope.This], true);
-    if (thisComponent.accessors && getterSetterPrefixPattern.test(state.docPrefix)) {
-      // getters
-      if (typeof prop.getter === "undefined" || prop.getter) {
-        const getterName = "get" + prop.name.charAt(0).toUpperCase() + prop.name.slice(1);
-        if (!thisComponent.functions.has(getterName.toLowerCase()) && state.currentWordMatches(getterName)) {
-          let propertyType: string = prop.dataType;
-          if (prop.dataTypeComponentUri) {
-            propertyType = path.basename(prop.dataTypeComponentUri.fsPath, COMPONENT_EXT);
-          }
-          componentPropertyCompletions.push(createNewProposal(getterName, CompletionItemKind.Function, {
-            detail: `(getter) ${thisComponent.name}.${getterName}(): ${propertyType}`,
-            description: prop.description
-          }));
-        }
-      }
-      // setters
-      if (typeof prop.setter === "undefined" || prop.setter) {
-        const setterName = "set" + prop.name.charAt(0).toUpperCase() + prop.name.slice(1);
-        if (!thisComponent.functions.has(setterName.toLowerCase()) && state.currentWordMatches(setterName)) {
-          let propertyType: string = prop.dataType;
-          if (prop.dataTypeComponentUri) {
-            propertyType = path.basename(prop.dataTypeComponentUri.fsPath, COMPONENT_EXT);
-          }
-          componentPropertyCompletions.push(createNewProposal(setterName, CompletionItemKind.Function, {
-            detail: `(setter) ${thisComponent.name}.${setterName}(${prop.name}: ${propertyType}): ${thisComponent.name}`,
-            description: prop.description
-          }));
-        }
-      }
-    }
   });
 
   return componentPropertyCompletions;
@@ -684,17 +625,33 @@ function getComponentFunctionCompletions(state: CompletionState, component: Comp
   let componentFunctionCompletions: CompletionItem[] = [];
   if (component) {
     let addedFunctions: MySet<string> = new MySet();
+    const getterSetterPrefixPattern = getValidScopesPrefixPattern([Scope.This], true);
     let currComponent: Component = component;
     while (currComponent) {
       currComponent.functions.filter((func: UserFunction, funcKey: string) => {
         const validScopes: Scope[] = func.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
         const funcPrefixPattern = getValidScopesPrefixPattern(validScopes, true);
-        return (funcPrefixPattern.test(state.docPrefix) && state.currentWordMatches(func.name) && !addedFunctions.has(funcKey));
+        return (funcPrefixPattern.test(state.docPrefix) && state.currentWordMatches(funcKey) && !addedFunctions.has(funcKey));
       }).forEach((func: UserFunction, funcKey: string) => {
         addedFunctions.add(funcKey);
         componentFunctionCompletions.push(
           createNewProposal(func.name, CompletionItemKind.Function, { detail: `(function) ${currComponent.name}.${getSyntaxString(func)}`, description: func.description }));
       });
+
+      if (getterSetterPrefixPattern.test(state.docPrefix)) {
+        const implicitFunctions: ComponentFunctions = getImplicitFunctions(currComponent);
+        implicitFunctions.filter((implFunc: UserFunction, funcKey: string) => {
+          return !addedFunctions.has(funcKey) && state.currentWordMatches(funcKey);
+        }).forEach((implFunc: UserFunction, funcKey: string) => {
+          const firstPart: string = implFunc.name.slice(0, 3);
+          const completionType = firstPart === "get" ? "getter" : "setter";
+          componentFunctionCompletions.push(createNewProposal(implFunc.name, CompletionItemKind.Function, {
+            detail: `(${completionType}) ${component.name}.${getSyntaxString(implFunc)}`,
+            description: implFunc.description
+          }));
+        });
+      }
+
       if (currComponent.extends) {
         currComponent = getComponent(currComponent.extends);
       } else {

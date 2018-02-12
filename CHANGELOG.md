@@ -2,6 +2,15 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.3.1] - 2018-02-12
+
+- Added syntax highlighting for style attribute
+- Added hover for external component functions
+- Added signature help for implicit getters/setters
+- Added signature help for external component functions
+- Added definitions for external component functions
+- Added definitions for variables within templates
+
 ## [0.3.0] - 2018-01-22
 
 - Added more ways to check context
