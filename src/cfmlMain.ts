@@ -21,6 +21,11 @@ import { isCfcFile } from "./utils/contextUtil";
 import CFMLTypeDefinitionProvider from "./features/typeDefinitionProvider";
 
 export const LANGUAGE_ID = "cfml";
+const DOCUMENT_SELECTOR = {
+  language: LANGUAGE_ID,
+  scheme: "file"
+};
+
 export let snippets: Snippets;
 
 export interface Snippets {
@@ -105,15 +110,15 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(commands.registerCommand("cfml.toggleLineComment", toggleComment(CommentType.Line)));
   context.subscriptions.push(commands.registerCommand("cfml.toggleBlockComment", toggleComment(CommentType.Block)));
 
-  context.subscriptions.push(languages.registerHoverProvider(LANGUAGE_ID, new CFMLHoverProvider()));
-  context.subscriptions.push(languages.registerDocumentSymbolProvider(LANGUAGE_ID, new CFMLDocumentSymbolProvider()));
-  context.subscriptions.push(languages.registerSignatureHelpProvider(LANGUAGE_ID, new CFMLSignatureHelpProvider(), "(", ","));
-  context.subscriptions.push(languages.registerDocumentLinkProvider(LANGUAGE_ID, new CFMLDocumentLinkProvider()));
+  context.subscriptions.push(languages.registerHoverProvider(DOCUMENT_SELECTOR, new CFMLHoverProvider()));
+  context.subscriptions.push(languages.registerDocumentSymbolProvider(DOCUMENT_SELECTOR, new CFMLDocumentSymbolProvider()));
+  context.subscriptions.push(languages.registerSignatureHelpProvider(DOCUMENT_SELECTOR, new CFMLSignatureHelpProvider(), "(", ","));
+  context.subscriptions.push(languages.registerDocumentLinkProvider(DOCUMENT_SELECTOR, new CFMLDocumentLinkProvider()));
   context.subscriptions.push(languages.registerWorkspaceSymbolProvider(new CFMLWorkspaceSymbolProvider()));
-  context.subscriptions.push(languages.registerCompletionItemProvider(LANGUAGE_ID, new CFMLCompletionItemProvider(), "."));
-  context.subscriptions.push(languages.registerCompletionItemProvider(LANGUAGE_ID, new DocBlockCompletions(), "*", "@", "."));
-  context.subscriptions.push(languages.registerDefinitionProvider(LANGUAGE_ID, new CFMLDefinitionProvider()));
-  context.subscriptions.push(languages.registerTypeDefinitionProvider(LANGUAGE_ID, new CFMLTypeDefinitionProvider()));
+  context.subscriptions.push(languages.registerCompletionItemProvider(DOCUMENT_SELECTOR, new CFMLCompletionItemProvider(), "."));
+  context.subscriptions.push(languages.registerCompletionItemProvider(DOCUMENT_SELECTOR, new DocBlockCompletions(), "*", "@", "."));
+  context.subscriptions.push(languages.registerDefinitionProvider(DOCUMENT_SELECTOR, new CFMLDefinitionProvider()));
+  context.subscriptions.push(languages.registerTypeDefinitionProvider(DOCUMENT_SELECTOR, new CFMLTypeDefinitionProvider()));
 
   context.subscriptions.push(workspace.onDidSaveTextDocument((document: TextDocument) => {
     if (isCfcFile(document)) {
