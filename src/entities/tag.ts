@@ -840,12 +840,7 @@ export async function goToMatchingTag(): Promise<void> {
     const cfTagAttributePattern: RegExp = documentPositionStateContext.positionIsScript ? getCfScriptTagAttributePattern() : getCfTagAttributePattern();
     const cfTagAttributeMatch: RegExpExecArray = cfTagAttributePattern.exec(documentPositionStateContext.docPrefix);
     if (cfTagAttributeMatch) {
-      let cfTagMatchOffset: number = cfTagAttributeMatch.index;
-      if (!documentPositionStateContext.positionIsScript) {
-        cfTagMatchOffset++;
-      }
       const tagName: string = cfTagAttributeMatch[2];
-      const cfTagMatchEnd: number = cfTagMatchOffset + tagName.length;
       globalTag = getGlobalTag(tagName);
     }
   }
