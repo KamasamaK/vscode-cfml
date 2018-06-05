@@ -23,3 +23,9 @@ export class MySet<T> extends Set<T> {
     return mySet;
   }
 }
+
+// TODO: Find a better place for this
+export interface NameWithOptionalValue<T> {
+  name: string;
+  value?: T;
+}

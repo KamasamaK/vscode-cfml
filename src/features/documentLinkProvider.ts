@@ -1,6 +1,6 @@
-import { DocumentLinkProvider, TextDocument, CancellationToken, DocumentLink, Range, Uri, workspace, Position, WorkspaceFolder } from "vscode";
-import * as path from "path";
 import * as fs from "fs";
+import * as path from "path";
+import { CancellationToken, DocumentLink, DocumentLinkProvider, Position, Range, TextDocument, Uri, WorkspaceFolder, workspace } from "vscode";
 
 export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
 

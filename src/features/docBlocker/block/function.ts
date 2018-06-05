@@ -15,7 +15,7 @@ export default class FunctionBlock extends Block {
   protected pattern: RegExp = /^(\s*)(?:\b(?:private|package|public|remote|static|final|abstract)\s+)?(?:\b(?:private|package|public|remote|static|final|abstract)\s+)?(?:\b(?:[A-Za-z0-9_\.$]+)\s+)?function\s+(?:[_$a-zA-Z][$\w]*)\s*(?:\((?:=\s*\{|[^{])*)[\{;]/i;
 
   public constructDoc(): Doc {
-    let doc = new Doc(DocType.Function);
+    let doc = new Doc(DocType.Function, this.document.uri);
 
     const positionOffset: number = this.document.offsetAt(this.position);
     const patternMatch: RegExpExecArray = this.pattern.exec(this.suffix);

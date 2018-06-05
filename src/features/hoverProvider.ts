@@ -11,13 +11,11 @@ import { Function, getSyntaxString, getFunctionSuffixPattern } from "../entities
 import { Component, COMPONENT_EXT, objectNewInstanceInitPrefix } from "../entities/component";
 import { getComponent } from "./cachedEntities";
 import { Signature } from "../entities/signature";
-import { getValidScopesPrefixPattern, Scope } from "../entities/scope";
-import { Access, UserFunction, getFunctionFromPrefix } from "../entities/userFunction";
+import { UserFunction, getFunctionFromPrefix } from "../entities/userFunction";
 import * as path from "path";
 import { MySet } from "../utils/collections";
 import { CFMLEngine } from "../utils/cfdocs/cfmlEngine";
 import { getTagPrefixPattern, getCfScriptTagAttributePattern, getCfTagAttributePattern } from "../entities/tag";
-import { variableExpressionPrefix } from "../entities/variable";
 import { getDocumentPositionStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
 import { VALUE_PATTERN } from "../entities/attribute";
 
@@ -42,7 +40,7 @@ export default class CFMLHoverProvider implements HoverProvider {
    * @param token A cancellation token.
    */
   public async provideHover(document: TextDocument, position: Position, token: CancellationToken): Promise<Hover | undefined> {
-    const cfmlHoverSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.hover");
+    const cfmlHoverSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.hover", document.uri);
     if (!cfmlHoverSettings.get<boolean>("enable", true)) {
       return undefined;
     }
@@ -93,8 +91,6 @@ export default class CFMLHoverProvider implements HoverProvider {
 
     let definition: HoverProviderItem;
 
-    const thisComponent: Component = documentPositionStateContext.component;
-
     if (documentPositionStateContext.positionInComment) {
       return undefined;
     }
@@ -132,51 +128,13 @@ export default class CFMLHoverProvider implements HoverProvider {
       }
 
       // Global function
-      if (cachedEntity.isGlobalFunction(currentWord)) {
+      if (!documentPositionStateContext.isContinuingExpression && cachedEntity.isGlobalFunction(currentWord)) {
         definition = this.functionToHoverProviderItem(cachedEntity.getGlobalFunction(lowerCurrentWord));
         return this.createHover(definition);
       }
 
-      // Internal function
-      if (thisComponent) {
-        let currComponent: Component = thisComponent;
-        let checkScope: boolean = true;
-        // If preceded by super keyword, start at base component
-        const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(docPrefix);
-        if (thisComponent.extends && varPrefixMatch) {
-          const varMatchText: string = varPrefixMatch[0];
-          const varScope: string = varPrefixMatch[2];
-          // const varQuote: string = varPrefixMatch[3];
-          const varName: string = varPrefixMatch[4];
-
-          if (varMatchText.split(".").length === 2 && !varScope && equalsIgnoreCase(varName, "super")) {
-            currComponent = getComponent(thisComponent.extends);
-            checkScope = false;
-          }
-        }
-        while (currComponent) {
-          if (currComponent.functions.has(lowerCurrentWord)) {
-            const thisFunc = currComponent.functions.get(lowerCurrentWord);
-            const validScopes: Scope[] = thisFunc.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
-            const funcPrefixPattern = getValidScopesPrefixPattern(validScopes, true);
-            if (!checkScope || funcPrefixPattern.test(docPrefix)) {
-              userFunc = thisFunc;
-              break;
-            }
-          }
-          if (currComponent.extends) {
-            currComponent = getComponent(currComponent.extends);
-          } else {
-            currComponent = undefined;
-          }
-        }
-      }
-
-      // External function
-      if (!userFunc) {
-        userFunc = await getFunctionFromPrefix(documentPositionStateContext, docPrefix, lowerCurrentWord);
-      }
-
+      // User function
+      userFunc = await getFunctionFromPrefix(documentPositionStateContext, lowerCurrentWord);
       if (userFunc) {
         definition = this.functionToHoverProviderItem(userFunc);
         return this.createHover(definition);
@@ -370,7 +328,9 @@ export default class CFMLHoverProvider implements HoverProvider {
     let language = "";
     let paramKind = "";
     if (symbolType === "function") {
-      syntax = "function " + syntax;
+      if (!syntax.startsWith("function ")) {
+        syntax = "function " + syntax;
+      }
 
       language = "typescript"; // cfml not coloring properly
       paramKind = "Argument";

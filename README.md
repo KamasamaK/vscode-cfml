@@ -16,39 +16,44 @@ Using the default theme `Dark+`
 ![Syntax Highlighting](./images/cfdocs_leaderboard.png)
 
 1. **Signature Help**  
-Automatically triggers within signature of a function or can be manually triggered. Currently limited to CFML global functions and internal/inherited component functions.  
-Win/Linux: `Ctrl+Shift+Space`; Mac: `Cmd+Shift+Space`
+Automatically triggers within signature of a function or can be manually triggered. This currently does not work for member functions. It is unable to work within a string and fails in certain circumstances within other literals.  
+Win/Linux: `Ctrl`+`Shift`+`Space`; Mac: `Cmd`+`Shift`+`Space`
 ![Signature Help](./images/cfdocs_leaderboard_signature.png)
 
 1. **Hover Documentation**  
-Displays documentation for functions and tags. Currently limited to CFML global functions and tags/attributes as well as internal/inherited component functions. Does not always consider context, so for example it may also trigger on SQL or JavaScript functions with the same name.  
-Win/Linux: `Ctrl+K Ctrl+I`; Mac: `Cmd+K Cmd+I`
+Displays documentation for functions and tags. Currently limited to CFML global functions and tags/attributes as well as component functions. Does not always consider context, so for example it may also trigger on SQL or JavaScript functions with the same name.  
+Win/Linux: `Ctrl`+`K` `Ctrl`+`I`; Mac: `Cmd`+`K` `Cmd`+`I`
 ![Hover Documentation](./images/cfdocs_leaderboard_hover.png)
 
 1. **Document Symbols**  
 Search symbols within a document.  
-Win/Linux: `Ctrl+Shift+O`; Mac: `Cmd+Shift+O`
+Win/Linux: `Ctrl`+`Shift`+`O`; Mac: `Cmd`+`Shift`+`O`
 ![Document Symbols](./images/cfdocs_leaderboard_document-symbols.png)
 
 1. **Workspace Symbols**  
 Search symbols within the workspace. Limited to components and their function declarations.  
-Win/Linux: `Ctrl+T`; Mac: `Cmd+T`
+Win/Linux: `Ctrl`+`T`; Mac: `Cmd`+`T`
 ![Workspace Symbols](./images/cfdocs_workspace-symbols.png)
 
 1. **Completion Suggestions**  
-Suggestions for global functions and tags, tag attributes, user functions, keywords, scopes, component properties, variables, component dot-paths, and docblocks.  
-Win/Linux: `Ctrl+Space`; Mac: `Cmd+Space`
+Suggestions for global functions and tags, tag attributes, user functions, keywords, scopes, component properties, variables, component dot-paths, and docblocks. Does not always consider context, so it can trigger inappropriately.  
+Win/Linux: `Ctrl`+`Space`; Mac: `Cmd`+`Space`
 ![Completion Suggestions](./images/cfdocs_leaderboard_completion.png)
 
 1. **Definition**
-Provides a link to the definition of a symbol. Currently only for object creation, function usage within the same or inherited component, function return types, argument types, property types, component extends, function arguments, function local variables, and application variables.  
-_Go to Definition:_ Win/Linux: `F12`/`Ctrl+Click`; Mac: `F12`  
-_Peek Definition:_ Win/Linux: `Alt+F12` (`Ctrl`+hover provides a smaller, alternate peek); Mac: `Opt+F12`
+Provides a link to the definition of a symbol. Currently only for object creation, function usage, function return types, argument types, property types, component extends, function arguments, function local variables, template variables, and application variables.  
+_Go to Definition:_ Win/Linux: `F12`/`Ctrl`+click; Mac: `F12`  
+_Peek Definition:_ Win/Linux: `Alt`+`F12` (`Ctrl`+hover provides a smaller, alternate peek); Mac: `Opt`+`F12`  
+_Open Definition to the Side:_ Win/Linux: `Ctrl`+`K` `F12`  
 ![Peek Definition](./images/cfdocs_definition-peek.png)
+
+1. **Type Definition**
+Provides a link to the definition of the type for a symbol. This only applies to user-defined types within the same workspace.  
+_No default shortcuts_
 
 ## Settings
 
-The following are the configurable Settings (Win/Linux: `Ctrl+Comma`; Mac: `Cmd+Comma`) that this extension contributes to VS Code:
+The following are the configurable Settings (Win/Linux: `Ctrl`+`Comma`; Mac: `Cmd`+`Comma`) that this extension contributes to VS Code:
 
 - `cfml.globalDefinitions.source`: The source of the global definitions. Currently only supports CFDocs. [*Default*: `cfdocs`]
 - `cfml.cfDocs.source`: Indicates which source will be used for CFDocs.  
@@ -59,9 +64,27 @@ The following are the configurable Settings (Win/Linux: `Ctrl+Comma`; Mac: `Cmd+
 - `cfml.hover.enable`: Whether hover is enabled. [*Default*: `true`]
 - `cfml.signature.enable`: Whether signature help is enabled. [*Default*: `true`]
 - `cfml.suggest.enable`: Whether completion help is enabled. [*Default*: `true`]
-- `cfml.suggest.snippets.enable`: Whether snippets are part of completion help. [*Default*: `true`]
-- `cfml.suggest.snippets.exclude`: Set of snippet keys you would like excluded from suggestions. See [snippets.json](./snippets/snippets.json).
+- `cfml.suggest.snippets.enable`: Whether included [snippets](./snippets/snippets.json) are part of completion help. [*Default*: `true`]
+- `cfml.suggest.snippets.exclude`: [*Optional*] Set of snippet keys you would like excluded from suggestions.
 - `cfml.suggest.globalFunctions.enable`: Whether global functions are part of completion help. [*Default*: `true`]
+- `cfml.suggest.globalTags.enable`: Whether global tags are part of completion help. [*Default*: `true`]
+- `cfml.suggest.globalTags.includeAttributes.setType`: What set of attributes to include when suggestion is selected. [*Default*: `none`]
+- `cfml.suggest.globalTags.includeAttributes.custom`: A custom set of attributes to include for given tags when suggestion is selected. Tags set here override the set type.  
+  **Example**
+    ```json
+    "cfml.suggest.globalTags.includeAttributes.custom": {
+        "cfquery": [
+            {
+                "name": "name"
+            },
+            {
+                "name": "datasource",
+                "value": "dsn"
+            }
+        ]
+    }
+    ```
+- `cfml.definition.enable`: Whether providing definitions is enabled. [*Default*: `true`]
 - `cfml.indexComponents.enable`: Whether to index all components in workspace on startup. This is done on each startup and duration depends on number and complexity of components as well as hardware specifications. Editor may be unresponsive during this period. It is currently required for most features involving components. [*Default*: `true`]
 - `cfml.autoCloseTags.enable`: Whether to enable auto-closing tags for CFML. This uses the third-party extension `auto-close-tag`. Changing this requires a restart. [*Default*: `true`]
 - `cfml.autoCloseTags.configurationTarget`: Auto-configuration target for auto-closing tags. [*Default*: `Global`]
@@ -84,15 +107,27 @@ The following are the configurable Settings (Win/Linux: `Ctrl+Comma`; Mac: `Cmd+
     ```
 - `cfml.engine.name`: Name of the CFML engine against which to filter.
 - `cfml.engine.version`: Version of the CFML engine against which to filter. SemVer format is preferred.
+- `cfml.mappings`: Represents CFML mappings from logicalPath to directoryPath.  
+  **Example**
+    ```json
+    "cfml.mappings": [
+      {
+        "logicalPath": "/model",
+        "directoryPath": "C:\myprojects\projectname\app\model"
+      }
+    ]
+    ```
 
 ## Commands
 
-Used in Command Palette (Win/Linux: `Ctrl+Shift+P`; Mac: `Cmd+Shift+P`). Can also be bound to Keyboard Shortcuts (Win/Linux: `Ctrl+K Ctrl+S`; Mac: `Cmd+K Cmd+S`).
+Used in Command Palette (Win/Linux: `Ctrl`+`Shift`+`P`; Mac: `Cmd`+`Shift`+`P`). Can also be bound to Keyboard Shortcuts (Win/Linux: `Ctrl`+`K` `Ctrl`+`S`; Mac: `Cmd`+`K` `Cmd`+`S`).
 
 - Refresh cache for global definitions
 - Refresh cache for workspace definitions
-- Toggle CFML line comments (`Ctrl+/`)
-- Toggle CFML block comments (`Shift+Alt+A`)
+- Toggle CFML line comment (`Ctrl`+`/`)
+- Toggle CFML block comment (`Shift`+`Alt`+`A`)
+- Open Application file for currently active document
+- Go to Matching Tag
 
 ## Known Issues/Limitations
 
@@ -112,10 +147,8 @@ Feel free to open issues for these or any other features you would find helpful 
 - Provide additional completion suggestions
   - Global member functions
   - Enumerated values for global functions
-- Definitions for more contexts
-- Type Definitions for more contexts
-- References
-- Custom mapping
+- Consider component imports
+- References (within same file/block)
 - Use proper parser ([CFParser](https://github.com/cfparser/cfparser))
 - Utilize a CFML language server
 
@@ -125,9 +158,9 @@ VS Code and this extension lack features and functionality that I find useful fo
 
 - [Auto Close Tag](https://marketplace.visualstudio.com/items?itemName=formulahendry.auto-close-tag) - Enables automatic closing of tags. There are settings (`cfml.autoCloseTags.*`) to automate the configuration for HTML and CFML tags.
 - [CFLint](https://marketplace.visualstudio.com/items?itemName=KamasamaK.vscode-cflint) - Integrates CFLint into VS Code as diagnostics.
-- [highlight-matching-tag](https://marketplace.visualstudio.com/items?itemName=vincaslt.highlight-matching-tag) - This seems to break often, but I've found it to work just enough to be useful.
-- [Path Intellisense](https://marketplace.visualstudio.com/items?itemName=christian-kohler.path-intellisense) - Provides suggestions when entering file paths
-- [Code Outline](https://marketplace.visualstudio.com/items?itemName=patrys.vscode-code-outline) - Displays document symbols in an outline view in the Explorer
+- [highlight-matching-tag](https://marketplace.visualstudio.com/items?itemName=vincaslt.highlight-matching-tag) - This doesn't work for all tags, but I've found it to work just enough to be useful.
+- [Path Autocomplete](https://marketplace.visualstudio.com/items?itemName=ionutvmi.path-autocomplete) - Provides suggestions when entering file paths
+- [Code Outline](https://marketplace.visualstudio.com/items?itemName=patrys.vscode-code-outline) - Displays document symbols in an outline view
 - [TODO Highlight](https://marketplace.visualstudio.com/items?itemName=wayou.vscode-todo-highlight)
 
 ## Release Notes

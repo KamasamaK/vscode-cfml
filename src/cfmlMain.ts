@@ -1,32 +1,34 @@
-import {
-  commands, languages, TextDocument, ConfigurationTarget, ExtensionContext, WorkspaceConfiguration, workspace, Uri, FileSystemWatcher, extensions, IndentAction, ConfigurationChangeEvent
-} from "vscode";
-import CFMLHoverProvider from "./features/hoverProvider";
-import CFMLDocumentSymbolProvider from "./features/documentSymbolProvider";
-import CFMLSignatureHelpProvider from "./features/signatureHelpProvider";
-import CFMLDocumentLinkProvider from "./features/documentLinkProvider";
-import CFMLWorkspaceSymbolProvider from "./features/workspaceSymbolProvider";
-import CFMLCompletionItemProvider from "./features/completionItemProvider";
-import { CFDocsService } from "./utils/cfdocs/cfDocsService";
-import { CommentType, toggleComment } from "./features/comment";
-import * as cachedEntity from "./features/cachedEntities";
-import { nonIndentingTags, decreasingIndentingTags, nonClosingTags } from "./entities/tag";
-import { COMPONENT_FILE_GLOB, parseComponent, Component } from "./entities/component";
-import { cacheComponent, clearCachedComponent } from "./features/cachedEntities";
-import CFMLDefinitionProvider from "./features/definitionProvider";
 import * as fs from "fs";
+import { ConfigurationChangeEvent, ConfigurationTarget, DocumentSelector, ExtensionContext, FileSystemWatcher, IndentAction, TextDocument, Uri, WorkspaceConfiguration, commands, extensions, languages, workspace, window } from "vscode";
+import { COMPONENT_FILE_GLOB, parseComponent, getApplicationUri } from "./entities/component";
+import { decreasingIndentingTags, nonClosingTags, nonIndentingTags, goToMatchingTag } from "./entities/tag";
+import * as cachedEntity from "./features/cachedEntities";
+import { cacheComponent, clearCachedComponent } from "./features/cachedEntities";
+import { CommentType, toggleComment } from "./features/comment";
+import CFMLCompletionItemProvider from "./features/completionItemProvider";
+import CFMLDefinitionProvider from "./features/definitionProvider";
 import DocBlockCompletions from "./features/docBlocker/docCompletionProvider";
-import { getDocumentStateContext, DocumentStateContext } from "./utils/documentUtil";
-import { isCfcFile } from "./utils/contextUtil";
+import CFMLDocumentLinkProvider from "./features/documentLinkProvider";
+import CFMLDocumentSymbolProvider from "./features/documentSymbolProvider";
+import CFMLHoverProvider from "./features/hoverProvider";
+import CFMLSignatureHelpProvider from "./features/signatureHelpProvider";
 import CFMLTypeDefinitionProvider from "./features/typeDefinitionProvider";
+import CFMLWorkspaceSymbolProvider from "./features/workspaceSymbolProvider";
+import { CFDocsService } from "./utils/cfdocs/cfDocsService";
+import { isCfcFile } from "./utils/contextUtil";
+import { DocumentStateContext, getDocumentStateContext } from "./utils/documentUtil";
 
-export const LANGUAGE_ID = "cfml";
-const DOCUMENT_SELECTOR = {
-  language: LANGUAGE_ID,
-  scheme: "file"
-};
-
-export let snippets: Snippets;
+export const LANGUAGE_ID: string = "cfml";
+const DOCUMENT_SELECTOR: DocumentSelector = [
+  {
+    language: LANGUAGE_ID,
+    scheme: "file"
+  },
+  {
+    language: LANGUAGE_ID,
+    scheme: "untitled"
+  }
+];
 
 export interface Snippets {
   [key: string]: Snippet;
@@ -36,6 +38,8 @@ export interface Snippet {
   body: string | string[];
   description: string;
 }
+
+export let snippets: Snippets;
 
 /**
  * Gets a ConfigurationTarget enumerable based on a string representation
@@ -94,21 +98,49 @@ export function activate(context: ExtensionContext): void {
   });
 
   context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", async () => {
-    const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
-    if (cfmlSettings.get<string>("globalDefinitions.source") === "cfdocs") {
+    const cfmlGlobalDefinitionsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.globalDefinitions");
+    if (cfmlGlobalDefinitionsSettings.get<string>("source") === "cfdocs") {
       CFDocsService.cacheAll();
     }
   }));
 
   context.subscriptions.push(commands.registerCommand("cfml.refreshWorkspaceDefinitionCache", async () => {
-    const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
-    if (cfmlSettings.get<boolean>("indexComponents.enable")) {
+    const cfmlIndexComponentsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.indexComponents");
+    if (cfmlIndexComponentsSettings.get<boolean>("enable")) {
       cachedEntity.cacheAllComponents();
     }
   }));
 
   context.subscriptions.push(commands.registerCommand("cfml.toggleLineComment", toggleComment(CommentType.Line)));
   context.subscriptions.push(commands.registerCommand("cfml.toggleBlockComment", toggleComment(CommentType.Block)));
+
+  context.subscriptions.push(commands.registerCommand("cfml.openActiveApplicationFile", async () => {
+    if (window.activeTextEditor === undefined) {
+      window.showErrorMessage("No active text editor was found.");
+      return;
+    }
+
+    const activeDocumentUri: Uri = window.activeTextEditor.document.uri;
+
+    if (activeDocumentUri.scheme === "untitled") {
+      return;
+    }
+
+    const applicationUri: Uri = getApplicationUri(activeDocumentUri);
+    if (applicationUri) {
+      const applicationDocument: TextDocument = await workspace.openTextDocument(applicationUri);
+      if (!applicationDocument) {
+        window.showErrorMessage("No Application found for the currently active document.");
+        return;
+      }
+
+      window.showTextDocument(applicationDocument);
+    }
+  }));
+
+  context.subscriptions.push(commands.registerCommand("cfml.goToMatchingTag", async () => {
+    goToMatchingTag();
+  }));
 
   context.subscriptions.push(languages.registerHoverProvider(DOCUMENT_SELECTOR, new CFMLHoverProvider()));
   context.subscriptions.push(languages.registerDocumentSymbolProvider(DOCUMENT_SELECTOR, new CFMLDocumentSymbolProvider()));
@@ -123,8 +155,7 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(workspace.onDidSaveTextDocument((document: TextDocument) => {
     if (isCfcFile(document)) {
       const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
-      const component: Component = parseComponent(documentStateContext);
-      cacheComponent(component);
+      cacheComponent(parseComponent(documentStateContext), documentStateContext);
     }
   }));
 
@@ -133,7 +164,7 @@ export function activate(context: ExtensionContext): void {
   fileWatcher.onDidCreate((componentUri: Uri) => {
     workspace.openTextDocument(componentUri).then((document: TextDocument) => {
       const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
-      cacheComponent(parseComponent(documentStateContext));
+      cacheComponent(parseComponent(documentStateContext), documentStateContext);
     });
   });
   fileWatcher.onDidDelete((componentUri: Uri) => {
@@ -186,6 +217,7 @@ export function activate(context: ExtensionContext): void {
     }
   }
 
+  // TODO: Remove this. Provide instructions instead.
   const emmetExt = extensions.getExtension("vscode.emmet");
   if (emmetExt) {
     const emmetSettings: WorkspaceConfiguration = workspace.getConfiguration("emmet", null);

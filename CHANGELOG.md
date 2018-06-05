@@ -2,9 +2,27 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.4.0] - 2018-06-04
+
+- Added support for custom mappings
+- Added setting for whether to provide definitions
+- Added more type definitions
+- Added scopes to settings to indicate whether they are resource-based or workspace-based
+- Added ability and configuration to have attributes populated for global tag completions
+- Added command to open Application file for active document
+- Added command to go to matching CFML tag
+- Application and Server variables initialized in their respective components are now cached and properly considered for various features
+- Improved catch information and suggestions
+- Improved suggestions for queries initialized in the same file/block
+- Improved docblock parsing
+- Fixed detection of certain variable assignments within switch statements
+- Fixed some syntax highlighting issues
+- Limited suggestions for script tags to only be in script context
+- Some refactoring
+
 ## [0.3.1] - 2018-02-12
 
-- Added syntax highlighting for style attribute
+- Added syntax highlighting for HTML style attribute
 - Added hover for external component functions
 - Added signature help for implicit getters/setters
 - Added signature help for external component functions

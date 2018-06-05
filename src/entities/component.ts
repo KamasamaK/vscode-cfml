@@ -1,26 +1,30 @@
-import { Uri, TextDocument, workspace, Position, Range, WorkspaceFolder } from "vscode";
-import { UserFunction, ComponentFunctions, parseScriptFunctions, parseTagFunctions } from "./userFunction";
-import { DataType } from "./dataType";
-import * as path from "path";
 import * as fs from "fs";
+import * as path from "path";
+import { Position, Range, TextDocument, Uri } from "vscode";
 import * as cachedEntities from "../features/cachedEntities";
-import { parseProperties, Properties } from "./property";
-import { parseVariableAssignments, Variable } from "./variable";
-import { parseDocBlock, DocBlockKeyValue } from "./docblock";
-import { parseAttributes, Attributes, Attribute } from "./attribute";
+import { getComponent, hasComponent } from "../features/cachedEntities";
 import { MySet } from "../utils/collections";
-import { DocumentStateContext } from "../utils/documentUtil";
-import { getComponent } from "../features/cachedEntities";
 import { isCfcFile } from "../utils/contextUtil";
+import { DocumentPositionStateContext, DocumentStateContext } from "../utils/documentUtil";
+import { resolveCustomMappingPaths, resolveRelativePath, resolveRootPath } from "../utils/fileUtil";
+import { Attribute, Attributes, parseAttributes } from "./attribute";
+import { DataType } from "./dataType";
+import { DocBlockKeyValue, parseDocBlock } from "./docblock";
+import { parseProperties, Properties } from "./property";
+import { ComponentFunctions, parseScriptFunctions, parseTagFunctions, UserFunction } from "./userFunction";
+import { parseVariableAssignments, Variable } from "./variable";
 
-const findConfig = require("find-config");
+const findup = require("findup-sync");
+
 
 export const COMPONENT_EXT: string = ".cfc";
 export const COMPONENT_FILE_GLOB: string = "**/*" + COMPONENT_EXT;
 
 export const COMPONENT_PATTERN: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(<cf)?(component|interface)\b)([^>{]*)/i;
 
-export const componentDottedPathPrefix: RegExp = /\b(import|new)\s+(['"])?([^('"]*?)$/i;
+export const componentExtendsPathPrefix: RegExp = /\b(extends|implements)\s*=\s*(['"])?([^'"#\s]*?)$/i;
+
+export const componentDottedPathPrefix: RegExp = /\b(import|new)\s+(['"])?([^('";\n]*?)$/i;
 
 export const objectNewInstanceInitPrefix: RegExp = /\bnew\s+(['"])?([^('"]+?)\1\($/i;
 
@@ -33,6 +37,11 @@ export const objectReferencePatterns: ReferencePattern[] = [
   // new object
   {
     pattern: /\bnew\s+(['"])?([^('"]+?)\1\(/gi,
+    refIndex: 2
+  },
+  // import
+  {
+    pattern: /\bimport\s+(['"])?([^'"]+?)\1(?:;|\n)/gi,
     refIndex: 2
   },
   // createObject
@@ -110,6 +119,7 @@ export interface Component {
   functions: ComponentFunctions;
   properties: Properties;
   variables: Variable[];
+  imports: string[];
 }
 
 interface ComponentAttributes {
@@ -165,7 +175,7 @@ export function isScriptComponent(document: TextDocument): boolean {
 
 /**
  * Parses a component document and returns an object conforming to the Component interface
- * @param documentStateContext The content information for a TextDocument to be parsed
+ * @param documentStateContext The context information for a TextDocument to be parsed
  */
 export function parseComponent(documentStateContext: DocumentStateContext): Component | undefined {
   const document: TextDocument = documentStateContext.document;
@@ -182,7 +192,7 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
   const componentDoc: string = componentMatch[3];
   const checkTag: string = componentMatch[4];
   const componentType: string = componentMatch[5];
-  const componentAttr: string = componentMatch[6];
+  const componentAttrs: string = componentMatch[6];
 
   const componentIsScript: boolean = !checkTag;
 
@@ -208,7 +218,8 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     accessors: false,
     functions: new ComponentFunctions(),
     properties: parseProperties(document),
-    variables: []
+    variables: [],
+    imports: []
   };
 
   if (componentDoc) {
@@ -233,11 +244,11 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     });
   }
 
-  if (componentAttr) {
+  if (componentAttrs) {
     const componentAttributePrefixOffset: number = componentMatch.index + attributePrefix.length;
     const componentAttributeRange = new Range(
       document.positionAt(componentAttributePrefixOffset),
-      document.positionAt(componentAttributePrefixOffset + componentAttr.length)
+      document.positionAt(componentAttributePrefixOffset + componentAttrs.length)
     );
 
     const parsedAttributes: Attributes = parseAttributes(document, componentAttributeRange, componentAttributeNames);
@@ -290,13 +301,39 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
 
   component.functions = componentFunctions;
 
-  // TODO: ImplicitFunctions
+  // TODO: ImplicitFunctions?
 
-  const componentDefinitionRange = new Range(document.positionAt(head.length), earliestFunctionRangeStart);
+  const componentDefinitionRange = new Range(document.positionAt(componentMatch.index + head.length), earliestFunctionRangeStart);
   documentStateContext.component = component;
   component.variables = parseVariableAssignments(documentStateContext, componentIsScript, componentDefinitionRange);
 
+  // TODO: Get imports
+
   return component;
+}
+
+/**
+ * Parses a component document and returns an object conforming to the Component interface
+ * @param documentPositionStateContext The context information for the TextDocument and position to be check
+ */
+export function isInComponentHead(documentPositionStateContext: DocumentPositionStateContext): boolean {
+  const document: TextDocument = documentPositionStateContext.document;
+  const documentText: string = documentPositionStateContext.sanitizedDocumentText;
+  const componentMatch: RegExpExecArray = COMPONENT_PATTERN.exec(documentText);
+
+  if (!componentMatch) {
+    return false;
+  }
+
+  const head: string = componentMatch[0];
+
+  if (!head) {
+    return false;
+  }
+
+  const componentHeadRange = new Range(new Position(0, 0), document.positionAt(componentMatch.index + head.length));
+
+  return componentHeadRange.contains(documentPositionStateContext.position);
 }
 
 /**
@@ -340,7 +377,7 @@ function processAttributes(attributes: Attributes): ComponentAttributes {
  * @param dotPath A string for a component in dot-path notation
  * @param baseUri The URI from which the component path will be resolved
  */
-export function componentPathToUri(dotPath: string, baseUri: Uri): Uri {
+export function componentPathToUri(dotPath: string, baseUri: Uri): Uri | undefined {
   const cachedResult: Uri = cachedEntities.componentPathToUri(dotPath, baseUri);
   if (cachedResult) {
     return cachedResult;
@@ -348,21 +385,30 @@ export function componentPathToUri(dotPath: string, baseUri: Uri): Uri {
 
   const normalizedPath: string = dotPath.replace(/\./g, path.sep) + COMPONENT_EXT;
 
+  /* Note
+  If ColdFusion finds a directory that matches the first path element, but does not find a CFC under that directory, ColdFusion returns a not found error and does NOT search for another directory.
+  This implementation does not do this.
+  */
+
   // relative to local directory
-  const baseDir: string = path.dirname(baseUri.fsPath);
-  const localPath: string = path.join(baseDir, normalizedPath);
+  const localPath: string = resolveRelativePath(baseUri, normalizedPath);
   if (fs.existsSync(localPath)) {
     return Uri.file(localPath);
   }
 
   // relative to web root
-  const root: WorkspaceFolder = workspace.getWorkspaceFolder(baseUri);
-  const rootPath: string = path.join(root.uri.fsPath, normalizedPath);
+  const rootPath: string = resolveRootPath(baseUri, normalizedPath);
   if (fs.existsSync(rootPath)) {
     return Uri.file(rootPath);
   }
 
-  // TODO: custom mappings
+  // custom mappings
+  const customMappingPaths: string[] = resolveCustomMappingPaths(baseUri, normalizedPath);
+  for (let mappedPath of customMappingPaths) {
+    if (fs.existsSync(mappedPath)) {
+      return Uri.file(mappedPath);
+    }
+  }
 
   return undefined;
 }
@@ -380,17 +426,85 @@ export function getComponentNameFromDotPath(path: string): string {
  * @param baseUri The URI from which the Application file will be searched
  */
 export function getApplicationUri(baseUri: Uri): Uri | undefined {
-  let componentUri: Uri;
+  if (baseUri.scheme !== "file") {
+    return undefined;
+  }
 
-  const fileNames = ["Application.cfc", "Application.cfm"];
-  fileNames.forEach((fileName: string) => {
-    const currentWorkingDir: string = path.dirname(baseUri.fsPath);
-    const applicationFile: string = findConfig(fileName, { cwd: currentWorkingDir });
-    if (applicationFile) {
-      componentUri = Uri.file(applicationFile);
-      return;
-    }
-  });
+  let componentUri: Uri;
+  const fileNamesGlob = "Application.@(cfc|cfm)";
+  const currentWorkingDir: string = path.dirname(baseUri.fsPath);
+  const applicationFile: string = findup(fileNamesGlob, { cwd: currentWorkingDir });
+  if (applicationFile) {
+    componentUri = Uri.file(applicationFile);
+  }
 
   return componentUri;
+}
+
+/**
+ * Finds the applicable Server file for the given file URI
+ * @param baseUri The URI from which the Server file will be searched
+ */
+export function getServerUri(baseUri: Uri): Uri | undefined {
+  let componentUri: Uri;
+
+  const fileName = "Server.cfc";
+  const rootPath: string = resolveRootPath(baseUri, fileName);
+  const rootUri: Uri = Uri.file(rootPath);
+
+  if (hasComponent(rootUri)) {
+    componentUri = rootUri;
+  }
+
+  // TODO: custom mapping
+
+  return componentUri;
+}
+
+/**
+ * Checks whether `checkComponent` is a subcomponent or equal to `baseComponent`
+ * @param checkComponent The candidate subcomponent
+ * @param baseComponent The candidate base component
+ */
+export function isSubcomponentOrEqual(checkComponent: Component, baseComponent: Component): boolean {
+  while (checkComponent) {
+    if (checkComponent.uri.toString() === baseComponent.uri.toString()) {
+      return true;
+    }
+
+    if (checkComponent.extends) {
+      checkComponent = getComponent(checkComponent.extends);
+    } else {
+      checkComponent = undefined;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Checks whether `checkComponent` is a subcomponent of `baseComponent`
+ * @param checkComponent The candidate subcomponent
+ * @param baseComponent The candidate base component
+ */
+export function isSubcomponent(checkComponent: Component, baseComponent: Component): boolean {
+  if (checkComponent.extends) {
+    checkComponent = getComponent(checkComponent.extends);
+  } else {
+    return false;
+  }
+
+  while (checkComponent) {
+    if (checkComponent.uri.toString() === baseComponent.uri.toString()) {
+      return true;
+    }
+
+    if (checkComponent.extends) {
+      checkComponent = getComponent(checkComponent.extends);
+    } else {
+      checkComponent = undefined;
+    }
+  }
+
+  return false;
 }

@@ -1,11 +1,10 @@
-import { CFDocsDefinitionInfo } from "./definitionInfo";
-import * as path from "path";
 import * as fs from "fs";
+import * as path from "path";
 import { WorkspaceConfiguration, workspace } from "vscode";
 import * as cachedEntity from "../../features/cachedEntities";
-import { CFMLEngineName, CFMLEngine } from "./cfmlEngine";
-
-const request = require("request");
+import { CFMLEngine, CFMLEngineName } from "./cfmlEngine";
+import { CFDocsDefinitionInfo } from "./definitionInfo";
+import * as request from "request";
 
 const cfDocsLinkPrefix = "https://raw.githubusercontent.com/foundeo/cfdocs/master/data/en/";
 
@@ -16,9 +15,9 @@ export class CFDocsService {
    * @param callback An optional callback that takes the returned CFDocsDefinitionInfo
    */
   public static async getDefinitionInfo(identifier: string, callback?: (definition: CFDocsDefinitionInfo) => boolean): Promise<CFDocsDefinitionInfo> {
-    const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
+    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
     let definitionInfo: Promise<CFDocsDefinitionInfo> = undefined;
-    if (cfmlSettings.get<string>("cfDocs.source") === "local") {
+    if (cfmlCfDocsSettings.get<string>("source") === "local") {
       definitionInfo = CFDocsService.getLocalDefinitionInfo(identifier, callback);
     } else {
       definitionInfo = CFDocsService.getRemoteDefinitionInfo(identifier, callback);
@@ -33,8 +32,8 @@ export class CFDocsService {
    * @param callback An optional callback that takes the returned CFDocsDefinitionInfo
    */
   private static async getLocalDefinitionInfo(identifier: string, callback?: (definition: CFDocsDefinitionInfo) => boolean): Promise<CFDocsDefinitionInfo> {
-    const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
-    const cfdocsPath: string = cfmlSettings.get("cfDocs.localPath");
+    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
+    const cfdocsPath: string = cfmlCfDocsSettings.get("localPath");
     let definitionInfo: CFDocsDefinitionInfo;
 
     return new Promise<CFDocsDefinitionInfo>((resolve, reject) => {
@@ -112,12 +111,12 @@ export class CFDocsService {
    * Returns a list of all global CFML functions documented on CFDocs
    */
   public static async getAllFunctionNames(): Promise<string[]> {
-    const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
+    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
     const jsonFileName: string = CFDocsService.getJsonFileName("functions");
 
     return new Promise<string[]>((resolve, reject) => {
-      if (cfmlSettings.get<string>("cfDocs.source") === "local") {
-        const cfdocsPath: string = cfmlSettings.get("cfDocs.localPath");
+      if (cfmlCfDocsSettings.get<string>("source") === "local") {
+        const cfdocsPath: string = cfmlCfDocsSettings.get("localPath");
         let docFilePath: string = path.join(cfdocsPath, jsonFileName);
         fs.readFile(docFilePath, "utf8", (err, data) => {
           if (err) {
@@ -149,12 +148,12 @@ export class CFDocsService {
    * Returns a list of all global CFML tags documented on CFDocs
    */
   public static async getAllTagNames(): Promise<string[]> {
-    const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
+    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
     const jsonFileName: string = CFDocsService.getJsonFileName("tags");
 
     return new Promise<string[]>((resolve, reject) => {
-      if (cfmlSettings.get<string>("cfDocs.source") === "local") {
-        const cfdocsPath: string = cfmlSettings.get("cfDocs.localPath");
+      if (cfmlCfDocsSettings.get<string>("source") === "local") {
+        const cfdocsPath: string = cfmlCfDocsSettings.get("localPath");
         let docFilePath: string = path.join(cfdocsPath, jsonFileName);
         fs.readFile(docFilePath, "utf8", (err, data) => {
           if (err) {

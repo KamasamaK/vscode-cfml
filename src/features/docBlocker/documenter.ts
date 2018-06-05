@@ -50,6 +50,6 @@ export default class Documenter {
       return comp.constructDoc().build();
     }
 
-    return new Doc(DocType.Unknown).build(true);
+    return new Doc(DocType.Unknown, this.document.uri).build(true);
   }
 }

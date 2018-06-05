@@ -1,5 +1,5 @@
 import { Range, TextDocument } from "vscode";
-import { MyMap, MySet } from "../utils/collections";
+import { MyMap, MySet, NameWithOptionalValue } from "../utils/collections";
 
 export const ATTRIBUTES_PATTERN = /\b([\w:-]+)\b(?:(\s*(?:=|:)\s*)(?:(['"])(.*?)\3|([\w$:.]+)))?/gi;
 export const VALUE_PATTERN = /\b([\w:-]+)\s*(?:=|:)\s*(?:(['"])?(?:(?!\2).)*|[^\s]*)$/;
@@ -8,6 +8,16 @@ export interface Attribute {
   name: string; // lowercased
   value: string;
   valueRange: Range;
+}
+
+export enum IncludeAttributesSetType {
+  None = "none",
+  Required = "required",
+  All = "all"
+}
+
+export interface IncludeAttributesCustom {
+  [name: string]: NameWithOptionalValue<string>[]; // lowercased name
 }
 
 // Collection of attributes. Key is attribute name lowercased

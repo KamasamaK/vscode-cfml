@@ -1,8 +1,8 @@
-import { TextDocument, Position, Range, WorkspaceConfiguration, workspace } from "vscode";
-import { CFMLEngine, CFMLEngineName } from "./cfdocs/cfmlEngine";
+import { Position, Range, TextDocument, WorkspaceConfiguration, workspace } from "vscode";
 import { Component, isScriptComponent } from "../entities/component";
-import { isContinuingExpressionPattern, isInRanges, isCfmFile, isCfcFile, getCfScriptRanges, getCommentRanges } from "./contextUtil";
 import { getComponent } from "../features/cachedEntities";
+import { CFMLEngine, CFMLEngineName } from "./cfdocs/cfmlEngine";
+import { getCfScriptRanges, getCommentRanges, isCfcFile, isCfmFile, isContinuingExpression, isInRanges } from "./contextUtil";
 import { getSanitizedDocumentText } from "./textUtil";
 
 export interface DocumentStateContext {
@@ -62,7 +62,6 @@ export function getDocumentStateContext(document: TextDocument, fast: boolean = 
  * @param fast Whether to use the faster, but less accurate parsing
  */
 export function getDocumentPositionStateContext(document: TextDocument, position: Position, fast: boolean = false): DocumentPositionStateContext {
-
   const documentStateContext: DocumentStateContext = getDocumentStateContext(document, fast);
 
   const docIsScript: boolean = documentStateContext.docIsScript;
@@ -84,7 +83,7 @@ export function getDocumentPositionStateContext(document: TextDocument, position
       positionInComment,
       docPrefix,
       currentWord,
-      isContinuingExpression: isContinuingExpressionPattern(docPrefix)
+      isContinuingExpression: isContinuingExpression(docPrefix)
     }
   );
 

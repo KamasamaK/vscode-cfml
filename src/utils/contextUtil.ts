@@ -1,10 +1,10 @@
-import { TextDocument, Range, Position, CharacterPair } from "vscode";
 import * as path from "path";
-import { equalsIgnoreCase } from "./textUtil";
+import { CharacterPair, Position, Range, TextDocument, Uri } from "vscode";
 import { COMPONENT_EXT, isScriptComponent } from "../entities/component";
-import { getTagPattern, parseTags, Tag } from "../entities/tag";
+import { Tag, getTagPattern, parseTags } from "../entities/tag";
+import { CommentContext, CommentType, cfmlCommentRules } from "../features/comment";
 import { DocumentStateContext } from "./documentUtil";
-import { CommentType, CommentContext, cfmlCommentRules } from "../features/comment";
+import { equalsIgnoreCase } from "./textUtil";
 
 const CFM_FILE_EXTS: string[] = [".cfm", ".cfml"];
 // const notContinuingExpressionPattern: RegExp = /(?:^|[^\w$.\s])\s*$/;
@@ -23,10 +23,80 @@ const characterPairs: CharacterPair[] = [
   ["<", ">"]
 ];
 
+const NEW_LINE = "\n".charCodeAt(0);
+const LEFT_BRACKET = "[".charCodeAt(0);
+const RIGHT_BRACKET = "]".charCodeAt(0);
+const LEFT_BRACE = "{".charCodeAt(0);
+const RIGHT_BRACE = "}".charCodeAt(0);
+const LEFT_PAREN = "(".charCodeAt(0);
+const RIGHT_PAREN = ")".charCodeAt(0);
+const COMMA = ",".charCodeAt(0);
+const SINGLE_QUOTE = "'".charCodeAt(0);
+const DOUBLE_QUOTE = '"'.charCodeAt(0);
+const BOF = 0;
+
+const identPattern = /[$A-Za-z_][$\w]*/;
+const identPartPattern = /[$\w]/;
+
 export interface StringContext {
   inString: boolean;
   activeStringDelimiter: string;
   embeddedCFML?: boolean;
+}
+
+export class BackwardIterator {
+  private document: TextDocument;
+  private lineNumber: number;
+  private lineCharacterOffset: number;
+  private lineText: string;
+
+  constructor(document: TextDocument, position: Position) {
+    this.document = document;
+    this.lineNumber = position.line;
+    this.lineCharacterOffset = position.character;
+    this.lineText = document.lineAt(this.lineNumber).text;
+  }
+
+  /**
+   * Returns whether there is another character
+   */
+  public hasNext(): boolean {
+    return this.lineNumber >= 0;
+  }
+
+  /**
+   * Gets the next character code
+   */
+  public next(): number {
+    if (this.lineCharacterOffset < 0) {
+      this.lineNumber--;
+      if (this.lineNumber >= 0) {
+        this.lineText = this.document.lineAt(this.lineNumber).text;
+        this.lineCharacterOffset = this.lineText.length - 1;
+        return NEW_LINE;
+      }
+
+      return BOF;
+    }
+
+    const charCode: number = this.lineText.charCodeAt(this.lineCharacterOffset);
+    this.lineCharacterOffset--;
+    return charCode;
+  }
+
+  /**
+   * Gets current position in iterator
+   */
+  public getPosition(): Position {
+    return new Position(this.lineNumber, this.lineCharacterOffset);
+  }
+
+  /**
+   * Gets document
+   */
+  public getDocument(): TextDocument {
+    return this.document;
+  }
 }
 
 /**
@@ -48,7 +118,15 @@ export function isCfmFile(document: TextDocument): boolean {
  * @param document The document to check
  */
 export function isCfcFile(document: TextDocument): boolean {
-  const extensionName = path.extname(document.fileName);
+  return isCfcUri(document.uri);
+}
+
+/**
+ * Checks whether the given URI represents a CFC file
+ * @param uri The URI to check
+ */
+export function isCfcUri(uri: Uri): boolean {
+  const extensionName = path.extname(uri.fsPath);
   return equalsIgnoreCase(extensionName, COMPONENT_EXT);
 }
 
@@ -95,7 +173,7 @@ export function getCfScriptRanges(document: TextDocument, range?: Range): Range[
  */
 export function getCommentRanges(document: TextDocument, isScript: boolean = false, docRange?: Range, fast: boolean = false): Range[] {
   if (fast) {
-    return getCommentRangesRegex(document, isScript, docRange);
+    return getCommentRangesByRegex(document, isScript, docRange);
   }
 
   return getCommentRangesIterated(document, isScript, docRange);
@@ -107,7 +185,7 @@ export function getCommentRanges(document: TextDocument, isScript: boolean = fal
  * @param isScript Whether the document or given range is CFScript
  * @param docRange Range within which to check
  */
-function getCommentRangesRegex(document: TextDocument, isScript: boolean = false, docRange?: Range): Range[] {
+function getCommentRangesByRegex(document: TextDocument, isScript: boolean = false, docRange?: Range): Range[] {
   let commentRanges: Range[] = [];
   let documentText: string;
   let textOffset: number;
@@ -152,7 +230,7 @@ function getCommentRangesRegex(document: TextDocument, isScript: boolean = false
 
     const cfScriptRanges: Range[] = getCfScriptRanges(document, docRange);
     cfScriptRanges.forEach((range: Range) => {
-      const cfscriptCommentRanges: Range[] = getCommentRangesRegex(document, true, range);
+      const cfscriptCommentRanges: Range[] = getCommentRangesByRegex(document, true, range);
       commentRanges = commentRanges.concat(cfscriptCommentRanges);
     });
   }
@@ -168,18 +246,14 @@ function getCommentRangesRegex(document: TextDocument, isScript: boolean = false
  */
 function getCommentRangesIterated(document: TextDocument, isScript: boolean = false, docRange?: Range): Range[] {
   let commentRanges: Range[] = [];
-  let documentText: string;
-  let textOffsetStart: number;
+  let documentText: string = document.getText();
+  let textOffsetStart: number = 0;
+  let textOffsetEnd: number = documentText.length;
   let previousPosition: Position;
   if (docRange && document.validateRange(docRange)) {
-    documentText = document.getText(docRange);
     textOffsetStart = document.offsetAt(docRange.start);
-  } else {
-    documentText = document.getText();
-    textOffsetStart = 0;
+    textOffsetEnd = document.offsetAt(docRange.end);
   }
-
-  const textOffsetEnd = textOffsetStart + documentText.length;
 
   let commentContext: CommentContext = {
     inComment: false,
@@ -195,6 +269,8 @@ function getCommentRangesIterated(document: TextDocument, isScript: boolean = fa
     activeStringDelimiter: undefined,
     embeddedCFML: false
   };
+
+  const embeddedCFMLDelimiter: string = "#";
 
   let cfScriptRanges: Range[] = [];
   // let cfScriptStartOffsets: number[] = [];
@@ -223,7 +299,7 @@ function getCommentRangesIterated(document: TextDocument, isScript: boolean = fa
     }
     */
 
-    const characterAtPosition: string = documentText.charAt(offset - textOffsetStart);
+    const characterAtPosition: string = documentText.charAt(offset);
 
     if (previousPosition && position.line !== previousPosition.line) {
       lineText = "";
@@ -232,6 +308,7 @@ function getCommentRangesIterated(document: TextDocument, isScript: boolean = fa
     lineText += characterAtPosition;
 
     if (commentContext.inComment) {
+      // Check for end of comment
       if (commentContext.commentType === CommentType.Line && position.line !== previousPosition.line) {
         commentRanges.push(new Range(commentContext.start, previousPosition));
 
@@ -252,7 +329,7 @@ function getCommentRangesIterated(document: TextDocument, isScript: boolean = fa
         };
       }
     } else if (stringContext.inString) {
-      if (characterAtPosition === "#") {
+      if (characterAtPosition === embeddedCFMLDelimiter) {
         stringContext.embeddedCFML = !stringContext.embeddedCFML;
       } else if (!stringContext.embeddedCFML && characterAtPosition === stringContext.activeStringDelimiter) {
         stringContext = {
@@ -328,7 +405,7 @@ export function getJavaScriptRanges(documentStateContext: DocumentStateContext, 
 }
 
 /**
- * Returns all of the ranges in which tagged cfoutput is active
+ * Returns all of the ranges in which tagged cfoutput is active.
  * @param document The document to check
  * @param range Optional range within which to check
  */
@@ -423,7 +500,7 @@ export function invertRanges(document: TextDocument, ranges: Range[]): Range[] {
  * Returns if the given prefix is part of a continuing expression
  * @param prefix Prefix to the current position
  */
-export function isContinuingExpressionPattern(prefix: string): boolean {
+export function isContinuingExpression(prefix: string): boolean {
   return continuingExpressionPattern.test(prefix);
 }
 
@@ -471,10 +548,10 @@ export function isStringDelimiter(char: string): boolean {
  * @param documentStateContext The context information for the TextDocument to check
  * @param startOffset A numeric offset representing the position in the document from which to start
  * @param endOffset A numeric offset representing the last position in the document that should be checked
- * @param char The character to check
+ * @param char The character(s) for which to check
  * @param includeChar Whether the returned position should include the character found
  */
-export function getNextCharacterPosition(documentStateContext: DocumentStateContext, startOffset: number, endOffset: number, char: string, includeChar: boolean = true): Position {
+export function getNextCharacterPosition(documentStateContext: DocumentStateContext, startOffset: number, endOffset: number, char: string|string[], includeChar: boolean = true): Position {
   const document: TextDocument = documentStateContext.document;
   const documentText: string = documentStateContext.sanitizedDocumentText;
   let stringContext: StringContext = {
@@ -482,6 +559,8 @@ export function getNextCharacterPosition(documentStateContext: DocumentStateCont
     activeStringDelimiter: undefined,
     embeddedCFML: false
   };
+  const embeddedCFMLDelimiter: string = "#";
+  const searchChar = Array.isArray(char) ? char : [char];
 
   let pairContext = [
     // braces
@@ -500,8 +579,9 @@ export function getNextCharacterPosition(documentStateContext: DocumentStateCont
       unclosedPairCount: 0
     }
   ];
-  const openingPairs: string[] = pairContext.map((pairItem) => pairItem.characterPair[0]).filter((openingChar) => openingChar !== char);
-  const closingPairs: string[] = pairContext.map((pairItem) => pairItem.characterPair[1]).filter((closingChar) => closingChar !== char);
+
+  const openingPairs: string[] = pairContext.map((pairItem) => pairItem.characterPair[0]).filter((openingChar) => !searchChar.includes(openingChar));
+  const closingPairs: string[] = pairContext.map((pairItem) => pairItem.characterPair[1]).filter((closingChar) => !searchChar.includes(closingChar));
   const incrementUnclosedPair = (openingChar: string): void => {
     pairContext.filter((pairItem) => {
       return openingChar === pairItem.characterPair[0];
@@ -526,7 +606,7 @@ export function getNextCharacterPosition(documentStateContext: DocumentStateCont
     const characterAtPosition: string = documentText.charAt(offset);
 
     if (stringContext.inString) {
-      if (characterAtPosition === "#") {
+      if (characterAtPosition === embeddedCFMLDelimiter) {
         stringContext.embeddedCFML = !stringContext.embeddedCFML;
       } else if (!stringContext.embeddedCFML && characterAtPosition === stringContext.activeStringDelimiter) {
         stringContext = {
@@ -545,7 +625,7 @@ export function getNextCharacterPosition(documentStateContext: DocumentStateCont
       incrementUnclosedPair(characterAtPosition);
     } else if (closingPairs.includes(characterAtPosition)) {
       decrementUnclosedPair(characterAtPosition);
-    } else if (characterAtPosition === char && hasNoUnclosedPairs()) {
+    } else if (searchChar.includes(characterAtPosition) && hasNoUnclosedPairs()) {
       if (includeChar) {
         return document.positionAt(offset + 1);
       } else {
@@ -573,12 +653,13 @@ export function getClosingPosition(documentStateContext: DocumentStateContext, i
     activeStringDelimiter: undefined,
     embeddedCFML: false
   };
+  const embeddedCFMLDelimiter: string = "#";
 
   for (let offset = initialOffset; offset < documentText.length; offset++) {
     const characterAtPosition: string = documentText.charAt(offset);
 
     if (stringContext.inString) {
-      if (characterAtPosition === "#") {
+      if (characterAtPosition === embeddedCFMLDelimiter) {
         stringContext.embeddedCFML = !stringContext.embeddedCFML;
       } else if (!stringContext.embeddedCFML && characterAtPosition === stringContext.activeStringDelimiter) {
         stringContext = {
@@ -605,4 +686,100 @@ export function getClosingPosition(documentStateContext: DocumentStateContext, i
   }
 
   return document.positionAt(initialOffset);
+}
+
+/**
+ * Tests whether the given character can be part of a valid CFML identifier
+ * @param char Character to test
+ */
+export function isValidIdentifierPart(char: string): boolean {
+  return identPartPattern.test(char);
+}
+
+/**
+ * Tests whether the given word can be a valid CFML identifier
+ * @param word String to test
+ */
+export function isValidIdentifier(word: string): boolean {
+  return identPattern.test(word);
+}
+
+/**
+ * Returns the range of the word preceding the given position if it is a valid identifier or undefined if invalid
+ * @param document The document in which to check for the identifier
+ * @param position A position at which to start
+ */
+export function getPrecedingIdentifierRange(document: TextDocument, position: Position): Range | undefined {
+  let identRange: Range;
+  let charStr = "";
+  let iterator: BackwardIterator = new BackwardIterator(document, position);
+  while (iterator.hasNext()) {
+    const ch: number = iterator.next();
+    charStr = String.fromCharCode(ch);
+    if (/\S/.test(charStr)) {
+      break;
+    }
+  }
+
+  if (isValidIdentifierPart(charStr)) {
+    const currentWordRange: Range = document.getWordRangeAtPosition(iterator.getPosition());
+    const currentWord: string = document.getText(currentWordRange);
+    if (isValidIdentifier(currentWord)) {
+      identRange = currentWordRange;
+    }
+  }
+
+  return identRange;
+}
+
+/**
+ * Gets an array of arguments including and preceding the currently selected argument
+ * @param iterator A BackwardIterator to use to read arguments
+ */
+export function readArguments(iterator: BackwardIterator): string[] {
+  let parenNesting = 0;
+  let bracketNesting = 0;
+  let braceNesting = 0;
+  let allArgs = [];
+  let currArg = [];
+  while (iterator.hasNext()) {
+    const ch: number = iterator.next();
+    currArg.unshift(String.fromCharCode(ch));
+    switch (ch) {
+      case LEFT_PAREN:
+        parenNesting--;
+        if (parenNesting < 0) {
+          currArg.shift();
+          allArgs.unshift(currArg.join("").trim());
+          return allArgs;
+        }
+        break;
+      case RIGHT_PAREN: parenNesting++; break;
+      case LEFT_BRACE: braceNesting--; break;
+      case RIGHT_BRACE: braceNesting++; break;
+      case LEFT_BRACKET: bracketNesting--; break;
+      case RIGHT_BRACKET: bracketNesting++; break;
+      case DOUBLE_QUOTE: case SINGLE_QUOTE:
+        // FIXME: If position is within string, it breaks the provider
+        currArg.unshift(String.fromCharCode(ch));
+        while (iterator.hasNext()) {
+          const nch: number = iterator.next();
+          // find the closing quote or double quote
+          currArg.unshift(String.fromCharCode(nch));
+          // TODO: Ignore if escaped
+          if (ch === nch) {
+            break;
+          }
+        }
+        break;
+      case COMMA:
+        if (!parenNesting && !bracketNesting && !braceNesting) {
+          currArg.shift();
+          allArgs.unshift(currArg.join("").trim());
+          currArg = [];
+        }
+        break;
+    }
+  }
+  return [];
 }

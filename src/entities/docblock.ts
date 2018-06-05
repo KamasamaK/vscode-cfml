@@ -1,6 +1,6 @@
 import { Range, TextDocument } from "vscode";
 
-const DOC_PATTERN: RegExp = /(\n\s*(?:\*\s*)?(?:@(\w+)(?:\.(\w+))?)?\s*)(\S.*)/gi;
+const DOC_PATTERN: RegExp = /(\n\s*(?:\*[ \t]*)?(?:@(\w+)(?:\.(\w+))?)?[ \t]*)(\S.*)/gi;
 
 export interface DocBlockKeyValue {
   key: string; // lowercased
@@ -39,6 +39,8 @@ export function parseDocBlock(document: TextDocument, docRange: Range): DocBlock
       } else {
         activeSubkey = undefined;
       }
+    } else if (metadataValue === "*") {
+      continue;
     }
 
     if ((activeKey !== prevKey || activeSubkey !== prevSubkey) && activeValue) {
@@ -74,6 +76,10 @@ export function parseDocBlock(document: TextDocument, docRange: Range): DocBlock
   return docBlock;
 }
 
+/**
+ * Gets a regular expression that matches a docblock key with the given name and captures its next word
+ * @param keyName The tag key to match
+ */
 export function getKeyPattern(keyName: string): RegExp {
-  return new RegExp(`@${keyName}\s+(\S+)`, "i");
+  return new RegExp(`@${keyName}\\s+(\\S+)`, "i");
 }

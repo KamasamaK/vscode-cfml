@@ -1,16 +1,17 @@
+import * as path from "path";
 import { DataType } from "./dataType";
 import { Location, Uri, TextDocument, Position, Range } from "vscode";
-import { Function } from "./function";
+import { Function, getScriptFunctionArgRanges } from "./function";
 import { Parameter } from "./parameter";
 import { Signature } from "./signature";
-import { getComponentNameFromDotPath, Component } from "./component";
-import { Variable, parseVariableAssignments, collectDocumentVariableAssignments, variableExpressionPrefix, getApplicationVariables } from "./variable";
-import { Scope, unscopedPrecedence } from "./scope";
+import { getComponentNameFromDotPath, Component, isSubcomponentOrEqual } from "./component";
+import { Variable, parseVariableAssignments, collectDocumentVariableAssignments, getApplicationVariables, getBestMatchingVariable, getVariableExpressionPrefixPattern } from "./variable";
+import { Scope } from "./scope";
 import { DocBlockKeyValue, parseDocBlock, getKeyPattern } from "./docblock";
 import { Attributes, Attribute, parseAttributes } from "./attribute";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
-import { getComponent } from "../features/cachedEntities";
+import { getComponent, hasComponent } from "../features/cachedEntities";
 import { parseTags, Tag } from "./tag";
 import { DocumentStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
 import { getClosingPosition, getNextCharacterPosition } from "../utils/contextUtil";
@@ -133,24 +134,6 @@ export interface UserFunction extends Function {
   signatures: UserFunctionSignature[];
   location: Location;
 }
-interface UserFunctionAttributes {
-  name: string;
-  access?: string;
-  description?: string;
-  displayname?: string;
-  hint?: string;
-  output?: string;
-  returnformat?: string;
-  returntype?: string;
-  roles?: string;
-  securejson?: string;
-  verifyclient?: string;
-  restpath?: string;
-  httpmethod?: string;
-  produces?: string;
-  consumes?: string;
-  modifier?: string;
-}
 
 // Collection of user functions for a particular component. Key is function name lowercased.
 export class ComponentFunctions extends MyMap<string, UserFunction> { }
@@ -171,7 +154,7 @@ export interface UserFunctionsByName {
 
 /**
  * Parses the CFScript function definitions and returns an array of UserFunction objects
- * @param documentStateContext The content information for a TextDocument in which to parse the CFScript functions
+ * @param documentStateContext The context information for a TextDocument in which to parse the CFScript functions
  */
 export function parseScriptFunctions(documentStateContext: DocumentStateContext): UserFunction[] {
   const document: TextDocument = documentStateContext.document;
@@ -215,12 +198,10 @@ export function parseScriptFunctions(documentStateContext: DocumentStateContext)
       functionEndPosition
     );
 
-    /*
     const functionAttributeRange: Range = new Range(
       argumentEndPosition,
       functionBodyStartPos.translate(0, -1)
     );
-    */
 
     const functionBodyRange: Range = new Range(
       functionBodyStartPos,
@@ -274,7 +255,8 @@ export function parseScriptFunctions(documentStateContext: DocumentStateContext)
       }
     }
 
-    // TODO: Parse text in functionAttributeRange
+    const parsedAttributes: Attributes = parseAttributes(document, functionAttributeRange);
+    userFunction = assignFunctionAttributes(userFunction, parsedAttributes);
 
     let scriptDocBlockParsed: DocBlockKeyValue[] = [];
     if (fullDocBlock) {
@@ -489,28 +471,6 @@ function parseScriptFunctionArgs(documentStateContext: DocumentStateContext, arg
 }
 
 /**
- * Parses the given arguments into an array of Argument objects that is returned
- * @param documentStateContext The context information for a TextDocument possibly containing function arguments
- * @param argsRange A range within the given document that contains the CFScript arguments
- */
-function getScriptFunctionArgRanges(documentStateContext: DocumentStateContext, argsRange: Range): Range[] {
-  let argRanges: Range[] = [];
-  const document: TextDocument = documentStateContext.document;
-  const argsEndOffset: number = document.offsetAt(argsRange.end);
-  const separatorChar: string = ",";
-
-  let argStartPosition = argsRange.start;
-  while (argStartPosition.isBefore(argsRange.end)) {
-    const argSeparatorPos = getNextCharacterPosition(documentStateContext, document.offsetAt(argStartPosition), argsEndOffset, separatorChar, false);
-    const argRange = new Range(argStartPosition, argSeparatorPos);
-    argRanges.push(argRange);
-    argStartPosition = argSeparatorPos.translate(0, 1);
-  }
-
-  return argRanges;
-}
-
-/**
  * Parses the tag function definitions and returns an array of UserFunction objects
  * @param documentStateContext The context information for a TextDocument in which to parse the tag functions
  */
@@ -524,9 +484,8 @@ export function parseTagFunctions(documentStateContext: DocumentStateContext): U
     const functionRange: Range = tag.tagRange;
     const functionBodyRange: Range = tag.bodyRange;
     const parsedAttributes: Attributes = tag.attributes;
-    let functionAttributes: UserFunctionAttributes = processFunctionAttributes(parsedAttributes);
 
-    if (!functionAttributes.name) {
+    if (!parsedAttributes.has("name") || !parsedAttributes.get("name").value) {
       return;
     }
 
@@ -535,7 +494,7 @@ export function parseTagFunctions(documentStateContext: DocumentStateContext): U
       static: false,
       abstract: false,
       final: false,
-      name: functionAttributes.name,
+      name: parsedAttributes.get("name").value,
       description: "",
       returntype: DataType.Any,
       signatures: [],
@@ -544,34 +503,7 @@ export function parseTagFunctions(documentStateContext: DocumentStateContext): U
       location: new Location(documentUri, functionRange)
     };
 
-    Object.getOwnPropertyNames(functionAttributes).forEach((attrName: string) => {
-      if (functionAttributes[attrName]) {
-        const attrVal = functionAttributes[attrName];
-        if (attrName === "access") {
-          userFunction.access = Access.valueOf(attrVal);
-        } else if (attrName === "returntype") {
-          const checkDataType = DataType.getDataTypeAndUri(attrVal, documentUri);
-          if (checkDataType) {
-            userFunction.returntype = checkDataType[0];
-            if (checkDataType[1]) {
-              userFunction.returnTypeUri = checkDataType[1];
-            }
-            const returnTypeRange: Range = parsedAttributes.get("returntype").valueRange;
-            const returnTypeName: string = getComponentNameFromDotPath(attrVal);
-            userFunction.returnTypeRange = new Range(
-              returnTypeRange.start.translate(0, attrVal.length - returnTypeName.length),
-              returnTypeRange.end
-            );
-          }
-        } else if (userFunctionBooleanAttributes.has(attrName)) {
-          userFunction[attrVal] = DataType.isTruthy(attrVal);
-        } else if (attrName === "hint") {
-          userFunction.description = attrVal;
-        } else if (attrName === "description" && userFunction.description === "") {
-          userFunction.description = attrVal;
-        }
-      }
-    });
+    assignFunctionAttributes(userFunction, parsedAttributes);
 
     const signature: UserFunctionSignature = {
       parameters: parseTagFunctionArguments(documentStateContext, functionBodyRange)
@@ -589,9 +521,13 @@ export function parseTagFunctions(documentStateContext: DocumentStateContext): U
  * @param documentStateContext The context information for a TextDocument containing these function arguments
  * @param functionBodyRange A range in the given document for the function body
  */
-function parseTagFunctionArguments(documentStateContext: DocumentStateContext, functionBodyRange: Range): Argument[] {
+function parseTagFunctionArguments(documentStateContext: DocumentStateContext, functionBodyRange: Range | undefined): Argument[] {
   let args: Argument[] = [];
   const documentUri: Uri = documentStateContext.document.uri;
+
+  if (functionBodyRange === undefined) {
+    return args;
+  }
 
   const parsedArgumentTags: Tag[] = parseTags(documentStateContext, "cfargument", functionBodyRange);
 
@@ -668,21 +604,42 @@ function parseTagFunctionArguments(documentStateContext: DocumentStateContext, f
 }
 
 /**
- * Parses a set of attribute/value pairs for a function and returns an object conforming to the UserFunctionAttributes interface
- * @param attributeStr A string with the set of attribute/value pairs for a function
+ * Assigns the given function attributes to the given user function
+ * @param userFunction The user function to which the attributes will be assigned
+ * @param functionAttributes The attributes that will be assigned to the user function
  */
-function processFunctionAttributes(attributes: Attributes): UserFunctionAttributes {
-  let attributeObj = {};
-
-  attributes.forEach((attr: Attribute, attrKey: string) => {
-    attributeObj[attrKey] = attr.value;
+function assignFunctionAttributes(userFunction: UserFunction, functionAttributes: Attributes): UserFunction {
+  functionAttributes.forEach((attribute: Attribute) => {
+    const attrName: string = attribute.name;
+    if (attribute.value) {
+      const attrVal: string = attribute.value;
+      if (attrName === "access") {
+        userFunction.access = Access.valueOf(attrVal);
+      } else if (attrName === "returntype") {
+        const checkDataType = DataType.getDataTypeAndUri(attrVal, userFunction.location.uri);
+        if (checkDataType) {
+          userFunction.returntype = checkDataType[0];
+          if (checkDataType[1]) {
+            userFunction.returnTypeUri = checkDataType[1];
+          }
+          const returnTypeRange: Range = functionAttributes.get("returntype").valueRange;
+          const returnTypeName: string = getComponentNameFromDotPath(attrVal);
+          userFunction.returnTypeRange = new Range(
+            returnTypeRange.start.translate(0, attrVal.length - returnTypeName.length),
+            returnTypeRange.end
+          );
+        }
+      } else if (userFunctionBooleanAttributes.has(attrName)) {
+        userFunction[attrVal] = DataType.isTruthy(attrVal);
+      } else if (attrName === "hint") {
+        userFunction.description = attrVal;
+      } else if (attrName === "description" && userFunction.description === "") {
+        userFunction.description = attrVal;
+      }
+    }
   });
 
-  if (!attributeObj["name"]) {
-    return null;
-  }
-
-  return <UserFunctionAttributes>attributeObj;
+  return userFunction;
 }
 
 /**
@@ -731,12 +688,18 @@ function parseModifier(modifier: string): string {
 /**
  * Gets the function based on its key and position in the document
  * @param documentPositionStateContext The contextual information of the state of a document and the cursor position
- * @param docPrefix The document prefix of the function as opposed to the position within documentPositionStateContext
  * @param functionKey The function key for which to get
+ * @param docPrefix The document prefix of the function if not the same as docPrefix within documentPositionStateContext
  */
-export async function getFunctionFromPrefix(documentPositionStateContext: DocumentPositionStateContext, docPrefix: string, functionKey: string): Promise<UserFunction> {
+export async function getFunctionFromPrefix(documentPositionStateContext: DocumentPositionStateContext, functionKey: string, docPrefix?: string): Promise<UserFunction | undefined> {
   let foundFunction: UserFunction;
-  const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(docPrefix);
+
+  if (docPrefix === undefined) {
+    docPrefix = documentPositionStateContext.docPrefix;
+  }
+
+  // TODO: Replace regex check with variable references range check
+  const varPrefixMatch: RegExpExecArray = getVariableExpressionPrefixPattern().exec(docPrefix);
   if (varPrefixMatch) {
     const varMatchText: string = varPrefixMatch[0];
     const varScope: string = varPrefixMatch[2];
@@ -749,60 +712,93 @@ export async function getFunctionFromPrefix(documentPositionStateContext: Docume
     }
 
     if (varMatchText.split(".").length === dotSeparatedCount) {
-      let foundVar: Variable;
-      const allDocumentVariableAssignments: Variable[] = collectDocumentVariableAssignments(documentPositionStateContext);
-
-      if (varScope) {
-        const scopeVal: Scope = Scope.valueOf(varScope);
-
-        let variableAssignments: Variable[];
-        if (scopeVal === Scope.Application) {
-          variableAssignments = await getApplicationVariables(documentPositionStateContext.document.uri);
-        } else {
-          variableAssignments = allDocumentVariableAssignments;
+      if (documentPositionStateContext.isCfcFile && !varScope && equalsIgnoreCase(varName, "super")) {
+        if (documentPositionStateContext.component && documentPositionStateContext.component.extends) {
+          const baseComponent: Component = getComponent(documentPositionStateContext.component.extends);
+          if (baseComponent) {
+            foundFunction = getFunctionFromComponent(baseComponent, functionKey, documentPositionStateContext.document.uri);
+          }
         }
-
-        foundVar = variableAssignments.find((currentVar: Variable) => {
-          return currentVar.scope === scopeVal && equalsIgnoreCase(currentVar.identifier, varName);
-        });
+      } else if (documentPositionStateContext.isCfcFile && !varScope && (equalsIgnoreCase(varName, Scope.Variables) || equalsIgnoreCase(varName, Scope.This))) {
+        let disallowedAccess: Access;
+        if (equalsIgnoreCase(varName, Scope.This)) {
+          disallowedAccess = Access.Private;
+        }
+        foundFunction = getFunctionFromComponent(documentPositionStateContext.component, functionKey, documentPositionStateContext.document.uri, disallowedAccess);
       } else {
-        for (let checkScope of unscopedPrecedence) {
-          foundVar = allDocumentVariableAssignments.find((currentVar: Variable) => {
-            return currentVar.scope === checkScope && equalsIgnoreCase(currentVar.identifier, varName);
-          });
-          if (foundVar) {
-            break;
-          }
+        // TODO: Allow passing variable assignments
+        const allDocumentVariableAssignments: Variable[] = collectDocumentVariableAssignments(documentPositionStateContext);
+
+        let variableAssignments: Variable[] = allDocumentVariableAssignments;
+        const fileName: string = path.basename(documentPositionStateContext.document.uri.fsPath);
+        if (varScope && fileName !== "Application.cfm") {
+          const applicationDocVariables: Variable[] = await getApplicationVariables(documentPositionStateContext.document.uri);
+          variableAssignments = variableAssignments.concat(applicationDocVariables);
         }
-      }
 
-      if (foundVar && foundVar.dataTypeComponentUri) {
-        let currComponent: Component = getComponent(foundVar.dataTypeComponentUri);
-        while (currComponent) {
-          if (currComponent.functions.has(functionKey)) {
-            const foundFunc = currComponent.functions.get(functionKey);
-            // TODO: Access.Package
-            if (foundFunc.access === Access.Public || foundFunc.access === Access.Remote) {
-              foundFunction = foundFunc;
-              break;
-            }
-          }
+        const scopeVal: Scope = varScope ? Scope.valueOf(varScope) : undefined;
+        const foundVar: Variable = getBestMatchingVariable(variableAssignments, varName, scopeVal);
 
-          const implicitFunctions: ComponentFunctions = getImplicitFunctions(currComponent);
-          if (implicitFunctions.has(functionKey)) {
-            foundFunction = implicitFunctions.get(functionKey);
-            break;
-          }
-
-          if (currComponent.extends) {
-            currComponent = getComponent(currComponent.extends);
-          } else {
-            currComponent = undefined;
+        if (foundVar && foundVar.dataTypeComponentUri) {
+          const foundVarComponent: Component = getComponent(foundVar.dataTypeComponentUri);
+          if (foundVarComponent) {
+            foundFunction = getFunctionFromComponent(foundVarComponent, functionKey, documentPositionStateContext.document.uri);
           }
         }
       }
     }
+  } else if (documentPositionStateContext.component) {
+    foundFunction = getFunctionFromComponent(documentPositionStateContext.component, functionKey, documentPositionStateContext.document.uri);
   }
 
   return foundFunction;
+}
+
+/**
+ * Gets the function based on the component to which it belongs, its name, and from where it is being called
+ * @param component The component in which to begin looking
+ * @param lowerFunctionName The function name all lowercased
+ * @param callerUri The URI of the document from which the function is being called
+ * @param disallowedAccess An access specifier to disallow
+ */
+export function getFunctionFromComponent(component: Component, lowerFunctionName: string, callerUri: Uri, disallowedAccess?: Access): UserFunction | undefined {
+  let validFunctionAccess: MySet<Access> = new MySet([Access.Remote, Access.Public]);
+  if (hasComponent(callerUri)) {
+    let callerComponent: Component = getComponent(callerUri);
+    if (isSubcomponentOrEqual(callerComponent, component)) {
+      validFunctionAccess.add(Access.Private);
+      validFunctionAccess.add(Access.Package);
+    }
+  }
+
+  if (!validFunctionAccess.has(Access.Package) && path.dirname(callerUri.fsPath) === path.dirname(component.uri.fsPath)) {
+    validFunctionAccess.add(Access.Package);
+  }
+
+  if (disallowedAccess && validFunctionAccess.has(disallowedAccess)) {
+    validFunctionAccess.delete(disallowedAccess);
+  }
+
+  let currComponent: Component = component;
+  while (currComponent) {
+    if (currComponent.functions.has(lowerFunctionName)) {
+      const foundFunc: UserFunction = currComponent.functions.get(lowerFunctionName);
+      if (validFunctionAccess.has(foundFunc.access)) {
+        return foundFunc;
+      }
+    }
+
+    const implicitFunctions: ComponentFunctions = getImplicitFunctions(currComponent, false);
+    if (implicitFunctions.has(lowerFunctionName)) {
+      return implicitFunctions.get(lowerFunctionName);
+    }
+
+    if (currComponent.extends) {
+      currComponent = getComponent(currComponent.extends);
+    } else {
+      currComponent = undefined;
+    }
+  }
+
+  return undefined;
 }

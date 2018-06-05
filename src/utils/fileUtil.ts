@@ -4,6 +4,12 @@ import { COMPONENT_EXT } from "../entities/component";
 import { equalsIgnoreCase } from "./textUtil";
 import { Uri, workspace, WorkspaceFolder } from "vscode";
 
+export interface CFMLMapping {
+  logicalPath: string;
+  directoryPath: string;
+  isPhysicalDirectoryPath?: boolean;
+}
+
 export function getDirectories(srcPath: string): string[] {
   const files: string[] = fs.readdirSync(srcPath);
 
@@ -41,8 +47,7 @@ export function resolveDottedPaths(dotPath: string, baseUri: Uri): string[] {
   // TODO: Check imports
 
   // relative to local directory
-  const baseDir: string = path.dirname(baseUri.fsPath);
-  const localPath: string = path.join(baseDir, normalizedPath);
+  const localPath: string = resolveRelativePath(baseUri, normalizedPath);
   if (fs.existsSync(localPath)) {
     paths.push(localPath);
 
@@ -52,8 +57,7 @@ export function resolveDottedPaths(dotPath: string, baseUri: Uri): string[] {
   }
 
   // relative to web root
-  const root: WorkspaceFolder = workspace.getWorkspaceFolder(baseUri);
-  const rootPath: string = path.join(root.uri.fsPath, normalizedPath);
+  const rootPath: string = resolveRootPath(baseUri, normalizedPath);
   if (fs.existsSync(rootPath)) {
     paths.push(rootPath);
 
@@ -62,7 +66,60 @@ export function resolveDottedPaths(dotPath: string, baseUri: Uri): string[] {
     }
   }
 
-  // TODO: custom mappings
+  // custom mappings
+  const customMappingPaths: string[] = resolveCustomMappingPaths(baseUri, normalizedPath);
+  for (let mappedPath of customMappingPaths) {
+    if (fs.existsSync(mappedPath)) {
+      paths.push(mappedPath);
+
+      if (normalizedPath.length > 0) {
+        return paths;
+      }
+    }
+  }
 
   return paths;
+}
+
+/**
+ * Resolves a full path relative to the given URI
+ * @param baseUri The URI from which the relative path will be resolved
+ * @param appendingPath A path appended to the given URI
+ */
+export function resolveRelativePath(baseUri: Uri, appendingPath: string): string {
+  return path.join(path.dirname(baseUri.fsPath), appendingPath);
+}
+
+/**
+ * Resolves a full path relative to the root of the given URI
+ * @param baseUri The URI from which the root path will be resolved
+ * @param appendingPath A path appended to the resolved root path
+ */
+export function resolveRootPath(baseUri: Uri, appendingPath: string): string {
+  const root: WorkspaceFolder = workspace.getWorkspaceFolder(baseUri);
+
+  return path.join(root.uri.fsPath, appendingPath);
+}
+
+/**
+ * Resolves a full path based on mappings
+ * @param baseUri The URI from which the root path will be resolved
+ * @param appendingPath A path appended to the resolved path
+ */
+export function resolveCustomMappingPaths(baseUri: Uri, appendingPath: string): string[] {
+  const customMappingPaths: string[] = [];
+
+  const cfmlMappings: CFMLMapping[] = workspace.getConfiguration("cfml", baseUri).get<CFMLMapping[]>("mappings", []);
+  const normalizedPath: string = appendingPath.replace(/\\/g, "/");
+  for (let cfmlMapping of cfmlMappings) {
+    const slicedLogicalPath: string = cfmlMapping.logicalPath.slice(1);
+    const logicalPathStartPattern = new RegExp(`^${slicedLogicalPath}(?:\/|$)`);
+    if (logicalPathStartPattern.test(normalizedPath)) {
+      const directoryPath: string = cfmlMapping.isPhysicalDirectoryPath === undefined || cfmlMapping.isPhysicalDirectoryPath ? cfmlMapping.directoryPath : resolveRootPath(baseUri, cfmlMapping.directoryPath);
+      const mappedPath: string = path.join(directoryPath, appendingPath.slice(slicedLogicalPath.length));
+      customMappingPaths.push(mappedPath);
+    }
+  }
+
+  return customMappingPaths;
 }

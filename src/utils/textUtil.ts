@@ -1,6 +1,18 @@
 import { MarkdownString, Range, TextDocument, Position } from "vscode";
 import { getCommentRanges, isCfcFile } from "./contextUtil";
-import { getComponent } from "../features/cachedEntities";
+import { getComponent, hasComponent } from "../features/cachedEntities";
+
+export enum Quote {
+  Single = "single",
+  Double = "double"
+}
+
+/**
+ * Returns the quote of the given type
+ */
+export function getQuote(quote: Quote): string {
+  return quote === Quote.Single ? "'" : '"';
+}
 
 /**
  * Returns whether the string are equal ignoring case
@@ -56,7 +68,7 @@ export function getSanitizedDocumentText(document: TextDocument, commentRanges?:
   if (commentRanges) {
     documentCommentRanges = commentRanges;
   } else {
-    const docIsScript: boolean = (isCfcFile(document) && getComponent(document.uri) && getComponent(document.uri).isScript);
+    const docIsScript: boolean = (isCfcFile(document) && hasComponent(document.uri) && getComponent(document.uri).isScript);
     documentCommentRanges = getCommentRanges(document, docIsScript);
   }
 

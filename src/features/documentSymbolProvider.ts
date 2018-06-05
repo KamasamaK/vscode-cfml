@@ -97,7 +97,7 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
    */
   private static getTemplateSymbols(documentStateContext: DocumentStateContext): SymbolInformation[] {
     let templateSymbols: SymbolInformation[] = [];
-    // TODO: Cache template variables
+    // TODO: Cache template variables?
     const allVariables: Variable[] = parseVariableAssignments(documentStateContext, false);
     allVariables.forEach((variable: Variable) => {
       const kind: SymbolKind = usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable;

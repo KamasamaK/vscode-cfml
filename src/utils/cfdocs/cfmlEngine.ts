@@ -1,6 +1,5 @@
+import * as semver from "semver";
 import { DataType } from "../../entities/dataType";
-
-const semver = require("semver");
 
 export enum CFMLEngineName {
   ColdFusion = "coldfusion",
@@ -133,6 +132,20 @@ export class CFMLEngine {
       || (this.name === CFMLEngineName.ColdFusion && semver.gte(this.version, "11.0.0"))
       || this.name === CFMLEngineName.Lucee
       || (this.name === CFMLEngineName.Railo && semver.gte(this.version, "4.2.0"))
+    );
+  }
+
+  /**
+   * Returns whether this engine supports named parameters for global functions
+   */
+  public supportsGlobalFunctionNamedParams(): boolean {
+    // NOTE: Railo and Lucee support this using colons.
+    // TODO: Find when = was supported
+    return (
+      this.name === CFMLEngineName.Unknown
+      || (this.name === CFMLEngineName.ColdFusion && semver.gte(this.version, "2018.0.0"))
+      || this.name === CFMLEngineName.Lucee
+      || (this.name === CFMLEngineName.Railo && semver.gte(this.version, "3.3.0"))
     );
   }
 

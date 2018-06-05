@@ -1,4 +1,4 @@
-import { workspace, SnippetString } from "vscode";
+import { workspace, SnippetString, Uri } from "vscode";
 
 interface Config {
   gap: boolean;
@@ -42,6 +42,11 @@ export class Doc {
   public docType: DocType;
 
   /**
+   * The URI of the document in which this doc is relevant
+   */
+  public uri: Uri;
+
+  /**
    * A config which will modify the result of the Doc
    */
   protected config: Config;
@@ -51,9 +56,10 @@ export class Doc {
    *
    * @param hint
    */
-  public constructor(docType: DocType) {
+  public constructor(docType: DocType, uri: Uri) {
     this.docType = docType;
     this.hint = "Undocumented " + docType;
+    this.uri = uri;
   }
 
   /**
@@ -61,7 +67,7 @@ export class Doc {
    */
   public getConfig(): Config {
     if (!this.config) {
-      this.config = workspace.getConfiguration().get<Config>("cfml.docBlock");
+      this.config = workspace.getConfiguration("cfml", this.uri).get<Config>("docBlock");
     }
     return this.config;
   }
@@ -71,8 +77,24 @@ export class Doc {
    *
    * @param config
    */
-  public setConfig(config): void {
+  public setConfig(config: Config): void {
     this.config = config;
+  }
+
+  /**
+   * Get the URI
+   */
+  public getUri(): Uri {
+    return this.uri;
+  }
+
+  /**
+   * Set the URI
+   *
+   * @param uri
+   */
+  public setUri(uri: Uri): void {
+    this.uri = uri;
   }
 
   /**

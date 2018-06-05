@@ -1,6 +1,7 @@
 import { Uri } from "vscode";
 import { componentPathToUri } from "./component";
 import { equalsIgnoreCase } from "../utils/textUtil";
+import { queryValuePattern } from "./query";
 
 export enum DataType {
   Any = "any",
@@ -114,11 +115,50 @@ export namespace DataType {
    * @param numStr A string to check
    */
   export function isNumeric(numStr: string): boolean {
-    let numStrTest = numStr;
+    let numStrTest: string = numStr;
     if (/^(["'])[0-9.]+\1$/.test(numStrTest)) {
       numStrTest = numStrTest.slice(1, -1);
     }
     return (!isNaN(parseFloat(numStrTest)) && isFinite(parseFloat(numStrTest)));
+  }
+
+  /**
+   * Validates whether a string is a string literal
+   * @param str A string to check
+   */
+  export function isStringLiteral(str: string): boolean {
+    const trimmedStr: string = str.trim();
+
+    return (trimmedStr.length > 1 && ((trimmedStr.startsWith("'") && trimmedStr.endsWith("'")) || (trimmedStr.startsWith('"') && trimmedStr.endsWith('"'))));
+  }
+
+  /**
+   * Gets the string literal value from the given CFML string literal
+   * @param str A string literal from which to get the string value
+   */
+  export function getStringLiteralValue(str: string): string {
+    let trimmedStr: string = str.trim();
+    const stringDelimiter: string = trimmedStr.charAt(0);
+    trimmedStr = trimmedStr.slice(1, -1);
+    let stringValue: string = "";
+
+    let previousChar: string = "";
+    let currentChar: string = "";
+    for (let idx = 0; idx < trimmedStr.length; idx++) {
+      currentChar = trimmedStr.charAt(idx);
+
+      // Skip if escaped
+      if (previousChar === stringDelimiter && currentChar === stringDelimiter) {
+        previousChar = "";
+        continue;
+      }
+
+      stringValue += currentChar;
+
+      previousChar = currentChar;
+    }
+
+    return stringValue;
   }
 
   /**
@@ -163,8 +203,9 @@ export namespace DataType {
   }
 
   /**
-   * Take the value and parse and try to infer its type
-   * @param value
+   * Analyzes the given value to try to infer its type
+   * @param value The value to analyze
+   * @param documentUri The URI of the document containing the value
    */
   export function inferDataTypeFromValue(value: string, documentUri: Uri): [DataType, Uri] {
     if (value.length === 0) {
@@ -183,11 +224,15 @@ export namespace DataType {
       return [DataType.String, null];
     }
 
+    if (/^function\s*\(/.test(value)) {
+      return [DataType.Function, null];
+    }
+
     if (/^(?:["']\s*#\s*)?(arrayNew\(|\[)/i.test(value)) {
       return [DataType.Array, null];
     }
 
-    if (/^(?:["']\s*#\s*)?query(?:New|Execute)?\(/i.test(value)) {
+    if (queryValuePattern.test(value)) {
       return [DataType.Query, null];
     }
 
@@ -216,6 +261,8 @@ export namespace DataType {
       }
       return [DataType.Component, null];
     }
+
+    // TODO: Check against functions and use its return type
 
     return [DataType.Any, null];
   }

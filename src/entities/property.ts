@@ -1,11 +1,11 @@
-import { TextDocument, Uri, Range, Location } from "vscode";
+import { Location, Range, TextDocument, Uri } from "vscode";
+import { getComponent } from "../features/cachedEntities";
+import { MyMap, MySet } from "../utils/collections";
+import { Attribute, Attributes, parseAttributes } from "./attribute";
+import { Component, getComponentNameFromDotPath } from "./component";
 import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
-import { parseAttributes, Attribute, Attributes } from "./attribute";
-import { getComponentNameFromDotPath, Component } from "./component";
-import { MyMap, MySet } from "../utils/collections";
-import { getComponent } from "../features/cachedEntities";
-import { Access, UserFunction, ComponentFunctions, UserFunctionSignature } from "./userFunction";
+import { Access, ComponentFunctions, UserFunction, UserFunctionSignature } from "./userFunction";
 
 const propertyPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:<cf)?property\b)([^;>]*)/gi;
 // const attributePattern: RegExp = /\b(\w+)\b(?:\s*=\s*(?:(['"])(.*?)\2|([a-z0-9:.]+)))?/gi;
@@ -149,13 +149,13 @@ export function parseProperties(document: TextDocument): Properties {
       property.name = parsedPropertyAttributes[2];
 
       const removedName: string = propertyMatch[0].slice(0, -property.name.length);
-      const nameAttributeOffset: number = removedName.lastIndexOf(property.name);
+      const nameAttributeOffset: number = propertyMatch.index + removedName.length;
       property.nameRange = new Range(
         document.positionAt(nameAttributeOffset),
         document.positionAt(nameAttributeOffset + property.name.length)
       );
 
-      const dataTypeOffset: number = propertyMatch.index + propertyMatch[0].lastIndexOf(dataTypeString);
+      const dataTypeOffset: number = propertyMatch.index + removedName.lastIndexOf(dataTypeString);
       const typeName: string = getComponentNameFromDotPath(dataTypeString);
       property.dataTypeRange = new Range(
         document.positionAt(dataTypeOffset + dataTypeString.length - typeName.length),
@@ -171,7 +171,11 @@ export function parseProperties(document: TextDocument): Properties {
   return properties;
 }
 
-
+/**
+ * Gets the implicit functions for a component's properties
+ * @param component The component for which to get the implicit functions
+ * @param includeInherited Whether to include inherited implicit functions
+ */
 export function getImplicitFunctions(component: Component, includeInherited: boolean = false): ComponentFunctions {
   let implicitFunctions = new ComponentFunctions();
 
@@ -206,10 +210,12 @@ export function getImplicitFunctions(component: Component, includeInherited: boo
   return implicitFunctions;
 }
 
-
+/**
+ * Constructs the getter implicit function for the given component property
+ * @param property The component property for which to construct the getter
+ * @param componentUri The URI of the component in which the property is defined
+ */
 export function constructGetter(property: Property, componentUri: Uri): UserFunction {
-  let implicitFunctionSignature: UserFunctionSignature = {parameters: []};
-
   return {
     access: Access.Public,
     static: false,
@@ -221,11 +227,16 @@ export function constructGetter(property: Property, componentUri: Uri): UserFunc
     returntype: property.dataType,
     returnTypeUri: property.dataTypeComponentUri,
     nameRange: property.nameRange,
-    signatures: [implicitFunctionSignature],
+    signatures: [{parameters: []}],
     location: new Location(componentUri, property.propertyRange)
   };
 }
 
+/**
+ * Constructs the setter implicit function for the given component property
+ * @param property The component property for which to construct the setter
+ * @param componentUri The URI of the component in which the property is defined
+ */
 export function constructSetter(property: Property, componentUri: Uri): UserFunction {
   let implicitFunctionSignature: UserFunctionSignature = {
     parameters: [
@@ -256,4 +267,3 @@ export function constructSetter(property: Property, componentUri: Uri): UserFunc
     location: new Location(componentUri, property.propertyRange)
   };
 }
-

@@ -1,15 +1,14 @@
-import { CFDocsService } from "./cfDocsService";
-import { GlobalFunction, GlobalTag } from "../../entities/globals";
-import { Signature } from "../../entities/signature";
-import { Parameter } from "../../entities/parameter";
 import { DataType } from "../../entities/dataType";
-import { multiSigGlobalFunctions } from "./multiSignatures";
+import { GlobalFunction, GlobalTag } from "../../entities/globals";
+import { Parameter } from "../../entities/parameter";
+import { Signature } from "../../entities/signature";
 import { equalsIgnoreCase } from "../textUtil";
-import { CFMLEngineName, CFMLEngine } from "./cfmlEngine";
+import { CFDocsService } from "./cfDocsService";
+import { CFMLEngine, CFMLEngineName } from "./cfmlEngine";
+import { multiSigGlobalFunctions } from "./multiSignatures";
+import * as htmlEntities from "html-entities";
 
-const Entities = require("html-entities").AllHtmlEntities;
-
-const entities = new Entities();
+const entities = new htmlEntities.AllHtmlEntities();
 
 export interface Param {
   name: string;

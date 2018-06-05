@@ -1,32 +1,37 @@
 import { DataType } from "./dataType";
-import { Scope } from "./scope";
+import { Scope, unscopedPrecedence } from "./scope";
 import { Location, TextDocument, Range, Uri, Position, WorkspaceConfiguration, workspace } from "vscode";
-import { getCfScriptRanges, isCfcFile } from "../utils/contextUtil";
-import { Component, getApplicationUri } from "./component";
+import { getCfScriptRanges, isCfcFile, isCfcUri } from "../utils/contextUtil";
+import { Component, getApplicationUri, getServerUri } from "./component";
 import { UserFunction, UserFunctionSignature, Argument, getLocalVariables } from "./userFunction";
-import { getComponent } from "../features/cachedEntities";
+import * as cachedEntities from "../features/cachedEntities";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
 import { parseAttributes, Attributes } from "./attribute";
-import { getTagPattern, OutputVariableTags, TagOutputAttribute, parseTags, Tag, getCfOpenTagPattern, getCfScriptTagPatternIgnoreBody, parseOpenTags, OpenTag } from "./tag";
+import { getTagPattern, OutputVariableTags, VariableAttribute, parseTags, Tag, getCfStartTagPattern, getCfScriptTagPatternIgnoreBody, parseStartTags, StartTag } from "./tag";
 import { Properties, Property } from "./property";
-import { parseQueryText, Query, QueryColumns } from "./query";
+import { getSelectColumnsFromQueryText, Query, QueryColumns, queryValuePattern } from "./query";
 import { CFMLEngineName, CFMLEngine } from "../utils/cfdocs/cfmlEngine";
 import { DocumentStateContext, DocumentPositionStateContext, getDocumentStateContext } from "../utils/documentUtil";
+import { getScriptFunctionArgRanges } from "./function";
 
-// Erroneously matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
-const cfscriptVariableAssignmentPattern = /((?:^|[;{}]|\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=\s*([^=][^;]*)/gi;
+
+// FIXME: Erroneously matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
+const cfscriptVariableAssignmentPattern = /(((?:^|[;{}]|\bfor\s*\(|\bcase\s+.+?:|\bdefault\s*:)\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\5\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\7(?:\s*\])?)*\s*=\s*)([^=][^;]*)/gi;
 const forInVariableAssignmentPattern = /((?:\bfor\s*\()\s*(\bvar\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*(?:\s+in\s+)/gi;
-const tagVariableAssignmentPattern = /(<cfset\s+(var\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\4\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\6(?:\s*\])?)*\s*=\s*([^=][^>]*)/gi;
-const tagParamPattern =  getTagPattern("cfparam");
+const tagVariableAssignmentPattern = /((<cfset\s+(var\s+)?(?:(application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?)([a-zA-Z_$][$\w]*)\5\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\7(?:\s*\])?)*\s*=\s*)([^=][^>]*)/gi;
+const tagParamPattern = getTagPattern("cfparam");
 const scriptParamPattern = /\b(cfparam\s*\(\s*|param\s+)([^;]*);/gi;
 // Does not match when a function is part of the expression
-const variableExpression = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*/i;
-export const variableExpressionPrefix = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*\s*(?:\.\s*|\[\s*['"]?)?$/i;
+const variableExpressionPattern = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*/i;
+const variableExpressionPrefixPattern = /\b((application|arguments|attributes|caller|cffile|cgi|client|cookie|flash|form|local|request|server|session|static|this|thistag|thread|url|variables)\s*(?:\.\s*|\[\s*(['"])))?([a-zA-Z_$][$\w]*)\3\s*\]?(?:\s*(?:\.\s*|\[\s*(['"])?)[$\w]+\5(?:\s*\])?)*\s*(?:\.\s*|\[\s*['"]?)$/i;
 
-// TODO: Import from tag.ts when bug is found/resolved
-const outputVariableTags: OutputVariableTags =
-{
+
+
+// TODO: Import outputVariableTags from tag.ts when bug is found/resolved
+
+// const outputVariableTags: OutputVariableTags = getOutputVariableTags();
+const outputVariableTags: OutputVariableTags = {
   "cfchart": [
     {
       attributeName: "name",
@@ -156,6 +161,7 @@ const outputVariableTags: OutputVariableTags =
     },
   ],
   // cfobject excluded and handled elsewhere
+  // cfparam excluded and handled elsewhere
   "cfpdf": [
     {
       attributeName: "name",
@@ -274,8 +280,29 @@ export function usesConstantConvention(ident: string): boolean {
 }
 
 /**
+ * Returns a regular expression that matches when prefixed by a specified unscoped variable accessing a property
+ * @param variableName The name of a variable
+ */
+export function getVariablePrefixPattern(variableName: string) {
+  let pattern: string = `(?:^|[^.\\s])\\s*(?:\\b${variableName}\\s*(?:\\.\\s*|\\[\\s*['"]))$`;
+
+  return new RegExp(pattern, "i");
+}
+
+/**
+ * Returns a regular expression that matches a variable (or similar) and captures its parts
+ * 1. variable prefix
+ * 2. variable scope
+ * 3. quote
+ * 4. variable name
+ */
+export function getVariableExpressionPrefixPattern() {
+  return variableExpressionPrefixPattern;
+}
+
+/**
  * Returns all of the variables declared
- * @param document The document to check
+ * @param documentStateContext Contextual information for a given document's state
  * @param isScript Whether this document or range is defined entirely in CFScript
  * @param docRange Range within which to check
  */
@@ -297,7 +324,7 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
 
   // Add function arguments
   if (isCfcFile(document)) {
-    const comp: Component = getComponent(document.uri);
+    const comp: Component = cachedEntities.getComponent(document.uri);
     if (comp) {
       comp.functions.forEach((func: UserFunction) => {
         if (!docRange || func.bodyRange.contains(docRange)) {
@@ -338,22 +365,22 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
     );
 
     const parsedAttr: Attributes = parseAttributes(document, paramAttributeRange);
-    if (!parsedAttr.has("name")) {
+    if (!parsedAttr.has("name") || !parsedAttr.get("name").value) {
       continue;
     }
 
     let paramType: DataType = DataType.Any;
     let paramTypeComponentUri: Uri = undefined;
-    if (parsedAttr.has("type")) {
+    if (parsedAttr.has("type") && !!parsedAttr.get("type").value) {
       paramType = DataType.paramTypeToDataType(parsedAttr.get("type").value);
-    } else if (parsedAttr.has("default")) {
+    } else if (parsedAttr.has("default") && parsedAttr.get("default").value !== undefined) {
       const inferredType: [DataType, Uri] = DataType.inferDataTypeFromValue(parsedAttr.get("default").value, documentUri);
       paramType = inferredType[0];
       paramTypeComponentUri = inferredType[1];
     }
 
     const paramName = parsedAttr.get("name").value;
-    const paramNameMatch = variableExpression.exec(paramName);
+    const paramNameMatch = variableExpressionPattern.exec(paramName);
     if (!paramNameMatch) {
       continue;
     }
@@ -401,11 +428,12 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
   let variableMatch: RegExpExecArray = null;
   const variableAssignmentPattern: RegExp = isScript ? cfscriptVariableAssignmentPattern : tagVariableAssignmentPattern;
   while (variableMatch = variableAssignmentPattern.exec(documentText)) {
-    const varPrefix: string = variableMatch[1];
-    const varScope: string = variableMatch[2];
-    const scope: string = variableMatch[3];
-    const varName: string = variableMatch[5];
-    const initValue: string = variableMatch[7];
+    const initValuePrefix: string = variableMatch[1];
+    const varPrefix: string = variableMatch[2];
+    const varScope: string = variableMatch[3];
+    const scope: string = variableMatch[4];
+    const varName: string = variableMatch[6];
+    const initValue: string = variableMatch[8];
 
     // TODO: Does not account for arguments being overridden.
     let scopeVal: Scope = Scope.Unknown;
@@ -415,13 +443,13 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
       scopeVal = Scope.Local;
     }
 
-    const varMatchStartOffset = textOffset + variableMatch.index + varPrefix.length;
+    const varMatchStartOffset: number = textOffset + variableMatch.index + varPrefix.length;
     const varRange = new Range(
       document.positionAt(varMatchStartOffset),
       document.positionAt(varMatchStartOffset + varName.length)
     );
 
-    const matchingVars = getMatchingVariables(variables, varName, scopeVal);
+    const matchingVars: Variable[] = getMatchingVariables(variables, varName, scopeVal);
     if (matchingVars.length > 0) {
       if (matchingVars.length > 1 || matchingVars[0].declarationLocation.range.start.isBefore(varRange.start)) {
         continue;
@@ -437,7 +465,8 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
       scopeVal = Scope.Variables;
     }
     const inferredType: [DataType, Uri] = DataType.inferDataTypeFromValue(initValue, documentUri);
-    variables.push({
+
+    let thisVar: Variable = {
       identifier: varName,
       dataType: inferredType[0],
       dataTypeComponentUri: inferredType[1],
@@ -446,14 +475,49 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
         document.uri,
         varRange
       )
-    });
+    };
+
+    if (inferredType[0] === DataType.Query) {
+      let valueMatch: RegExpExecArray = null;
+      if (valueMatch = queryValuePattern.exec(initValue)) {
+        const fullValueMatch: string = valueMatch[0];
+        const functionName: string = valueMatch[1];
+
+        const initValueOffset = textOffset + variableMatch.index + initValuePrefix.length;
+        const paramsStartOffset: number = initValueOffset + valueMatch.index + fullValueMatch.length;
+        const paramsEndOffset: number = initValueOffset + initValue.length - 1;
+        const paramsRange = new Range(document.positionAt(paramsStartOffset), document.positionAt(paramsEndOffset));
+        const paramRanges: Range[] = getScriptFunctionArgRanges(documentStateContext, paramsRange);
+        if (paramRanges.length > 0) {
+          const firstParamText: string = document.getText(paramRanges[0]);
+
+          // TODO: If not string literal, but string variable, retrieve string value from variable. Account for using named param.
+          if (DataType.isStringLiteral(firstParamText)) {
+            const firstParamVal: string = DataType.getStringLiteralValue(firstParamText);
+            let columns: QueryColumns;
+            if (equalsIgnoreCase(functionName, "queryNew")) {
+              columns = new MySet(firstParamVal.split(","));
+            } else {
+              columns = getSelectColumnsFromQueryText(firstParamVal);
+            }
+            if (columns.size > 0) {
+              let query: Query = thisVar as Query;
+              query.selectColumnNames = columns;
+              thisVar = query;
+            }
+          }
+        }
+      }
+    }
+
+    variables.push(thisVar);
   }
 
   if (!isScript || userEngine.supportsScriptTags()) {
     // Tags with output attributes
     let foundOutputVarTags: MySet<string> = new MySet();
     let cfTagMatch: RegExpExecArray = null;
-    const cfTagPattern: RegExp = isScript ? getCfScriptTagPatternIgnoreBody() : getCfOpenTagPattern();
+    const cfTagPattern: RegExp = isScript ? getCfScriptTagPatternIgnoreBody() : getCfStartTagPattern();
     while (cfTagMatch = cfTagPattern.exec(documentText)) {
       const tagName = cfTagMatch[2].toLowerCase();
       if (!foundOutputVarTags.has(tagName) && outputVariableTags.hasOwnProperty(tagName)) {
@@ -462,16 +526,20 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
     }
 
     foundOutputVarTags.forEach((tagName: string) => {
-      const tagOutputAttributes: TagOutputAttribute[] = outputVariableTags[tagName];
-      const parsedOutputVariableTags: OpenTag[] = (tagName === "cfquery" ? parseTags(documentStateContext, tagName, docRange) : parseOpenTags(documentStateContext, tagName, docRange));
-      parsedOutputVariableTags.forEach((tag: OpenTag) => {
+      const tagOutputAttributes: VariableAttribute[] = outputVariableTags[tagName];
+
+      const parsedOutputVariableTags: StartTag[] = (tagName === "cfquery" ? parseTags(documentStateContext, tagName, docRange) : parseStartTags(documentStateContext, tagName, isScript, docRange));
+      parsedOutputVariableTags.forEach((tag: StartTag) => {
         const tagAttributes: Attributes = tag.attributes;
-        tagOutputAttributes.filter((tagOutputAttribute: TagOutputAttribute) => {
+        tagOutputAttributes.filter((tagOutputAttribute: VariableAttribute) => {
           return tagAttributes.has(tagOutputAttribute.attributeName);
-        }).forEach((tagOutputAttribute: TagOutputAttribute) => {
+        }).forEach((tagOutputAttribute: VariableAttribute) => {
           const attributeName: string = tagOutputAttribute.attributeName;
           const attributeVal: string = tagAttributes.get(attributeName).value;
-          const varExpressionMatch: RegExpExecArray = variableExpression.exec(attributeVal);
+          if (!attributeVal) {
+            return;
+          }
+          const varExpressionMatch: RegExpExecArray = variableExpressionPattern.exec(attributeVal);
           if (!varExpressionMatch) {
             return;
           }
@@ -517,9 +585,10 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
             )
           };
 
-          if (tagName === "cfquery" && "bodyText" in tag) {
+          if (tagName === "cfquery" && "bodyRange" in tag) {
             const queryTag = tag as Tag;
-            const columns: QueryColumns = parseQueryText(queryTag.bodyText);
+            const bodyText: string = document.getText(queryTag.bodyRange);
+            const columns: QueryColumns = getSelectColumnsFromQueryText(bodyText);
 
             if (columns.size > 0) {
               let query: Query = outputVar as Query;
@@ -611,8 +680,9 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
 /**
  * Returns Variable array representation of Properties
  * @param properties The properties of a component to convert
+ * @param documentUri The URI of the document in which these properties are declared
  */
-export function propertiesToVariables(properties: Properties, uri: Uri): Variable[] {
+export function propertiesToVariables(properties: Properties, documentUri: Uri): Variable[] {
   let propertyVars: Variable[] = [];
   properties.forEach((prop: Property) => {
     propertyVars.push(
@@ -621,7 +691,7 @@ export function propertiesToVariables(properties: Properties, uri: Uri): Variabl
         dataType: prop.dataType,
         dataTypeComponentUri: prop.dataTypeComponentUri,
         scope: Scope.Variables,
-        declarationLocation: new Location(uri, prop.propertyRange),
+        declarationLocation: new Location(documentUri, prop.propertyRange),
         description: prop.description
       }
     );
@@ -633,8 +703,9 @@ export function propertiesToVariables(properties: Properties, uri: Uri): Variabl
 /**
  * Returns Variable array representation of Arguments
  * @param args The arguments of a function to convert
+ * @param documentUri The URI of the document in which these arguments are declared
  */
-export function argumentsToVariables(args: Argument[], uri: Uri): Variable[] {
+export function argumentsToVariables(args: Argument[], documentUri: Uri): Variable[] {
   let argVars: Variable[] = [];
   args.forEach((arg: Argument) => {
     argVars.push(
@@ -643,7 +714,7 @@ export function argumentsToVariables(args: Argument[], uri: Uri): Variable[] {
         dataType: arg.dataType,
         dataTypeComponentUri: arg.dataTypeComponentUri,
         scope: Scope.Arguments,
-        declarationLocation: new Location(uri, arg.nameRange),
+        declarationLocation: new Location(documentUri, arg.nameRange),
         description: arg.description
       }
     );
@@ -653,7 +724,44 @@ export function argumentsToVariables(args: Argument[], uri: Uri): Variable[] {
 }
 
 /**
- * Returns whether the variable was already found
+ * Returns the variable that best matches the given name and scope
+ * @param variables The variables to check
+ * @param varName The variable name for which to check
+ * @param scope The variable's scope
+ */
+export function getBestMatchingVariable(variables: Variable[], varName: string, varScope?: Scope): Variable | undefined {
+  let foundVar: Variable;
+
+  if (varScope) {
+    foundVar = variables.find((currentVar: Variable) => {
+      return currentVar.scope === varScope && equalsIgnoreCase(currentVar.identifier, varName);
+    });
+
+    if (!foundVar && unscopedPrecedence.includes(varScope)) {
+      foundVar = variables.find((currentVar: Variable) => {
+        return currentVar.scope === Scope.Unknown && equalsIgnoreCase(currentVar.identifier, varName);
+      });
+    }
+  } else {
+    for (let checkScope of unscopedPrecedence) {
+      foundVar = variables.find((currentVar: Variable) => {
+        return currentVar.scope === checkScope && equalsIgnoreCase(currentVar.identifier, varName);
+      });
+      if (foundVar) {
+        return foundVar;
+      }
+    }
+
+    foundVar = variables.find((currentVar: Variable) => {
+      return currentVar.scope === Scope.Unknown && equalsIgnoreCase(currentVar.identifier, varName);
+    });
+  }
+
+  return foundVar;
+}
+
+/**
+ * Returns the variables that match the given name and scope
  * @param variables The variables to check
  * @param varName The variable name for which to check
  * @param scope The variable's scope
@@ -676,33 +784,57 @@ export function getMatchingVariables(variables: Variable[], varName: string, sco
  * @param baseUri The URI of the document for which the Application file will be found
  */
 export async function getApplicationVariables(baseUri: Uri): Promise<Variable[]> {
-  let applicationDocVariables: Variable[] = [];
+  let applicationVariables: Variable[] = [];
   const applicationUri: Uri = getApplicationUri(baseUri);
   if (applicationUri) {
-    // TODO: Cache this information
-    const applicationDoc: TextDocument = await workspace.openTextDocument(applicationUri);
-    const applicationDocStateContext: DocumentStateContext = getDocumentStateContext(applicationDoc);
-    applicationDocVariables = parseVariableAssignments(applicationDocStateContext, applicationDocStateContext.docIsScript);
+    if (isCfcUri(applicationUri)) {
+      applicationVariables = cachedEntities.getApplicationVariables(applicationUri);
+    } else {
+      // TODO: Cache Application.cfm variables
+      const applicationDoc: TextDocument = await workspace.openTextDocument(applicationUri);
+      const applicationDocStateContext: DocumentStateContext = getDocumentStateContext(applicationDoc);
+      applicationVariables = parseVariableAssignments(applicationDocStateContext, applicationDocStateContext.docIsScript).filter((variable: Variable) => {
+        return [Scope.Application, Scope.Session, Scope.Request].includes(variable.scope);
+      });
+    }
   }
 
-  return applicationDocVariables;
+  return applicationVariables;
+}
+
+/**
+ * Gets the server variables
+ * @param baseUri The URI of the document for which the Server file will be found
+ */
+export function getServerVariables(baseUri: Uri): Variable[] {
+  let serverVariables: Variable[] = [];
+
+  const serverUri: Uri = getServerUri(baseUri);
+  if (serverUri) {
+    serverVariables = cachedEntities.getServerVariables(serverUri);
+  }
+
+  return serverVariables;
 }
 
 /**
  * Collects all variable assignments accessible based on the given documentPositionStateContext
- * @param documentPositionStateContext
+ * @param documentPositionStateContext The contextual information of the state of a document and the cursor position
  */
 export function collectDocumentVariableAssignments(documentPositionStateContext: DocumentPositionStateContext): Variable[] {
   let allVariableAssignments: Variable[] = [];
+
   if (documentPositionStateContext.isCfmFile) {
     const docVariableAssignments: Variable[] = parseVariableAssignments(documentPositionStateContext, false);
     allVariableAssignments = allVariableAssignments.concat(docVariableAssignments);
   } else if (documentPositionStateContext.isCfcFile) {
     const thisComponent = documentPositionStateContext.component;
     if (thisComponent) {
+      const documentUri: Uri = documentPositionStateContext.document.uri;
+
       // properties
       const componentProperties: Properties = thisComponent.properties;
-      allVariableAssignments = allVariableAssignments.concat(propertiesToVariables(componentProperties, documentPositionStateContext.document.uri));
+      allVariableAssignments = allVariableAssignments.concat(propertiesToVariables(componentProperties, documentUri));
 
       // component variables
       let currComponent: Component = thisComponent;
@@ -714,10 +846,25 @@ export function collectDocumentVariableAssignments(documentPositionStateContext:
           });
         });
         componentVariables = componentVariables.concat(currComponentVariables);
+
+        // Also check in init function
+        const initMethod: string = currComponent.initmethod ? currComponent.initmethod.toLowerCase() : "init";
+        if (currComponent.functions.has(initMethod)) {
+          const currInitFunc: UserFunction = currComponent.functions.get(initMethod);
+
+          const currInitVariables: Variable[] = parseVariableAssignments(documentPositionStateContext, currComponent.isScript, currInitFunc.bodyRange).filter((variable: Variable) => {
+            return variable.scope === Scope.Variables && !componentVariables.some((existingVariable: Variable) => {
+              return existingVariable.scope === variable.scope && equalsIgnoreCase(existingVariable.identifier, variable.identifier);
+            });
+          });
+
+          componentVariables = componentVariables.concat(currInitVariables);
+        }
+
         allVariableAssignments = allVariableAssignments.concat(componentVariables);
 
         if (currComponent.extends) {
-          currComponent = getComponent(currComponent.extends);
+          currComponent = cachedEntities.getComponent(currComponent.extends);
         } else {
           currComponent = undefined;
         }
@@ -732,7 +879,7 @@ export function collectDocumentVariableAssignments(documentPositionStateContext:
           functionArgs = signature.parameters;
         });
       });
-      allVariableAssignments = allVariableAssignments.concat(argumentsToVariables(functionArgs, documentPositionStateContext.document.uri));
+      allVariableAssignments = allVariableAssignments.concat(argumentsToVariables(functionArgs, documentUri));
 
       // function local variables
       let localVariables: Variable[] = [];
@@ -755,10 +902,15 @@ export interface Variable {
   scope: Scope;
   declarationLocation: Location;
   description?: string;
+  initialValue?: string;
 }
 
-export class Variables extends MyMap<Scope, Variable[]> { }
+export class VariablesByScope extends MyMap<Scope, Variable[]> { }
 
-export interface Struct {
-  keys: MySet<string>;
+export class VariablesByUri extends MyMap<string, Variable[]> { } // key is Uri.toString()
+
+export interface Struct extends Variable {
+  keys: StructKeys;
 }
+
+export class StructKeys extends MySet<Variable> { }

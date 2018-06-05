@@ -2,13 +2,13 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.18.0"
+    "vscode": "^1.22.0"
   },
   "repository": {
     "type": "git",
@@ -18,7 +18,7 @@
     "url": "https://github.com/KamasamaK/vscode-cfml/issues"
   },
   "categories": [
-    "Languages"
+    "Programming Languages"
   ],
   "keywords": [
     "cfml",
@@ -73,7 +73,7 @@
     ],
     "configuration": {
       "type": "object",
-      "title": "CFML",
+      "title": "CFML Configuration",
       "properties": {
         "cfml.globalDefinitions.source": {
           "type": "string",
@@ -81,7 +81,18 @@
           "enum": [
             "cfdocs"
           ],
-          "default": "cfdocs"
+          "default": "cfdocs",
+          "scope": "window"
+        },
+        "cfml.cfDocs.source": {
+          "type": "string",
+          "description": "Indicates which source will be used. Remote is GitHub repo. Local is based on cfml.cfDocs.localPath.",
+          "enum": [
+            "remote",
+            "local"
+          ],
+          "default": "remote",
+          "scope": "window"
         },
         "cfml.cfDocs.localPath": {
           "type": [
@@ -89,36 +100,32 @@
             "null"
           ],
           "description": "Absolute path to the data directory of CFDocs.",
-          "default": null
-        },
-        "cfml.cfDocs.source": {
-          "type": "string",
-          "description": "Indicates which source will be used. Remote is GitHub repo. Local is based on cfDocs.localPath.",
-          "enum": [
-            "remote",
-            "local"
-          ],
-          "default": "remote"
+          "default": null,
+          "scope": "window"
         },
         "cfml.hover.enable": {
           "type": "boolean",
           "description": "Whether hover is enabled.",
-          "default": true
+          "default": true,
+          "scope": "resource"
         },
         "cfml.signature.enable": {
           "type": "boolean",
           "description": "Whether signature help is enabled.",
-          "default": true
+          "default": true,
+          "scope": "resource"
         },
         "cfml.suggest.enable": {
           "type": "boolean",
           "description": "Whether completion help is enabled.",
-          "default": true
+          "default": true,
+          "scope": "resource"
         },
         "cfml.suggest.snippets.enable": {
           "type": "boolean",
           "description": "Whether snippets are part of completion help.",
-          "default": true
+          "default": true,
+          "scope": "resource"
         },
         "cfml.suggest.snippets.exclude": {
           "type": "array",
@@ -126,52 +133,122 @@
           "items": {
             "type": "string"
           },
-          "default": []
+          "default": [],
+          "scope": "resource"
         },
         "cfml.suggest.globalFunctions.enable": {
           "type": "boolean",
           "description": "Whether global functions are part of completion help.",
-          "default": true
+          "default": true,
+          "scope": "resource"
+        },
+        "cfml.suggest.globalTags.enable": {
+          "type": "boolean",
+          "description": "Whether global tags are part of completion help.",
+          "default": true,
+          "scope": "resource"
+        },
+        "cfml.suggest.globalTags.includeAttributes.setType": {
+          "type": "string",
+          "description": "What set of attributes to include when suggestion is selected",
+          "default": "none",
+          "enum": [
+            "none",
+            "required",
+            "all"
+          ],
+          "scope": "resource"
+        },
+        "cfml.suggest.globalTags.includeAttributes.defaultValue": {
+          "type": "boolean",
+          "description": "Whether to populate the default value for an attribute if it has one.",
+          "default": false,
+          "scope": "resource"
+        },
+        "cfml.suggest.globalTags.includeAttributes.custom": {
+          "type": "object",
+          "description": "A custom set of attributes to include for given tags when suggestion is selected. This setting overrides the set type.",
+          "default": {},
+          "patternProperties": {
+            "^cf[a-z0-9_]+$": {
+              "description": "The tag name and its attribute overrides",
+              "type": "array",
+              "minItems": 0,
+              "items": {
+                "title": "Attribute",
+                "description": "The attribute information",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "title": "Attribute name",
+                    "description": "The name of the attribute to include",
+                    "type": "string"
+                  },
+                  "value": {
+                    "title": "Attribute value",
+                    "description": "The default value of the attribute",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "default": []
+            }
+          },
+          "additionalProperties": false,
+          "scope": "resource"
+        },
+        "cfml.definition.enable": {
+          "type": "boolean",
+          "description": "Whether providing definitions is enabled.",
+          "default": true,
+          "scope": "resource"
         },
         "cfml.indexComponents.enable": {
           "type": "boolean",
           "description": "Whether to index all components in workspace. This is done on each startup and is required for multiple features.",
-          "default": true
+          "default": true,
+          "scope": "window"
         },
         "cfml.autoCloseTags.enable": {
           "type": "boolean",
           "description": "Whether to enable auto-closing tags for CFML. This uses the third-party extension auto-close-tag. Change requires restart.",
-          "default": true
+          "default": true,
+          "scope": "window"
         },
         "cfml.autoCloseTags.configurationTarget": {
           "type": "string",
           "description": "Auto-configuration target for auto-closing tags.",
           "enum": [
             "Global",
-            "Workspace",
-            "WorkspaceFolder"
+            "Workspace"
           ],
-          "default": "Global"
+          "default": "Global",
+          "scope": "window"
         },
         "cfml.emmet.enable": {
           "type": "boolean",
           "description": "Whether to enable Emmet for CFML. Change requires restart.",
-          "default": false
+          "default": false,
+          "scope": "window"
         },
         "cfml.emmet.configurationTarget": {
           "type": "string",
           "description": "Auto-configuration target for Emmet.",
           "enum": [
             "Global",
-            "Workspace",
-            "WorkspaceFolder"
+            "Workspace"
           ],
-          "default": "Global"
+          "default": "Global",
+          "scope": "window"
         },
         "cfml.docBlock.gap": {
           "type": "boolean",
           "default": true,
-          "description": "Whether there should be a gap between the hint and other tags in a docblock"
+          "description": "Whether there should be a gap between the hint and other tags in a docblock",
+          "scope": "resource"
         },
         "cfml.docBlock.extra": {
           "type": "array",
@@ -201,9 +278,13 @@
                   ]
                 }
               }
-            }
+            },
+            "required": [
+              "name"
+            ]
           },
-          "description": "Extra tags you wish to include in every DocBlock"
+          "description": "Extra tags you wish to include in every DocBlock",
+          "scope": "resource"
         },
         "cfml.engine.name": {
           "type": "string",
@@ -213,12 +294,43 @@
             "lucee",
             "railo",
             "openbd"
-          ]
+          ],
+          "scope": "window"
         },
         "cfml.engine.version": {
           "type": "string",
           "pattern": "^((0|[1-9]\\d*)(\\.(0|[1-9]\\d*)(\\.(0|[1-9]\\d*))?)?)?$",
-          "description": "Version of the CFML engine against which to filter. SemVer format is preferred."
+          "description": "Version of the CFML engine against which to filter. SemVer format is preferred.",
+          "scope": "window"
+        },
+        "cfml.mappings": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object",
+            "properties": {
+              "logicalPath": {
+                "type": "string",
+                "description": "The name of the tag"
+              },
+              "directoryPath": {
+                "type": "string",
+                "default": "",
+                "description": "The default value for the tag"
+              },
+              "isPhysicalDirectoryPath": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether directoryPath refers to a physical path or one relative to the workspace root"
+              }
+            },
+            "required": [
+              "logicalPath",
+              "directoryPath"
+            ]
+          },
+          "description": "Represents CFML mappings from logicalPath to directoryPath.",
+          "scope": "resource"
         }
       }
     },
@@ -236,12 +348,22 @@
       {
         "command": "cfml.toggleLineComment",
         "category": "CFML",
-        "title": "Toggle CFML line comments"
+        "title": "Toggle CFML line comment"
       },
       {
         "command": "cfml.toggleBlockComment",
         "category": "CFML",
-        "title": "Toggle CFML block comments"
+        "title": "Toggle CFML block comment"
+      },
+      {
+        "command": "cfml.openActiveApplicationFile",
+        "category": "CFML",
+        "title": "Open Application file for currently active document"
+      },
+      {
+        "command": "cfml.goToMatchingTag",
+        "category": "CFML",
+        "title": "Go to Matching Tag"
       }
     ],
     "keybindings": [
@@ -266,18 +388,21 @@
     "test": "node ./node_modules/vscode/bin/test"
   },
   "dependencies": {
-    "trie-prefix-tree": "1.4.0",
-    "request": "^2.83.0",
-    "find-config": "1.0.0",
-    "semver": "^5.5.0",
-    "html-entities": "^1.2.1"
+    "@types/html-entities": "~1.2.16",
+    "@types/request": "~2.47.0",
+    "@types/semver": "~5.5.0",
+    "findup-sync": "2.0.0",
+    "html-entities": "~1.2.1",
+    "request": "~2.47.0",
+    "semver": "~5.5.0",
+    "trie-prefix-tree": "1.5.0"
   },
   "devDependencies": {
-    "typescript": "^2.7.1",
-    "tslint": "^5.9.1",
-    "vscode": "^1.1.10",
-    "mocha": "^4.1.0",
-    "@types/node": "^8.5.9",
-    "@types/mocha": "^2.2.47"
+    "@types/mocha": "~5.2.0",
+    "@types/node": "~8.0.58",
+    "mocha": "~5.2.0",
+    "tslint": "^5.10.0",
+    "typescript": "^2.9.1",
+    "vscode": "^1.1.18"
   }
 }

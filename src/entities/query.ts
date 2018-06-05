@@ -4,6 +4,8 @@ import { Variable } from "./variable";
 // TODO: Get query name
 // const queryScriptPattern: RegExp = /((?:setSql|queryExecute)\s*\(|sql\s*=)\s*(['"])([\s\S]*?)\2\s*[),]/gi;
 
+export const queryValuePattern: RegExp = /^(?:["']\s*#\s*)?(query(?:New|Execute)?)\(/i;
+
 const selectQueryPattern: RegExp = /^\s*SELECT\s+([\s\S]+?)\s+FROM\s+[\s\S]+/i;
 
 export const queryObjectProperties = {
@@ -56,9 +58,9 @@ export interface Query extends Variable {
   selectColumnNames: QueryColumns;
 }
 
-export interface QueryColumns extends MySet<string> { }
+export class QueryColumns extends MySet<string> { }
 
-export function parseQueryText(sql: string): QueryColumns {
+export function getSelectColumnsFromQueryText(sql: string): QueryColumns {
   let selectColumnNames: QueryColumns = new MySet();
 
   if (sql) {
@@ -70,7 +72,7 @@ export function parseQueryText(sql: string): QueryColumns {
         const splitColumn: string[] = column.trim().split(/[\s.]+/);
         if (splitColumn.length > 0) {
           const columnName = splitColumn.pop();
-          if (columnName.length > 0) {
+          if (columnName !== "*") {
             selectColumnNames.add(columnName);
           }
         }

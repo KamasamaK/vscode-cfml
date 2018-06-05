@@ -1,11 +1,15 @@
-import { Uri, workspace, TextDocument, WorkspaceFolder, WorkspaceConfiguration, ConfigurationTarget, extensions } from "vscode";
-import { GlobalFunctions, GlobalTags, GlobalFunction, GlobalTag } from "../entities/globals";
-import { UserFunction, UserFunctionsByName, ComponentFunctions, UserFunctionByUri } from "../entities/userFunction";
-import { Component, ComponentsByUri, ComponentsByName, COMPONENT_EXT, COMPONENT_FILE_GLOB, parseComponent } from "../entities/component";
 import * as path from "path";
-import { getDocumentStateContext, DocumentStateContext } from "../utils/documentUtil";
+import { ConfigurationTarget, TextDocument, Uri, WorkspaceConfiguration, extensions, workspace } from "vscode";
+import { COMPONENT_EXT, COMPONENT_FILE_GLOB, Component, ComponentsByName, ComponentsByUri, parseComponent } from "../entities/component";
+import { GlobalFunction, GlobalFunctions, GlobalTag, GlobalTags } from "../entities/globals";
+import { Scope } from "../entities/scope";
+import { ComponentFunctions, UserFunction, UserFunctionByUri, UserFunctionsByName } from "../entities/userFunction";
+import { Variable, VariablesByUri, parseVariableAssignments } from "../entities/variable";
+import { DocumentStateContext, getDocumentStateContext } from "../utils/documentUtil";
+import { resolveCustomMappingPaths, resolveRelativePath, resolveRootPath } from "../utils/fileUtil";
 
 const trie = require("trie-prefix-tree");
+
 
 let allGlobalFunctions: GlobalFunctions = {};
 let allGlobalTags: GlobalTags = {};
@@ -19,6 +23,9 @@ let allUserFunctionsByName: UserFunctionsByName = {};
 
 let allComponentNames = trie([]);
 let allFunctionNames = trie([]);
+
+let allServerVariables: VariablesByUri = new VariablesByUri();
+let allApplicationVariables: VariablesByUri = new VariablesByUri();
 
 /**
  * Checks whether the given identifier is a cached global function
@@ -110,13 +117,21 @@ function setComponent(comp: Component): void {
  * @param uri The URI of the component to be retrieved
  */
 export function getComponent(uri: Uri): Component {
-  if (!allComponentsByUri.hasOwnProperty(uri.toString())) {
+  if (!hasComponent(uri)) {
     /* TODO: If not already cached, attempt to parse and cache
     cacheGivenComponents([uri]);
     */
   }
 
   return allComponentsByUri[uri.toString()];
+}
+
+/**
+ * Checks if the cached component with the given URI exists
+ * @param uri The URI of the component to be checked
+ */
+export function hasComponent(uri: Uri): boolean {
+  return allComponentsByUri.hasOwnProperty(uri.toString());
 }
 
 /**
@@ -167,26 +182,31 @@ export function searchAllFunctionNames(query: string): UserFunction[] {
  * @param dotPath A string for a component in dot-path notation
  * @param baseUri The URI from which the component path will be resolved
  */
-export function componentPathToUri(dotPath: string, baseUri: Uri): Uri {
+export function componentPathToUri(dotPath: string, baseUri: Uri): Uri | undefined {
   const normalizedPath: string = dotPath.replace(/\./g, path.sep) + COMPONENT_EXT;
 
   // relative to local directory
-  const baseDir: string = path.dirname(baseUri.fsPath);
-  const localPath: string = path.join(baseDir, normalizedPath);
+  const localPath: string = resolveRelativePath(baseUri, normalizedPath);
   const localFile: Uri = Uri.file(localPath);
   if (allComponentsByUri[localFile.toString()]) {
     return localFile;
   }
 
   // relative to web root
-  const root: WorkspaceFolder = workspace.getWorkspaceFolder(baseUri);
-  const rootPath: string = path.join(root.uri.fsPath, normalizedPath);
+  const rootPath: string = resolveRootPath(baseUri, normalizedPath);
   const rootFile: Uri = Uri.file(rootPath);
   if (allComponentsByUri[rootFile.toString()]) {
     return rootFile;
   }
 
-  // TODO: custom mappings
+  // custom mappings
+  const customMappingPaths: string[] = resolveCustomMappingPaths(baseUri, normalizedPath);
+  for (let mappedPath of customMappingPaths) {
+    const mappedFile: Uri = Uri.file(mappedPath);
+    if (allComponentsByUri[mappedFile.toString()]) {
+      return mappedFile;
+    }
+  }
 
   return undefined;
 }
@@ -194,13 +214,30 @@ export function componentPathToUri(dotPath: string, baseUri: Uri): Uri {
 /**
  * Caches given component and its contents
  * @param component The component to cache
+ * @param documentStateContext Contextual information for a given document's state
  */
-export function cacheComponent(component: Component): void {
+export function cacheComponent(component: Component, documentStateContext: DocumentStateContext): void {
   clearCachedComponent(component.uri);
   setComponent(component);
   component.functions.forEach((funcObj: UserFunction) => {
     setUserFunction(funcObj);
   });
+
+  const componentUri: Uri = component.uri;
+  const fileName = path.basename(componentUri.fsPath);
+  if (fileName === "Application.cfc") {
+    const thisApplicationVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript);
+
+    const thisApplicationFilteredVariables: Variable[] = thisApplicationVariables.filter((variable: Variable) => {
+      return [Scope.Application, Scope.Session, Scope.Request].includes(variable.scope);
+    });
+    allApplicationVariables.set(componentUri.toString(), thisApplicationFilteredVariables);
+  } else if (fileName === "Server.cfc") {
+    const thisServerVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript).filter((variable: Variable) => {
+      return variable.scope === Scope.Server;
+    });
+    allServerVariables.set(componentUri.toString(), thisServerVariables);
+  }
 }
 
 /**
@@ -216,6 +253,8 @@ export async function cacheAllComponents(): Promise<void> {
       const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
       const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
       const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
+      // const cflintRunModesValues = cflintSettings.inspect<{}>("runModes");
+      // const cflintRunModesPrevWSValue = cflintRunModesValues.workspaceValue;
       cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(async () => {
         await cacheGivenComponents(componentUris);
         cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
@@ -235,14 +274,12 @@ export async function cacheAllComponents(): Promise<void> {
  */
 async function cacheGivenComponents(componentUris: Uri[]): Promise<void> {
   componentUris.forEach((componentUri: Uri) => {
+    // TODO: Consider displaying progress
     workspace.openTextDocument(componentUri).then((document: TextDocument) => {
       const documentStateContext: DocumentStateContext = getDocumentStateContext(document, true);
-      const parsedComponent = parseComponent(documentStateContext);
+      const parsedComponent: Component = parseComponent(documentStateContext);
       if (parsedComponent) {
-        cacheComponent(parsedComponent);
-      }
-      if (path.basename(componentUri.fsPath) === "Application.cfc") {
-        // TODO: Perform Application-specific tasks
+        cacheComponent(parsedComponent, documentStateContext);
       }
     });
   });
@@ -302,4 +339,20 @@ function clearAllCachedComponents(): void {
 
   allUserFunctionsByName = {};
   allFunctionNames = trie([]);
+}
+
+/**
+ * Retrieves the cached application variables identified by the given URI
+ * @param uri The URI of the component to be check
+ */
+export function getApplicationVariables(uri: Uri): Variable[] {
+  return allApplicationVariables.get(uri.toString());
+}
+
+/**
+ * Retrieves the cached server variables identified by the given URI
+ * @param uri The URI of the component to be check
+ */
+export function getServerVariables(uri: Uri): Variable[] {
+  return allServerVariables.get(uri.toString());
 }

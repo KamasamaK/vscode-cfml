@@ -1,7 +1,7 @@
 import { Position, languages, commands, window, TextEditor, LanguageConfiguration, TextDocument, CharacterPair } from "vscode";
 import { LANGUAGE_ID } from "../cfmlMain";
 import { isInCfScript, isCfcFile } from "../utils/contextUtil";
-import { getComponent } from "./cachedEntities";
+import { getComponent, hasComponent } from "./cachedEntities";
 
 export enum CommentType {
   Line,
@@ -33,7 +33,7 @@ export const cfmlCommentRules: CFMLCommentRules = {
  * @param startPosition The position at which the comment starts
  */
 function isTagComment(document: TextDocument, startPosition: Position): boolean {
-  const docIsScript: boolean = (isCfcFile(document) && getComponent(document.uri) && getComponent(document.uri).isScript);
+  const docIsScript: boolean = (isCfcFile(document) && hasComponent(document.uri) && getComponent(document.uri).isScript);
 
   return !docIsScript && !isInCfScript(document, startPosition);
 }
@@ -57,8 +57,8 @@ function getCommentCommand(commentType: CommentType): string {
  * Return a function that can be used to execute a line or block comment
  * @param commentType The comment type for which the command will be executed
  */
-export function toggleComment(commentType: CommentType): () => void {
-  return () => {
+export function toggleComment(commentType: CommentType): () => Promise<void> {
+  return async () => {
     const editor: TextEditor = window.activeTextEditor;
 
     if (editor) {

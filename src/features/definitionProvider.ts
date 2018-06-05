@@ -1,18 +1,20 @@
-import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, TextLine, workspace } from "vscode";
-import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath, getApplicationUri } from "../entities/component";
+import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, workspace, WorkspaceConfiguration } from "vscode";
+import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath } from "../entities/component";
 import { componentPathToUri, getComponent } from "./cachedEntities";
-import { Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern } from "../entities/scope";
-import { Access, UserFunction, UserFunctionSignature, Argument, getLocalVariables, getFunctionFromPrefix, ComponentFunctions } from "../entities/userFunction";
-import { Property, getImplicitFunctions } from "../entities/property";
+import { Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern, unscopedPrecedence } from "../entities/scope";
+import { UserFunction, UserFunctionSignature, Argument, getLocalVariables, getFunctionFromPrefix } from "../entities/userFunction";
+import { Property } from "../entities/property";
 import { equalsIgnoreCase } from "../utils/textUtil";
-import { getFunctionSuffixPattern } from "../entities/function";
-import { Variable, variableExpressionPrefix, parseVariableAssignments } from "../entities/variable";
-import { DocumentPositionStateContext, getDocumentPositionStateContext, DocumentStateContext, getDocumentStateContext } from "../utils/documentUtil";
+import { Variable, parseVariableAssignments, getApplicationVariables, getServerVariables } from "../entities/variable";
+import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
 
 export default class CFMLDefinitionProvider implements DefinitionProvider {
 
   public async provideDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition> {
-    const results: Definition = [];
+    const cfmlDefinitionSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.definition", document.uri);
+    if (!cfmlDefinitionSettings.get<boolean>("enable", true)) {
+      return null;
+    }
 
     const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
 
@@ -20,11 +22,11 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       return null;
     }
 
+    const results: Definition = [];
+
     const docIsCfcFile: boolean = documentPositionStateContext.isCfcFile;
     const docIsCfmFile: boolean = documentPositionStateContext.isCfmFile;
     const documentText: string = documentPositionStateContext.sanitizedDocumentText;
-    const textLine: TextLine = document.lineAt(position);
-    const lineText: string = textLine.text;
     let wordRange: Range = document.getWordRangeAtPosition(position);
     const currentWord: string = documentPositionStateContext.currentWord;
     const lowerCurrentWord: string = currentWord.toLowerCase();
@@ -33,7 +35,6 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
     }
 
     const docPrefix: string = documentPositionStateContext.docPrefix;
-    const lineSuffix: string = lineText.slice(wordRange.end.character, textLine.range.end.character);
 
     // TODO: These references should ideally be in cachedEntities.
     let referenceMatch: RegExpExecArray | null;
@@ -64,62 +65,8 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
     });
 
     if (docIsCfcFile) {
-      const varPrefixMatch: RegExpExecArray = variableExpressionPrefix.exec(docPrefix);
       const thisComponent: Component = documentPositionStateContext.component;
       if (thisComponent) {
-        // Internal functions
-        const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
-        if (functionSuffixPattern.test(lineSuffix)) {
-          let currComponent: Component = thisComponent;
-          let checkScope: boolean = true;
-          // If preceded by super keyword, start at base component
-          if (thisComponent.extends && varPrefixMatch) {
-            const varMatchText: string = varPrefixMatch[0];
-            const varScope: string = varPrefixMatch[2];
-            // const varQuote: string = varPrefixMatch[3];
-            const varName: string = varPrefixMatch[4];
-
-            if (varMatchText.split(".").length === 2 && !varScope && equalsIgnoreCase(varName, "super")) {
-              currComponent = getComponent(thisComponent.extends);
-              checkScope = false;
-            }
-          }
-
-          const getterSetterPrefixPattern = getValidScopesPrefixPattern([Scope.This], true);
-
-          while (currComponent) {
-            if (currComponent.functions.has(lowerCurrentWord)) {
-              const userFun: UserFunction = currComponent.functions.get(lowerCurrentWord);
-              const validScopes: Scope[] = userFun.access === Access.Private ? [Scope.Variables] : [Scope.Variables, Scope.This];
-              const funcPrefixPattern = getValidScopesPrefixPattern(validScopes, true);
-              if (!checkScope || funcPrefixPattern.test(docPrefix)) {
-                results.push(new Location(
-                  currComponent.uri,
-                  userFun.nameRange
-                ));
-                break;
-              }
-            }
-
-            if (getterSetterPrefixPattern.test(docPrefix)) {
-              const implicitFunctions: ComponentFunctions = getImplicitFunctions(currComponent);
-              if (implicitFunctions.has(lowerCurrentWord)) {
-                const implicitFunc: UserFunction = implicitFunctions.get(lowerCurrentWord);
-                results.push(new Location(
-                  implicitFunc.location.uri,
-                  implicitFunc.nameRange
-                ));
-                break;
-              }
-            }
-
-            if (currComponent.extends) {
-              currComponent = getComponent(currComponent.extends);
-            } else {
-              currComponent = undefined;
-            }
-          }
-        }
         // Extends
         if (thisComponent.extendsRange && thisComponent.extendsRange.contains(position)) {
           const extendsComp: Component = getComponent(thisComponent.extends);
@@ -130,29 +77,35 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             ));
           }
         }
-        // Component functions
+
+        // Component functions (related)
         thisComponent.functions.forEach((func: UserFunction) => {
           // Function return types
           if (func.returnTypeUri && func.returnTypeRange.contains(position)) {
             const returnTypeComp: Component = getComponent(func.returnTypeUri);
-            results.push(new Location(
-              returnTypeComp.uri,
-              returnTypeComp.declarationRange
-            ));
+            if (returnTypeComp) {
+              results.push(new Location(
+                returnTypeComp.uri,
+                returnTypeComp.declarationRange
+              ));
+            }
           }
+
           // Argument types
           func.signatures.forEach((signature: UserFunctionSignature) => {
             signature.parameters.filter((arg: Argument) => {
               return arg.dataTypeComponentUri && arg.dataTypeRange.contains(position);
             }).forEach((arg: Argument) => {
               const argTypeComp: Component = getComponent(arg.dataTypeComponentUri);
-              results.push(new Location(
-                argTypeComp.uri,
-                argTypeComp.declarationRange
-              ));
+              if (argTypeComp) {
+                results.push(new Location(
+                  argTypeComp.uri,
+                  argTypeComp.declarationRange
+                ));
+              }
             });
           });
-          // This function
+
           if (func.bodyRange.contains(position)) {
             // Argument uses
             const argumentPrefixPattern = getValidScopesPrefixPattern([Scope.Arguments], false);
@@ -168,7 +121,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
                 });
               });
             }
-            // Local variables
+            // Local variable uses
             const localVariables = getLocalVariables(func, documentPositionStateContext, thisComponent.isScript);
             const localVarPrefixPattern = getValidScopesPrefixPattern([Scope.Local], true);
             if (localVarPrefixPattern.test(docPrefix)) {
@@ -180,17 +133,20 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             }
           }
         });
-        // Component properties
-        thisComponent.properties.forEach((prop: Property) => {
-          // Property types
-          if (prop.dataTypeComponentUri && prop.dataTypeRange.contains(position)) {
-            const dataTypeComp: Component = getComponent(prop.dataTypeComponentUri);
+
+        // Component properties (declarations)
+        thisComponent.properties.filter((prop: Property) => {
+          return prop.dataTypeComponentUri !== undefined && prop.dataTypeRange.contains(position);
+        }).forEach((prop: Property) => {
+          const dataTypeComp: Component = getComponent(prop.dataTypeComponentUri);
+          if (dataTypeComp) {
             results.push(new Location(
               dataTypeComp.uri,
               dataTypeComp.declarationRange
             ));
           }
         });
+
         // Component variables
         const variablesPrefixPattern = getValidScopesPrefixPattern([Scope.Variables], false);
         if (variablesPrefixPattern.test(docPrefix)) {
@@ -213,20 +169,21 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
           if (!equalsIgnoreCase(variable.identifier, currentWord)) {
             return false;
           }
+
           if (validScope) {
             const currentScope: Scope = Scope.valueOf(validScope);
-            return [currentScope, Scope.Unknown].includes(variable.scope);
+            return (variable.scope === currentScope || (variable.scope === Scope.Unknown && unscopedPrecedence.includes(currentScope)));
           }
 
-          return true;
+          return (unscopedPrecedence.includes(variable.scope) || variable.scope === Scope.Unknown);
         }).forEach((variable: Variable) => {
           results.push(variable.declarationLocation);
         });
       }
     }
 
-    // External functions
-    const externalUserFunc: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, docPrefix, lowerCurrentWord);
+    // User function
+    const externalUserFunc: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, lowerCurrentWord);
     if (externalUserFunc) {
       results.push(new Location(
         externalUserFunc.location.uri,
@@ -235,20 +192,28 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
     }
 
     // Application variables
-    const variablesPrefixPattern = getValidScopesPrefixPattern([Scope.Application], false);
-    if (variablesPrefixPattern.test(docPrefix)) {
-      const applicationUri: Uri = getApplicationUri(document.uri);
+    const applicationVariablesPrefixPattern = getValidScopesPrefixPattern([Scope.Application, Scope.Session, Scope.Request], false);
+    const variableScopePrefixMatch: RegExpExecArray = applicationVariablesPrefixPattern.exec(docPrefix);
+    if (variableScopePrefixMatch) {
+      const currentScope: string = Scope.valueOf(variableScopePrefixMatch[1]);
 
-      if (applicationUri) {
-        const applicationDoc: TextDocument = await workspace.openTextDocument(applicationUri);
-        const applicationDocStateContext: DocumentStateContext = getDocumentStateContext(applicationDoc);
-        const applicationDocVariables = parseVariableAssignments(applicationDocStateContext, applicationDocStateContext.docIsScript);
-        applicationDocVariables.filter((variable: Variable) => {
-          return variable.scope === Scope.Application && equalsIgnoreCase(variable.identifier, currentWord);
-        }).forEach((variable: Variable) => {
-          results.push(variable.declarationLocation);
-        });
-      }
+      const applicationDocVariables: Variable[] = await getApplicationVariables(document.uri);
+      applicationDocVariables.filter((variable: Variable) => {
+        return variable.scope === currentScope && equalsIgnoreCase(variable.identifier, currentWord);
+      }).forEach((variable: Variable) => {
+        results.push(variable.declarationLocation);
+      });
+    }
+
+    // Server variables
+    const serverVariablesPrefixPattern = getValidScopesPrefixPattern([Scope.Server], false);
+    if (serverVariablesPrefixPattern.test(docPrefix)) {
+      const serverDocVariables: Variable[] = getServerVariables(document.uri);
+      serverDocVariables.filter((variable: Variable) => {
+        return variable.scope === Scope.Server && equalsIgnoreCase(variable.identifier, currentWord);
+      }).forEach((variable: Variable) => {
+        results.push(variable.declarationLocation);
+      });
     }
 
     return results;
