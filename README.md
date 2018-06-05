@@ -60,7 +60,7 @@ The following are the configurable Settings (Win/Linux: `Ctrl`+`Comma`; Mac: `Cm
 **Values**
   - `remote`: Retrieve resources remotely from GitHub. [*Default*]
   - `local`: Retrieve resources locally using `cfml.cfDocs.localPath`.
-- `cfml.cfDocs.localPath`: [*Optional*] Absolute path to the data directory of CFDocs.
+- `cfml.cfDocs.localPath`: [*Optional*] Physical path to the data directory of CFDocs.
 - `cfml.hover.enable`: Whether hover is enabled. [*Default*: `true`]
 - `cfml.signature.enable`: Whether signature help is enabled. [*Default*: `true`]
 - `cfml.suggest.enable`: Whether completion help is enabled. [*Default*: `true`]
@@ -108,12 +108,21 @@ The following are the configurable Settings (Win/Linux: `Ctrl`+`Comma`; Mac: `Cm
 - `cfml.engine.name`: Name of the CFML engine against which to filter.
 - `cfml.engine.version`: Version of the CFML engine against which to filter. SemVer format is preferred.
 - `cfml.mappings`: Represents CFML mappings from logicalPath to directoryPath.  
-  **Example**
+  **Examples**
     ```json
     "cfml.mappings": [
       {
         "logicalPath": "/model",
-        "directoryPath": "C:\myprojects\projectname\app\model"
+        "directoryPath": "C:\\myprojects\\projectname\\app\\model"
+      }
+    ]
+    ```
+    ```json
+    "cfml.mappings": [
+      {
+        "logicalPath": "/model",
+        "directoryPath": "/app/model",
+        "isPhysicalDirectoryPath": false
       }
     ]
     ```
