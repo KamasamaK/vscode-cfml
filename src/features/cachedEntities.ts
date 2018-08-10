@@ -7,9 +7,13 @@ import { ComponentFunctions, UserFunction, UserFunctionByUri, UserFunctionsByNam
 import { Variable, VariablesByUri, parseVariableAssignments } from "../entities/variable";
 import { DocumentStateContext, getDocumentStateContext } from "../utils/documentUtil";
 import { resolveCustomMappingPaths, resolveRelativePath, resolveRootPath } from "../utils/fileUtil";
+import { MyMap, SearchMode } from "../utils/collections";
+import { CFDocsDefinitionInfo } from "../utils/cfdocs/definitionInfo";
+import { APPLICATION_CFM_GLOB } from "../utils/contextUtil";
 
 const trie = require("trie-prefix-tree");
 
+let allGlobalEntityDefinitions = new MyMap<string, CFDocsDefinitionInfo>();
 
 let allGlobalFunctions: GlobalFunctions = {};
 let allGlobalTags: GlobalTags = {};
@@ -32,11 +36,7 @@ let allApplicationVariables: VariablesByUri = new VariablesByUri();
  * @param name The identifier to check
  */
 export function isGlobalFunction(name: string): boolean {
-  if (allGlobalFunctions[name.toLowerCase()]) {
-    return true;
-  }
-
-  return false;
+  return allGlobalFunctions.hasOwnProperty(name.toLowerCase());
 }
 
 /**
@@ -44,11 +44,15 @@ export function isGlobalFunction(name: string): boolean {
  * @param name The identifier to check
  */
 export function isGlobalTag(name: string): boolean {
-  if (allGlobalTags[name.toLowerCase()]) {
-    return true;
-  }
+  return allGlobalTags.hasOwnProperty(name.toLowerCase());
+}
 
-  return false;
+/**
+ * Checks whether the given identifier is a cached global entity
+ * @param name The identifier to check
+ */
+export function isGlobalEntity(name: string): boolean {
+  return allGlobalTags.hasOwnProperty(name.toLowerCase()) || allGlobalFunctions.hasOwnProperty(name.toLowerCase());
 }
 
 /**
@@ -75,6 +79,13 @@ export function getAllGlobalFunctions(): GlobalFunctions {
 }
 
 /**
+ * Clears all of the cached global functions
+ */
+export function clearAllGlobalFunctions(): void {
+  allGlobalFunctions = {};
+}
+
+/**
  * Sets the given global tag object into cache
  * @param tagDefinition The global tag object to cache
  */
@@ -95,6 +106,43 @@ export function getGlobalTag(tagName: string): GlobalTag {
  */
 export function getAllGlobalTags(): GlobalTags {
   return allGlobalTags;
+}
+
+/**
+ * Clears all of the cached global tags
+ */
+export function clearAllGlobalTags(): void {
+  allGlobalTags = {};
+}
+
+/**
+ * Sets the given global definition object into cache
+ * @param definition The global definition object to cache
+ */
+export function setGlobalEntityDefinition(definition: CFDocsDefinitionInfo): void {
+  allGlobalEntityDefinitions.set(definition.name.toLowerCase(), definition);
+}
+
+/**
+ * Retrieves the cached global tag identified by the given tag name
+ * @param name The name of the global definition to be retrieved
+ */
+export function getGlobalEntityDefinition(name: string): CFDocsDefinitionInfo {
+  return allGlobalEntityDefinitions.get(name.toLowerCase());
+}
+
+/**
+ * Returns all of the cached global entity definitions
+ */
+export function getAllGlobalEntityDefinitions(): MyMap<string, CFDocsDefinitionInfo> {
+  return allGlobalEntityDefinitions;
+}
+
+/**
+ * Clears all of the cached global entity definitions
+ */
+export function clearAllGlobalEntityDefinitions(): void {
+  allGlobalEntityDefinitions = new MyMap<string, CFDocsDefinitionInfo>();
 }
 
 /**
@@ -164,15 +212,26 @@ function setUserFunction(userFunction: UserFunction): void {
 /**
  * Retrieves all cached user functions matched by the given query
  * @param query Some query text used to search for cached user functions
+ * @param searchMode How the query will be searched for
  */
-export function searchAllFunctionNames(query: string): UserFunction[] {
+export function searchAllFunctionNames(query: string, searchMode: SearchMode = SearchMode.StartsWith): UserFunction[] {
   let functions: UserFunction[] = [];
-  // let usedFunctionNames = new MySet<string>();
-  allFunctionNames.getPrefix(query.toLowerCase()).forEach((funcKey: string) => {
-    functions = functions.concat(Object.values(allUserFunctionsByName[funcKey]));
-    // usedFunctionNames.add(funcKey);
-  });
-  // TODO: Also check for arbitrary substrings
+  const lowerQuery = query.toLowerCase();
+
+  if (searchMode === SearchMode.StartsWith) {
+    allFunctionNames.getPrefix(lowerQuery).forEach((funcKey: string) => {
+      functions = functions.concat(Object.values(allUserFunctionsByName[funcKey]));
+    });
+  } else if (searchMode === SearchMode.Contains) {
+    for (let name in allUserFunctionsByName) {
+      const lowerName = name.toLowerCase();
+      if (lowerName.includes(lowerQuery)) {
+        functions = functions.concat(Object.values(allUserFunctionsByName[lowerName]));
+      }
+    }
+  } else if (searchMode === SearchMode.EqualTo) {
+    functions = Object.values(allUserFunctionsByName[lowerQuery]);
+  }
 
   return functions;
 }
@@ -224,14 +283,14 @@ export function cacheComponent(component: Component, documentStateContext: Docum
   });
 
   const componentUri: Uri = component.uri;
-  const fileName = path.basename(componentUri.fsPath);
+  const fileName: string = path.basename(componentUri.fsPath);
   if (fileName === "Application.cfc") {
     const thisApplicationVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript);
 
     const thisApplicationFilteredVariables: Variable[] = thisApplicationVariables.filter((variable: Variable) => {
       return [Scope.Application, Scope.Session, Scope.Request].includes(variable.scope);
     });
-    allApplicationVariables.set(componentUri.toString(), thisApplicationFilteredVariables);
+    setApplicationVariables(componentUri, thisApplicationFilteredVariables);
   } else if (fileName === "Server.cfc") {
     const thisServerVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript).filter((variable: Variable) => {
       return variable.scope === Scope.Server;
@@ -246,7 +305,7 @@ export function cacheComponent(component: Component, documentStateContext: Docum
 export async function cacheAllComponents(): Promise<void> {
   clearAllCachedComponents();
 
-  workspace.findFiles(COMPONENT_FILE_GLOB).then((componentUris: Uri[]) => {
+  return workspace.findFiles(COMPONENT_FILE_GLOB).then((componentUris: Uri[]) => {
     // TODO: Revisit when https://github.com/Microsoft/vscode/issues/15178 is addressed
     const cflintExt = extensions.getExtension("KamasamaK.vscode-cflint");
     if (cflintExt) {
@@ -257,10 +316,12 @@ export async function cacheAllComponents(): Promise<void> {
       // const cflintRunModesPrevWSValue = cflintRunModesValues.workspaceValue;
       cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(async () => {
         await cacheGivenComponents(componentUris);
+        await cacheAllApplicationCfms();
         cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
       });
     } else {
       cacheGivenComponents(componentUris);
+      cacheAllApplicationCfms();
     }
   },
   (reason) => {
@@ -342,11 +403,66 @@ function clearAllCachedComponents(): void {
 }
 
 /**
+ * Reads and parses all Application.cfm files in the current workspace and caches their definitions
+ */
+export async function cacheAllApplicationCfms(): Promise<void> {
+  clearAllApplicationVariables();
+
+  return workspace.findFiles(APPLICATION_CFM_GLOB).then(
+    cacheGivenApplicationCfms,
+    (reason) => {
+      console.error(reason);
+    }
+  );
+}
+
+/**
+ * Reads and parses given Application.cfm files and caches their definitions
+ * @param applicationUris List of URIs to parse and cache
+ */
+async function cacheGivenApplicationCfms(applicationUris: Uri[]): Promise<void> {
+  applicationUris.forEach((applicationUri: Uri) => {
+    workspace.openTextDocument(applicationUri).then((document: TextDocument) => {
+      const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
+      const thisApplicationVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript);
+      const thisApplicationFilteredVariables: Variable[] = thisApplicationVariables.filter((variable: Variable) => {
+        return [Scope.Application, Scope.Session, Scope.Request].includes(variable.scope);
+      });
+      setApplicationVariables(applicationUri, thisApplicationFilteredVariables);
+    });
+  });
+}
+
+/**
  * Retrieves the cached application variables identified by the given URI
  * @param uri The URI of the component to be check
  */
 export function getApplicationVariables(uri: Uri): Variable[] {
   return allApplicationVariables.get(uri.toString());
+}
+
+/**
+ * Sets the cached application variables for the given URI
+ * @param uri The URI of the application file
+ * @param applicationVariables The application variables to set
+ */
+export function setApplicationVariables(uri: Uri, applicationVariables: Variable[]): void {
+  allApplicationVariables.set(uri.toString(), applicationVariables);
+}
+
+/**
+ * Removes the cached application variables identified by the given URI
+ * @param uri The URI of the application file to remove
+ */
+export function removeApplicationVariables(uri: Uri): boolean {
+  return allApplicationVariables.delete(uri.toString());
+}
+
+/**
+ * Clears all cached references to Application variables
+ */
+function clearAllApplicationVariables(): void {
+  allApplicationVariables.clear();
 }
 
 /**

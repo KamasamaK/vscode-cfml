@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { CancellationToken, DocumentLink, DocumentLinkProvider, Position, Range, TextDocument, Uri, WorkspaceFolder, workspace } from "vscode";
+import { CancellationToken, DocumentLink, DocumentLinkProvider, Position, Range, TextDocument, Uri, workspace, WorkspaceFolder } from "vscode";
 
 export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
 
@@ -20,9 +20,9 @@ export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
   /**
    * Provide links for the given document.
    * @param document The document in which the command was invoked.
-   * @param token A cancellation token.
+   * @param _token A cancellation token.
    */
-  public async provideDocumentLinks(document: TextDocument, token: CancellationToken): Promise<DocumentLink[]> {
+  public async provideDocumentLinks(document: TextDocument, _token: CancellationToken): Promise<DocumentLink[]> {
     const results: DocumentLink[] = [];
     const documentText: string = document.getText();
 

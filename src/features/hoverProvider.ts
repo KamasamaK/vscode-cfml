@@ -1,23 +1,21 @@
-import {
-  Hover, HoverProvider, Position, Range, TextDocument, TextLine, CancellationToken, WorkspaceConfiguration, workspace, MarkdownString, Uri
-} from "vscode";
-import * as cachedEntity from "./cachedEntities";
-import { textToMarkdownString, equalsIgnoreCase } from "../utils/textUtil";
-import { GlobalFunction, GlobalTag, globalTagSyntaxToScript } from "../entities/globals";
-import { Parameter, constructParameterLabel } from "../entities/parameter";
-import { LANGUAGE_ID } from "../cfmlMain";
-import { DataType } from "../entities/dataType";
-import { Function, getSyntaxString, getFunctionSuffixPattern } from "../entities/function";
-import { Component, COMPONENT_EXT, objectNewInstanceInitPrefix } from "../entities/component";
-import { getComponent } from "./cachedEntities";
-import { Signature } from "../entities/signature";
-import { UserFunction, getFunctionFromPrefix } from "../entities/userFunction";
 import * as path from "path";
-import { MySet } from "../utils/collections";
-import { CFMLEngine } from "../utils/cfdocs/cfmlEngine";
-import { getTagPrefixPattern, getCfScriptTagAttributePattern, getCfTagAttributePattern } from "../entities/tag";
-import { getDocumentPositionStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
+import { CancellationToken, Hover, HoverProvider, MarkdownString, Position, Range, TextDocument, TextLine, Uri, workspace, WorkspaceConfiguration } from "vscode";
+import { LANGUAGE_ID } from "../cfmlMain";
 import { VALUE_PATTERN } from "../entities/attribute";
+import { Component, COMPONENT_EXT, objectNewInstanceInitPrefix } from "../entities/component";
+import { DataType } from "../entities/dataType";
+import { Function, getFunctionSuffixPattern, getSyntaxString } from "../entities/function";
+import { GlobalFunction, GlobalTag, globalTagSyntaxToScript } from "../entities/globals";
+import { constructParameterLabel, Parameter } from "../entities/parameter";
+import { Signature } from "../entities/signature";
+import { getCfScriptTagAttributePattern, getCfTagAttributePattern, getTagPrefixPattern } from "../entities/tag";
+import { getFunctionFromPrefix, UserFunction } from "../entities/userFunction";
+import { CFMLEngine } from "../utils/cfdocs/cfmlEngine";
+import { MySet } from "../utils/collections";
+import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
+import { equalsIgnoreCase, textToMarkdownString } from "../utils/textUtil";
+import * as cachedEntity from "./cachedEntities";
+import { getComponent } from "./cachedEntities";
 
 const cfDocsLinkPrefix = "https://cfdocs.org/";
 
@@ -37,9 +35,9 @@ export default class CFMLHoverProvider implements HoverProvider {
    * Provides a hover for the given position and document
    * @param document The document in which the hover was invoked.
    * @param position The position at which the hover was invoked.
-   * @param token A cancellation token.
+   * @param _token A cancellation token.
    */
-  public async provideHover(document: TextDocument, position: Position, token: CancellationToken): Promise<Hover | undefined> {
+  public async provideHover(document: TextDocument, position: Position, _token: CancellationToken): Promise<Hover | undefined> {
     const cfmlHoverSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.hover", document.uri);
     if (!cfmlHoverSettings.get<boolean>("enable", true)) {
       return undefined;
@@ -156,7 +154,7 @@ export default class CFMLHoverProvider implements HoverProvider {
       }
     }
 
-    // TODO: Function arguments, component properties
+    // TODO: Function arguments used within function body, or named argument invocation. Component properties.
 
     return undefined;
   }
@@ -351,6 +349,10 @@ export default class CFMLHoverProvider implements HoverProvider {
       hoverTexts.push(new MarkdownString("_No " + symbolType.toLowerCase() + " description_"));
     }
 
+    if (definition.externalLink) {
+      hoverTexts.push(new MarkdownString("Link: " + definition.externalLink));
+    }
+
     const paramList: Parameter[] = definition.params;
     if (paramList) {
       if (paramList.length > 0) {
@@ -388,10 +390,6 @@ export default class CFMLHoverProvider implements HoverProvider {
           hoverTexts.push(new MarkdownString("_No " + paramKind.toLowerCase() + " description_"));
         }
       });
-    }
-
-    if (definition.externalLink) {
-      hoverTexts.push(new MarkdownString("Link: " + definition.externalLink));
     }
 
     return hoverTexts;

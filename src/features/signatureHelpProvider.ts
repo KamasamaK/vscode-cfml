@@ -8,19 +8,22 @@ import { Signature } from "../entities/signature";
 import { Component, objectNewInstanceInitPrefix } from "../entities/component";
 import { getComponent, componentPathToUri } from "./cachedEntities";
 import { Parameter, constructParameterLabel } from "../entities/parameter";
-import { textToMarkdownString } from "../utils/textUtil";
-import { getFunctionFromPrefix, UserFunction } from "../entities/userFunction";
+import { textToMarkdownString, equalsIgnoreCase } from "../utils/textUtil";
+import { getFunctionFromPrefix, UserFunction, variablesToUserFunctions, isUserFunctionVariable, UserFunctionVariable } from "../entities/userFunction";
 import { getDocumentPositionStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
 import { BackwardIterator, readArguments, getPrecedingIdentifierRange, isContinuingExpression } from "../utils/contextUtil";
+import { collectDocumentVariableAssignments, Variable } from "../entities/variable";
+import { DataType } from "../entities/dataType";
+import { getVariableScopePrefixPattern, Scope, unscopedPrecedence } from "../entities/scope";
 
 export default class CFMLSignatureHelpProvider implements SignatureHelpProvider {
   /**
    * Provide help for the signature at the given position and document.
    * @param document The document in which the command was invoked.
    * @param position The position at which the command was invoked.
-   * @param token A cancellation token.
+   * @param _token A cancellation token.
    */
-  public async provideSignatureHelp(document: TextDocument, position: Position, token: CancellationToken): Promise<SignatureHelp | null> {
+  public async provideSignatureHelp(document: TextDocument, position: Position, _token: CancellationToken): Promise<SignatureHelp | null> {
     const cfmlSignatureSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.signature", document.uri);
     if (!cfmlSignatureSettings.get<boolean>("enable", true)) {
       return null;
@@ -79,16 +82,47 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
         entry = cachedEntity.getGlobalFunction(lowerIdent);
       }
 
-      // Check user function
+      // Check user functions
       if (!entry) {
         const userFun: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, lowerIdent, startIdentPositionPrefix);
 
         // Ensure this does not trigger on script function definition
-        if (userFun && userFun.location.range.contains(position) && !userFun.bodyRange.contains(position)) {
+        if (userFun && !userFun.isImplicit && userFun.location.range.contains(position) && !userFun.bodyRange.contains(position)) {
           return null;
         }
 
         entry = userFun;
+      }
+
+      // Check variables
+      if (!entry) {
+        const variableScopePrefixPattern: RegExp = getVariableScopePrefixPattern();
+        const variableScopePrefixMatch: RegExpExecArray = variableScopePrefixPattern.exec(startIdentPositionPrefix);
+        if (variableScopePrefixMatch) {
+          const scopePrefix: string = variableScopePrefixMatch[1];
+          let prefixScope: Scope;
+          if (scopePrefix) {
+            prefixScope = Scope.valueOf(scopePrefix);
+          }
+          const allDocumentVariableAssignments: Variable[] = collectDocumentVariableAssignments(documentPositionStateContext);
+          const userFunctionVariables: UserFunctionVariable[] = allDocumentVariableAssignments.filter((variable: Variable) => {
+            if (variable.dataType !== DataType.Function || !isUserFunctionVariable(variable) || !equalsIgnoreCase(variable.identifier, lowerIdent)) {
+              return false;
+            }
+
+            if (prefixScope) {
+              return (variable.scope === prefixScope || (variable.scope === Scope.Unknown && unscopedPrecedence.includes(prefixScope)));
+            }
+
+            return (unscopedPrecedence.includes(variable.scope) || variable.scope === Scope.Unknown);
+          }).map((variable: Variable) => {
+            return variable as UserFunctionVariable;
+          });
+          const userFunctions: UserFunction[] = variablesToUserFunctions(userFunctionVariables);
+          if (userFunctions.length > 0) {
+            entry = userFunctions[0];
+          }
+        }
       }
     }
 
@@ -99,7 +133,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
     let sigHelp = new SignatureHelp();
 
     entry.signatures.forEach((signature: Signature) => {
-      const sigDesc: string = signature.description  ? signature.description : entry.description;
+      const sigDesc: string = signature.description ? signature.description : entry.description;
       let signatureInfo = new SignatureInformation(getSyntaxString(entry), textToMarkdownString(sigDesc));
       signatureInfo.parameters = signature.parameters.map((param: Parameter) => {
         return new ParameterInformation(constructParameterLabel(param), textToMarkdownString(param.description));

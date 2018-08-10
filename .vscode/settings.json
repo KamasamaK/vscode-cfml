@@ -13,6 +13,7 @@
   "editor.detectIndentation": false,
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
+  "typescript.tsc.autoDetect": "off",
   "typescript.tsdk": "node_modules\\typescript\\lib",
   "cSpell.words": [
     "struct"

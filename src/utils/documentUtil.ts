@@ -21,6 +21,7 @@ export interface DocumentPositionStateContext extends DocumentStateContext {
   positionIsScript: boolean;
   positionInComment: boolean;
   docPrefix: string;
+  wordRange: Range;
   currentWord: string;
   isContinuingExpression: boolean;
 }
@@ -82,6 +83,7 @@ export function getDocumentPositionStateContext(document: TextDocument, position
       positionIsScript,
       positionInComment,
       docPrefix,
+      wordRange,
       currentWord,
       isContinuingExpression: isContinuingExpression(docPrefix)
     }

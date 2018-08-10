@@ -11,7 +11,8 @@ export interface DocBlockKeyValue {
 
 /**
  * Parses a CFScript documentation block and returns an array of DocBlockKeyValue objects
- * @param docBlockStr The documentation block to be parsed
+ * @param document The document in which to parse
+ * @param docRange The range within the document containing the docblock
  */
 export function parseDocBlock(document: TextDocument, docRange: Range): DocBlockKeyValue[] {
   const docBlockStr: string = document.getText(docRange);

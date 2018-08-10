@@ -1,19 +1,19 @@
-import { workspace, window, Uri, WorkspaceSymbolProvider, SymbolInformation, SymbolKind, Location, CancellationToken, Position, TextEditor, TextDocument } from "vscode";
-import * as cachedEntity from "./cachedEntities";
-import { UserFunction } from "../entities/userFunction";
-import { COMPONENT_EXT, Component } from "../entities/component";
-import { LANGUAGE_ID } from "../cfmlMain";
 import * as path from "path";
+import { CancellationToken, Location, Position, SymbolInformation, SymbolKind, TextDocument, TextEditor, Uri, window, workspace, WorkspaceSymbolProvider } from "vscode";
+import { LANGUAGE_ID } from "../cfmlMain";
+import { Component, COMPONENT_EXT } from "../entities/component";
+import { UserFunction } from "../entities/userFunction";
 import { equalsIgnoreCase } from "../utils/textUtil";
+import * as cachedEntity from "./cachedEntities";
 
 export default class CFMLWorkspaceSymbolProvider implements WorkspaceSymbolProvider {
 
   /**
    * Workspace-wide search for a symbol matching the given query string.
    * @param query A non-empty query string.
-   * @param token A cancellation token.
+   * @param _token A cancellation token.
    */
-  public async provideWorkspaceSymbols(query: string, token: CancellationToken): Promise<SymbolInformation[]> {
+  public async provideWorkspaceSymbols(query: string, _token: CancellationToken): Promise<SymbolInformation[]> {
     let workspaceSymbols: SymbolInformation[] = [];
     if (query === "") {
       return workspaceSymbols;

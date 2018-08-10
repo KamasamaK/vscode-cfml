@@ -1,12 +1,19 @@
 import * as fs from "fs";
 import * as path from "path";
-import { WorkspaceConfiguration, workspace } from "vscode";
-import * as cachedEntity from "../../features/cachedEntities";
-import { CFMLEngine, CFMLEngineName } from "./cfmlEngine";
-import { CFDocsDefinitionInfo } from "./definitionInfo";
 import * as request from "request";
+import { commands, Position, Range, TextDocument, TextLine, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
+import { getFunctionSuffixPattern } from "../../entities/function";
+import { GlobalEntity } from "../../entities/globals";
+import { getTagPrefixPattern } from "../../entities/tag";
+import * as cachedEntity from "../../features/cachedEntities";
+import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../documentUtil";
+import { CFMLEngine, CFMLEngineName } from "./cfmlEngine";
+import { CFDocsDefinitionInfo, EngineCompatibilityDetail } from "./definitionInfo";
 
-const cfDocsLinkPrefix = "https://raw.githubusercontent.com/foundeo/cfdocs/master/data/en/";
+const cfDocsRepoLinkPrefix: string = "https://raw.githubusercontent.com/foundeo/cfdocs/master/data/en/";
+const cfDocsLinkPrefix: string = "https://cfdocs.org/";
+
+// TODO: Replace content retrieval with API calls through @octokit/rest: https://octokit.github.io/rest.js/#api-Repos-getContent
 
 export class CFDocsService {
   /**
@@ -62,7 +69,7 @@ export class CFDocsService {
    * @param callback An optional callback that takes the returned CFDocsDefinitionInfo
    */
   private static async getRemoteDefinitionInfo(identifier: string, callback?: (definition: CFDocsDefinitionInfo) => boolean): Promise<CFDocsDefinitionInfo> {
-    const cfDocsLink: string = cfDocsLinkPrefix + CFDocsService.getJsonFileName(identifier);
+    const cfDocsLink: string = cfDocsRepoLinkPrefix + CFDocsService.getJsonFileName(identifier);
     let definitionInfo: CFDocsDefinitionInfo;
 
     return new Promise<CFDocsDefinitionInfo>((resolve, reject) => {
@@ -125,7 +132,7 @@ export class CFDocsService {
           resolve(JSON.parse(data).related);
         });
       } else {
-        const cfDocsLink: string = cfDocsLinkPrefix + jsonFileName;
+        const cfDocsLink: string = cfDocsRepoLinkPrefix + jsonFileName;
 
         request(cfDocsLink, (error, response, body) => {
           if (error) {
@@ -162,7 +169,7 @@ export class CFDocsService {
           resolve(JSON.parse(data).related);
         });
       } else {
-        const cfDocsLink: string = cfDocsLinkPrefix + jsonFileName;
+        const cfDocsLink: string = cfDocsRepoLinkPrefix + jsonFileName;
 
         request(cfDocsLink, (error, response, body) => {
           if (error) {
@@ -192,6 +199,7 @@ export class CFDocsService {
     if (definition.type === "function" && definition.isCompatible(userEngine)) {
       cachedEntity.setGlobalFunction(definition.toGlobalFunction());
       // TODO: Add member function also
+      cachedEntity.setGlobalEntityDefinition(definition);
       return true;
     }
     return false;
@@ -207,6 +215,7 @@ export class CFDocsService {
     const userEngine: CFMLEngine = new CFMLEngine(userEngineName, cfmlEngineSettings.get<string>("version"));
     if (definition.type === "tag" && definition.isCompatible(userEngine)) {
       cachedEntity.setGlobalTag(definition.toGlobalTag());
+      cachedEntity.setGlobalEntityDefinition(definition);
       return true;
     }
     return false;
@@ -228,4 +237,95 @@ export class CFDocsService {
 
     return true;
   }
+}
+
+export async function openCfDocsForCurrentWord(): Promise<void> {
+  if (!window.activeTextEditor) {
+    return;
+  }
+
+  const document: TextDocument = window.activeTextEditor.document;
+  const position: Position = window.activeTextEditor.selection.start;
+  const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
+
+  if (documentPositionStateContext.positionInComment) {
+    return;
+  }
+
+  const docPrefix: string = documentPositionStateContext.docPrefix;
+  const textLine: TextLine = document.lineAt(position);
+  const wordRange: Range = documentPositionStateContext.wordRange;
+  const lineSuffix: string = documentPositionStateContext.sanitizedDocumentText.slice(document.offsetAt(wordRange.end), document.offsetAt(textLine.range.end));
+  const userEngine: CFMLEngine = documentPositionStateContext.userEngine;
+
+  const currentWord: string = documentPositionStateContext.currentWord;
+
+  let globalEntity: GlobalEntity;
+  const tagPrefixPattern: RegExp = getTagPrefixPattern();
+  const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
+
+  if ((tagPrefixPattern.test(docPrefix) || (userEngine.supportsScriptTags() && functionSuffixPattern.test(lineSuffix))) && cachedEntity.isGlobalTag(currentWord)) {
+    globalEntity = cachedEntity.getGlobalTag(currentWord);
+  } else if (!documentPositionStateContext.isContinuingExpression && functionSuffixPattern.test(lineSuffix) && cachedEntity.isGlobalFunction(currentWord)) {
+    globalEntity = cachedEntity.getGlobalFunction(currentWord);
+  }
+
+  if (globalEntity) {
+    commands.executeCommand("vscode.open", Uri.parse(cfDocsLinkPrefix + globalEntity.name));
+  } else {
+    window.showInformationMessage("No matching CFDocs entity was found");
+  }
+}
+
+export async function openEngineDocsForCurrentWord(): Promise<void> {
+  if (!window.activeTextEditor) {
+    return;
+  }
+
+  const document: TextDocument = window.activeTextEditor.document;
+  const position: Position = window.activeTextEditor.selection.start;
+  const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
+
+  if (documentPositionStateContext.positionInComment) {
+    return;
+  }
+
+  const userEngine: CFMLEngine = documentPositionStateContext.userEngine;
+
+  if (userEngine.getName() === CFMLEngineName.Unknown) {
+    window.showInformationMessage("CFML engine is not set");
+    return;
+  }
+
+  const docPrefix: string = documentPositionStateContext.docPrefix;
+  const textLine: TextLine = document.lineAt(position);
+  const wordRange: Range = documentPositionStateContext.wordRange;
+  const lineSuffix: string = documentPositionStateContext.sanitizedDocumentText.slice(document.offsetAt(wordRange.end), document.offsetAt(textLine.range.end));
+
+  const currentWord: string = documentPositionStateContext.currentWord;
+
+  let globalEntity: CFDocsDefinitionInfo;
+  const tagPrefixPattern: RegExp = getTagPrefixPattern();
+  const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
+
+  if ((tagPrefixPattern.test(docPrefix) || (userEngine.supportsScriptTags() && functionSuffixPattern.test(lineSuffix))) && cachedEntity.isGlobalTag(currentWord))
+  {
+    globalEntity = cachedEntity.getGlobalEntityDefinition(currentWord);
+  } else if (!documentPositionStateContext.isContinuingExpression && functionSuffixPattern.test(lineSuffix) && cachedEntity.isGlobalFunction(currentWord)) {
+    globalEntity = cachedEntity.getGlobalEntityDefinition(currentWord);
+  }
+
+  if (globalEntity && globalEntity.engines && globalEntity.engines.hasOwnProperty(userEngine.getName())) {
+    const engineInfo: EngineCompatibilityDetail = globalEntity.engines[userEngine.getName()];
+    if (engineInfo.docs) {
+      commands.executeCommand("vscode.open", Uri.parse(engineInfo.docs));
+    } else {
+      window.showInformationMessage("No engine docs for this entity was found");
+    }
+
+    return;
+  }
+
+  window.showInformationMessage("No matching compatible entity was found");
+
 }

@@ -29,3 +29,10 @@ export interface NameWithOptionalValue<T> {
   name: string;
   value?: T;
 }
+
+// TODO: Find a better place for this
+export enum SearchMode {
+  StartsWith,
+  Contains,
+  EqualTo,
+}

@@ -7,6 +7,7 @@ import { DocumentStateContext } from "./documentUtil";
 import { equalsIgnoreCase } from "./textUtil";
 
 const CFM_FILE_EXTS: string[] = [".cfm", ".cfml"];
+export const APPLICATION_CFM_GLOB: string = "**/Application.cfm";
 // const notContinuingExpressionPattern: RegExp = /(?:^|[^\w$.\s])\s*$/;
 const continuingExpressionPattern: RegExp = /(?:\.\s*|[\w$])$/;
 const cfscriptLineCommentPattern: RegExp = /\/\/[^\r\n]*/g;

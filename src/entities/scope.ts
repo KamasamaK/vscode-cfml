@@ -76,6 +76,29 @@ export namespace Scope {
   }
 }
 
+export const allScopes: Scope[] = [
+  Scope.Application,
+  Scope.Arguments,
+  Scope.Attributes,
+  Scope.Caller,
+  Scope.Cffile,
+  Scope.CGI,
+  Scope.Client,
+  Scope.Cookie,
+  Scope.Flash,
+  Scope.Form,
+  Scope.Local,
+  Scope.Request,
+  Scope.Server,
+  Scope.Session,
+  Scope.Static,
+  Scope.This,
+  Scope.ThisTag,
+  Scope.Thread,
+  Scope.URL,
+  Scope.Variables
+];
+
 export const unscopedPrecedence: Scope[] = [
   Scope.Local,
   Scope.Arguments,
@@ -224,29 +247,5 @@ export function getValidScopesPrefixPattern(scopes: Scope[], optionalScope: bool
  * Returns a regular expression that matches a scoped variable
  */
 export function getVariableScopePrefixPattern() {
-   return getValidScopesPrefixPattern(
-    [
-      Scope.Application,
-      Scope.Arguments,
-      Scope.Attributes,
-      Scope.Caller,
-      Scope.Cffile,
-      Scope.CGI,
-      Scope.Client,
-      Scope.Cookie,
-      Scope.Flash,
-      Scope.Form,
-      Scope.Local,
-      Scope.Request,
-      Scope.Server,
-      Scope.Session,
-      Scope.Static,
-      Scope.This,
-      Scope.ThisTag,
-      Scope.Thread,
-      Scope.URL,
-      Scope.Variables
-    ],
-    true
-  );
+   return getValidScopesPrefixPattern(allScopes, true);
 }

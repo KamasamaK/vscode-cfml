@@ -4311,13 +4311,13 @@
       ]
     },
     "source-js-cfoutput-ternary-expression": {
-      "begin": "(\\?)",
+      "begin": "\\?",
       "beginCaptures": {
         "0": {
           "name": "keyword.operator.ternary.js"
         }
       },
-      "end": "(:)",
+      "end": ":",
       "endCaptures": {
         "0": {
           "name": "keyword.operator.ternary.js"
@@ -5242,7 +5242,7 @@
           "end": "(?=[,\\)])",
           "captures": {
             "1": {
-              "name": "entity.other.function-parameter.cfml"
+              "name": "entity.other.parameter-name.cfml"
             },
             "2": {
               "name": "keyword.operator.assignment.cfml"
@@ -9911,7 +9911,7 @@
     },
     "source-cfml-script-constructor": {
       "name": "meta.instance.constructor.cfml",
-      "begin": "\\b(new)\\s+",
+      "begin": "(?i)\\b(new)\\s+",
       "beginCaptures": {
         "1": {
           "name": "keyword.operator.new.cfml"
@@ -9943,12 +9943,15 @@
               "match": ","
             },
             {
-              "begin": "\\b([_$a-zA-Z][$\\w]*)\\s*(=)(?!=)",
+              "begin": "\\b(?i:(argumentCollection)|([_$a-zA-Z][$\\w]*))\\s*(=)(?!=)",
               "beginCaptures": {
                 "1": {
-                  "name": "entity.other.method-parameter.cfml"
+                  "name": "entity.other.argumentCollection.cfml"
                 },
                 "2": {
+                  "name": "entity.other.parameter-name.cfml"
+                },
+                "3": {
                   "name": "keyword.operator.assignment.cfml"
                 }
               },
@@ -10200,7 +10203,21 @@
           ]
         },
         {
-          "begin": "\\?|:(?!:)",
+          "begin": "\\?:(?!:)",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.operator.elvis.cfml"
+            }
+          },
+          "end": "(?<=\\})|(?=[^\\s\\{])",
+          "patterns": [
+            {
+              "include": "#source-cfml-script-struct-literal"
+            }
+          ]
+        },
+        {
+          "begin": "\\?(?!\\.)|:(?!:)",
           "beginCaptures": {
             "0": {
               "name": "keyword.operator.ternary.cfml"
@@ -11101,7 +11118,7 @@
               }
             },
             {
-              "match": "(?x)(?i)\n  \\b(type)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml) # primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #component/object (may need additional tokens)\n)(\"))",
+              "match": "(?x)(?i)\n  \\b(type)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml) # primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #component/object (may need additional tokens)\n)(?:(\\[)(\\]))?(\"))",
               "captures": {
                 "1": {
                   "name": "entity.other.attribute-name.cfml"
@@ -11125,6 +11142,12 @@
                   "name": "entity.name.type.object.cfml"
                 },
                 "8": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.begin.cfml"
+                },
+                "9": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.end.cfml"
+                },
+                "10": {
                   "name": "punctuation.definition.string.end.cfml"
                 }
               }
@@ -11142,7 +11165,7 @@
           "begin": "\\b([_$a-zA-Z][$\\w\\.]*)\\s*(=)(?!=)",
           "captures": {
             "1": {
-              "name": "entity.other.function-parameter.cfml"
+              "name": "entity.other.parameter-name.cfml"
             },
             "2": {
               "name": "keyword.operator.assignment.cfml"
@@ -11830,7 +11853,7 @@
               }
             },
             {
-              "match": "(?x)(?i)\n  \\b(returntype)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|void|xml) # return-type.primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #return-type component/object (may need additional tokens)\n)(\"))",
+              "match": "(?x)(?i)\n  \\b(returntype)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|void|xml) # return-type.primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #return-type component/object (may need additional tokens)\n)(?:(\\[)(\\]))?(\"))",
               "captures": {
                 "1": {
                   "name": "entity.other.attribute-name.cfml"
@@ -11854,6 +11877,12 @@
                   "name": "entity.name.type.object.cfml"
                 },
                 "8": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.begin.cfml"
+                },
+                "9": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.end.cfml"
+                },
+                "10": {
                   "name": "punctuation.definition.string.end.cfml"
                 }
               }
@@ -12001,7 +12030,7 @@
               }
             },
             {
-              "match": "(?x)(?i)\n  \\b(type)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml) # primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #component/object (may need additional tokens)\n)(\"))",
+              "match": "(?x)(?i)\n  \\b(type)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml) # primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #component/object (may need additional tokens)\n)(?:(\\[)(\\]))?(\"))",
               "captures": {
                 "1": {
                   "name": "entity.other.attribute-name.cfml"
@@ -12025,6 +12054,12 @@
                   "name": "entity.name.type.object.cfml"
                 },
                 "8": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.begin.cfml"
+                },
+                "9": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.end.cfml"
+                },
+                "10": {
                   "name": "punctuation.definition.string.end.cfml"
                 }
               }
@@ -12146,12 +12181,15 @@
           "match": ","
         },
         {
-          "begin": "\\b([_$a-zA-Z][$\\w]*)\\s*(=)(?!=)",
+          "begin": "\\b(?i:(argumentCollection)|([_$a-zA-Z][$\\w]*))\\s*(=)(?!=)",
           "beginCaptures": {
             "1": {
-              "name": "entity.other.method-parameter.cfml"
+              "name": "entity.other.argumentCollection.cfml"
             },
             "2": {
+              "name": "entity.other.parameter-name.cfml"
+            },
+            "3": {
               "name": "keyword.operator.assignment.cfml"
             }
           },
@@ -12283,7 +12321,7 @@
           "begin": "\\b([_$a-zA-Z][$\\w\\.]*)\\s*(=)(?!=)",
           "beginCaptures": {
             "1": {
-              "name": "entity.other.method-parameter.cfml"
+              "name": "entity.other.parameter-name.cfml"
             },
             "2": {
               "name": "keyword.operator.assignment.cfml"
@@ -12312,7 +12350,7 @@
           "match": "(?i:required)"
         },
         {
-          "begin": "(?:(?:(any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml)|([_$a-zA-Z][$\\w.]*))\\s+)?([_$a-zA-Z][$\\w]*)",
+          "begin": "(?:(?:(any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml)|([_$a-zA-Z][$\\w.]*))(?:(\\[)(\\]))?\\s+)?([_$a-zA-Z][$\\w]*)",
           "beginCaptures": {
             "1": {
               "name": "support.type.primitive.cfml"
@@ -12321,6 +12359,12 @@
               "name": "entity.name.type.cfml"
             },
             "3": {
+              "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.begin.cfml"
+            },
+            "4": {
+              "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.end.cfml"
+            },
+            "5": {
               "name": "variable.parameter.function.cfml"
             }
           },
@@ -12977,13 +13021,13 @@
     "source-cfml-script-punctuation": {
       "patterns": [
         {
-          "begin": "\\.|\\?\\.",
+          "begin": "\\?\\.|\\.",
           "beginCaptures": {
             "0": {
               "name": "punctuation.accessor.cfml"
             }
           },
-          "end": "(?<=\\))|(?=\\n)|(\\})|(;)|(?:([A-Z][_$\\dA-Z]*)|([_$a-zA-Z][$\\w]*))(?=\\n|[^$\\w])(?!(\\s*\\(|\\s*=\\s*(function\\b|\\([^\\(]*?\\)\\s*=>)))",
+          "end": "(?<=\\))|(?=\\n)|(\\})|(;)|(?:([A-Z][_$\\dA-Z]*)|([$\\w]+))(?=\\n|[^$\\w])(?!(\\s*\\(|\\s*=\\s*(function\\b|\\([^\\(]*?\\)\\s*=>)))",
           "endCaptures": {
             "1": {
               "name": "meta.function.body.cfml punctuation.definition.block.end.cfml"
@@ -13077,9 +13121,6 @@
           },
           "end": "(?<=\\))|(?=\\n)|(\\})|(;)|(?:([A-Z][_$\\dA-Z]*)|([_$a-zA-Z][$\\w]*))(?=\\n|[^$\\w])(?!(\\s*\\(|\\s*=\\s*(function\\b|\\([^\\(]*?\\)\\s*=>)))",
           "endCaptures": {
-            "4": {
-              "name": "meta.property.cfml"
-            },
             "1": {
               "name": "meta.function.body.cfml punctuation.definition.block.end.cfml"
             },
@@ -13088,6 +13129,9 @@
             },
             "3": {
               "name": "meta.property.constant.cfml"
+            },
+            "4": {
+              "name": "meta.property.cfml"
             }
           },
           "patterns": [
@@ -13195,12 +13239,12 @@
           "end": "\\)",
           "patterns": [
             {
+              "match": "\\b([a-zA-Z_][\\w:-]*)\\b",
               "captures": {
                 "1": {
                   "name": "entity.other.attribute-name.cfml"
                 }
-              },
-              "match": "\\b([a-zA-Z_][\\w:-]*)\\b"
+              }
             },
             {
               "begin": "(=|:)",
@@ -13228,6 +13272,65 @@
     "source-cfml-script-call": {
       "patterns": [
         {
+          "name": "meta.function-call.support.cfml meta.function-call.support.typed-arraynew.cfml",
+          "begin": "(?i)(?=\\barraynew\\s*\\[)",
+          "end": "(?<=\\))",
+          "patterns": [
+            {
+              "begin": "(?i)\\b(arraynew)\\s*(\\[)",
+              "beginCaptures": {
+                "1": {
+                  "name": "support.function.cfml"
+                },
+                "2": {
+                  "name": "meta.brackets.cfml meta.type.parameters.cfml punctuation.definition.brackets.begin.cfml"
+                }
+              },
+              "contentName": "meta.brackets.cfml meta.type.parameters.cfml",
+              "end": "\\]",
+              "endCaptures": {
+                "0": {
+                  "name": "meta.brackets.cfml meta.type.parameters.cfml punctuation.definition.brackets.end.cfml"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#source-cfml-script-expressions"
+                }
+              ]
+            },
+            {
+              "begin": "(?<=\\])\\s*(\\()",
+              "beginCaptures": {
+                "1": {
+                  "name": "meta.function-call.parameters.support.cfml punctuation.definition.group.begin.cfml"
+                }
+              },
+              "contentName": "meta.function-call.parameters.support.cfml",
+              "end": "\\)",
+              "endCaptures": {
+                "0": {
+                  "name": "meta.function-call.parameters.support.cfml punctuation.definition.group.end.cfml"
+                }
+              },
+              "patterns": [
+                {
+                  "name": "punctuation.separator.function-call.support.cfml",
+                  "match": ","
+                },
+                {
+                  "include": "#source-cfml-script-support-call-parameter"
+                },
+                {
+                  "include": "#source-cfml-script-expressions"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "begin": "(?=\\b[_$a-zA-Z][$\\w]*\\s*\\()",
+          "end": "(?<=\\))",
           "patterns": [
             {
               "include": "#source-cfml-script-support-call"
@@ -13243,13 +13346,15 @@
             {
               "include": "#source-cfml-script-function-call-params"
             }
-          ],
-          "end": "(?<=\\))",
-          "begin": "(?=\\b[_$a-zA-Z][$\\w]*\\s*\\()"
+          ]
         },
         {
+          "begin": "(?=[_$a-zA-Z][$\\w]*\\s*\\.\\s*[_$a-zA-Z][$\\w]*\\s*\\()",
+          "end": "(?<=\\))",
           "patterns": [
             {
+              "begin": "(?=[_$a-zA-Z][$\\w]*\\s*\\.)",
+              "end": "\\?\\.|\\.",
               "endCaptures": {
                 "0": {
                   "name": "punctuation.accessor.cfml"
@@ -13263,9 +13368,7 @@
                   "name": "variable.other.object.cfml",
                   "match": "[_$a-zA-Z][$\\w]*"
                 }
-              ],
-              "end": "\\.|\\?\\.",
-              "begin": "(?=[_$a-zA-Z][$\\w]*\\s*\\.)"
+              ]
             },
             {
               "name": "keyword.other.accessor.cfml",
@@ -13274,13 +13377,15 @@
             {
               "include": "#source-cfml-script-method-call"
             }
-          ],
-          "end": "(?<=\\))",
-          "begin": "(?=[_$a-zA-Z][$\\w]*\\s*\\.\\s*[_$a-zA-Z][$\\w]*\\s*\\()"
+          ]
         },
         {
+          "begin": "(?=[_$a-zA-Z][$\\w.]*\\s*::\\s*[_$a-zA-Z][$\\w]*\\s*\\()",
+          "end": "(?<=\\))",
           "patterns": [
             {
+              "begin": "(?=[_$a-zA-Z][$\\w.]*\\s*::)",
+              "end": "::",
               "endCaptures": {
                 "0": {
                   "name": "punctuation.accessor.static.cfml"
@@ -13291,16 +13396,12 @@
                   "name": "entity.name.class.cfml",
                   "match": "[_$a-zA-Z][$\\w.]*"
                 }
-              ],
-              "end": "::",
-              "begin": "(?=[_$a-zA-Z][$\\w.]*\\s*::)"
+              ]
             },
             {
               "include": "#source-cfml-script-static-method-call"
             }
-          ],
-          "end": "(?<=\\))",
-          "begin": "(?=[_$a-zA-Z][$\\w.]*\\s*::\\s*[_$a-zA-Z][$\\w]*\\s*\\()"
+          ]
         }
       ]
     },
@@ -13431,6 +13532,10 @@
             }
           },
           "patterns": [
+            {
+              "name": "punctuation.separator.slice.cfml",
+              "match": ":"
+            },
             {
               "include": "#source-cfml-script-expressions"
             }
@@ -13578,7 +13683,7 @@
           "begin": "\\b([_$a-zA-Z][$\\w]*)\\s*(=)(?!=)",
           "beginCaptures": {
             "1": {
-              "name": "entity.other.function-parameter.cfml"
+              "name": "entity.other.parameter-name.cfml"
             },
             "2": {
               "name": "keyword.operator.assignment.cfml"
@@ -14149,7 +14254,7 @@
     "source-cfml-script-named-function": {
       "patterns": [
         {
-          "begin": "(?x)\n(?:\n  (?:\n    (?i:\\b(private|package|public|remote|static|final|abstract)\\s+)?\n    (?i:\\b(private|package|public|remote|static|final|abstract)\\s+)?\n    ((?i:\\b\n      (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|void|xml)\\s+\n      |\n      ([A-Za-z0-9_.$]+)\\s+\n      |\n      ([A-Za-z0-9_.$]+)(\\[)(\\])?\\s+\n    ))?\n  )\n)\n(?i:(function))\n\\s+\n(?:\n  (init)\n  |\n  ([_$a-zA-Z][$\\w]*)\n)\\b",
+          "begin": "(?x)\n(?:\n  (?:\n    (?i:\\b(private|package|public|remote|static|final|abstract|default)\\s+)?\n    (?i:\\b(private|package|public|remote|static|final|abstract|default)\\s+)?\n    ((?i:\\b\n      (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|void|xml)\\s+\n      |\n      ([A-Za-z0-9_.$]+)\\s+\n      |\n      ([A-Za-z0-9_.$]+)(?:(\\[)(\\]))?\\s+\n    ))?\n  )\n)\n(?i:(function))\n\\s+\n(?:\n  (init)\n  |\n  ([_$a-zA-Z][$\\w]*)\n)\\b",
           "beginCaptures": {
             "0": {
               "name": "meta.function.declaration.cfml"
@@ -14173,10 +14278,10 @@
               "name": "entity.name.type.object.array.cfml"
             },
             "7": {
-              "name": "meta.brackets.cfml punctuation.definition.brackets.begin.cfml"
+              "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.begin.cfml"
             },
             "8": {
-              "name": "meta.brackets.cfml punctuation.definition.brackets.end.cfml"
+              "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.end.cfml"
             },
             "9": {
               "name": "storage.type.function.cfml"
@@ -14248,7 +14353,7 @@
             {
               "name": "meta.function.declaration.cfml",
               "begin": "(?=[_$a-zA-Z][$\\w]*\\s*\\.)",
-              "end": "\\.",
+              "end": "\\?\\.|\\.",
               "endCaptures": {
                 "0": {
                   "name": "punctuation.accessor.cfml"
@@ -14292,7 +14397,7 @@
             {
               "name": "meta.function.declaration.cfml",
               "begin": "(?=[_$a-zA-Z][$\\w]*\\s*\\.)",
-              "end": "\\.",
+              "end": "\\?\\.|\\.",
               "endCaptures": {
                 "0": {
                   "name": "punctuation.accessor.cfml"
@@ -14671,7 +14776,7 @@
               }
             },
             {
-              "match": "(?x)(?i)\n  \\b(type)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml) # primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #component/object (may need additional tokens)\n)(\"))",
+              "match": "(?x)(?i)\n  \\b(type)\\s*(=)\\s*((\")(\n  (any|array|binary|boolean|component|date|function|guid|numeric|query|string|struct|uuid|variablename|xml) # primitive\n  |\n  ([_$a-zA-Z][$\\w.]*) #component/object (may need additional tokens)\n)(?:(\\[)(\\]))?(\"))",
               "captures": {
                 "1": {
                   "name": "entity.other.attribute-name.cfml"
@@ -14695,6 +14800,12 @@
                   "name": "entity.name.type.object.cfml"
                 },
                 "8": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.begin.cfml"
+                },
+                "9": {
+                  "name": "meta.type.array.cfml meta.brackets.cfml punctuation.definition.brackets.end.cfml"
+                },
+                "10": {
                   "name": "punctuation.definition.string.end.cfml"
                 }
               }
@@ -14733,6 +14844,10 @@
               "include": "#source-cfml-script-struct-literal"
             }
           ]
+        },
+        {
+          "name": "storage.modifier.cfml",
+          "match": "(?i)\\bfinal\\b"
         },
         {
           "name": "storage.type.cfml",

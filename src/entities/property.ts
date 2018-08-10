@@ -1,11 +1,11 @@
 import { Location, Range, TextDocument, Uri } from "vscode";
-import { getComponent } from "../features/cachedEntities";
 import { MyMap, MySet } from "../utils/collections";
 import { Attribute, Attributes, parseAttributes } from "./attribute";
-import { Component, getComponentNameFromDotPath } from "./component";
+import { getComponentNameFromDotPath } from "./component";
 import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
-import { Access, ComponentFunctions, UserFunction, UserFunctionSignature } from "./userFunction";
+import { Access, UserFunction, UserFunctionSignature } from "./userFunction";
+import { DocumentStateContext } from "../utils/documentUtil";
 
 const propertyPattern: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(?:<cf)?property\b)([^;>]*)/gi;
 // const attributePattern: RegExp = /\b(\w+)\b(?:\s*=\s*(?:(['"])(.*?)\2|([a-z0-9:.]+)))?/gi;
@@ -46,8 +46,9 @@ export class Properties extends MyMap<string, Property> { }
  * Returns an array of Property objects that define properties within the given component
  * @param document The document to parse which should represent a component
  */
-export function parseProperties(document: TextDocument): Properties {
+export function parseProperties(documentStateContext: DocumentStateContext): Properties {
   let properties: Properties = new Properties();
+  const document: TextDocument = documentStateContext.document;
   const componentText: string = document.getText();
   let propertyMatch: RegExpExecArray = null;
   while (propertyMatch = propertyPattern.exec(componentText)) {
@@ -172,45 +173,6 @@ export function parseProperties(document: TextDocument): Properties {
 }
 
 /**
- * Gets the implicit functions for a component's properties
- * @param component The component for which to get the implicit functions
- * @param includeInherited Whether to include inherited implicit functions
- */
-export function getImplicitFunctions(component: Component, includeInherited: boolean = false): ComponentFunctions {
-  let implicitFunctions = new ComponentFunctions();
-
-  let currComponent: Component = component;
-  while (currComponent) {
-    if (currComponent.accessors) {
-      currComponent.properties.forEach((prop: Property) => {
-        // getters
-        if (typeof prop.getter === "undefined" || prop.getter) {
-          const getterKey = "get" + prop.name.toLowerCase();
-          if (!implicitFunctions.has(getterKey)) {
-            implicitFunctions.set(getterKey, constructGetter(prop, currComponent.uri));
-          }
-        }
-        // setters
-        if (typeof prop.setter === "undefined" || prop.setter) {
-          const setterKey = "set" + prop.name.toLowerCase();
-          if (!implicitFunctions.has(setterKey)) {
-            implicitFunctions.set(setterKey, constructSetter(prop, currComponent.uri));
-          }
-        }
-      });
-    }
-
-    if (includeInherited && currComponent.extends) {
-      currComponent = getComponent(currComponent.extends);
-    } else {
-      currComponent = undefined;
-    }
-  }
-
-  return implicitFunctions;
-}
-
-/**
  * Constructs the getter implicit function for the given component property
  * @param property The component property for which to construct the getter
  * @param componentUri The URI of the component in which the property is defined
@@ -228,7 +190,8 @@ export function constructGetter(property: Property, componentUri: Uri): UserFunc
     returnTypeUri: property.dataTypeComponentUri,
     nameRange: property.nameRange,
     signatures: [{parameters: []}],
-    location: new Location(componentUri, property.propertyRange)
+    location: new Location(componentUri, property.propertyRange),
+    isImplicit: true
   };
 }
 
@@ -264,6 +227,7 @@ export function constructSetter(property: Property, componentUri: Uri): UserFunc
     returnTypeUri: componentUri,
     nameRange: property.nameRange,
     signatures: [implicitFunctionSignature],
-    location: new Location(componentUri, property.propertyRange)
+    location: new Location(componentUri, property.propertyRange),
+    isImplicit: true
   };
 }

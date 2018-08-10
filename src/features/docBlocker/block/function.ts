@@ -12,7 +12,7 @@ import { UserFunction, UserFunctionSignature, Argument } from "../../../entities
  */
 export default class FunctionBlock extends Block {
 
-  protected pattern: RegExp = /^(\s*)(?:\b(?:private|package|public|remote|static|final|abstract)\s+)?(?:\b(?:private|package|public|remote|static|final|abstract)\s+)?(?:\b(?:[A-Za-z0-9_\.$]+)\s+)?function\s+(?:[_$a-zA-Z][$\w]*)\s*(?:\((?:=\s*\{|[^{])*)[\{;]/i;
+  protected pattern: RegExp = /^(\s*)(?:\b(?:private|package|public|remote|static|final|abstract|default)\s+)?(?:\b(?:private|package|public|remote|static|final|abstract|default)\s+)?(?:\b(?:[A-Za-z0-9_\.$]+)\s+)?function\s+(?:[_$a-zA-Z][$\w]*)\s*(?:\((?:=\s*\{|[^{])*)[\{;]/i;
 
   public constructDoc(): Doc {
     let doc = new Doc(DocType.Function, this.document.uri);

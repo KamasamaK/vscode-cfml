@@ -1,19 +1,20 @@
-import { DocumentSymbolProvider, SymbolInformation, SymbolKind, TextDocument, Range, Location, CancellationToken, Position } from "vscode";
-import { getComponent } from "./cachedEntities";
+import { CancellationToken, DocumentSymbolProvider, Position, Range, DocumentSymbol, SymbolKind, TextDocument } from "vscode";
 import { Component } from "../entities/component";
-import { Variable, usesConstantConvention, parseVariableAssignments } from "../entities/variable";
-import { getLocalVariables, UserFunction } from "../entities/userFunction";
 import { Property } from "../entities/property";
-import { getDocumentStateContext, DocumentStateContext } from "../utils/documentUtil";
+import { getLocalVariables, UserFunction } from "../entities/userFunction";
+import { parseVariableAssignments, usesConstantConvention, Variable } from "../entities/variable";
+import { DocumentStateContext, getDocumentStateContext } from "../utils/documentUtil";
+import { getComponent } from "./cachedEntities";
+import { Scope } from "../entities/scope";
 
 export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvider {
   /**
    * Provide symbol information for the given document.
    * @param document The document for which to provide symbols.
-   * @param token A cancellation token.
+   * @param _token A cancellation token.
    */
-  public async provideDocumentSymbols(document: TextDocument, token: CancellationToken): Promise<SymbolInformation[]> {
-    let documentSymbols: SymbolInformation[] = [];
+  public async provideDocumentSymbols(document: TextDocument, _token: CancellationToken): Promise<DocumentSymbol[]> {
+    let documentSymbols: DocumentSymbol[] = [];
 
     if (!document.fileName) {
       return documentSymbols;
@@ -32,80 +33,108 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
 
   /**
    * Provide symbol information for component and its contents
-   * @param document The document for which to provide symbols.
+   * @param documentStateContext The document context for which to provide symbols.
    */
-  private static getComponentSymbols(documentStateContext: DocumentStateContext): SymbolInformation[] {
-    let componentSymbols: SymbolInformation[] = [];
-
+  private static getComponentSymbols(documentStateContext: DocumentStateContext): DocumentSymbol[] {
     const document: TextDocument = documentStateContext.document;
     const component: Component = getComponent(document.uri);
 
-    componentSymbols.push(new SymbolInformation(
+    let componentSymbol: DocumentSymbol = new DocumentSymbol(
       component.name,
-      component.isInterface ? SymbolKind.Interface : SymbolKind.Class,
       "",
-      new Location(document.uri, new Range(new Position(0, 0), document.positionAt(document.getText().length)))
-    ));
+      component.isInterface ? SymbolKind.Interface : SymbolKind.Class,
+      new Range(new Position(0, 0), document.positionAt(document.getText().length)),
+      component.declarationRange
+    );
+    componentSymbol.children = [];
 
     // Component properties
+    let propertySymbols: DocumentSymbol[] = [];
     component.properties.forEach((property: Property, propertyKey: string) => {
-      componentSymbols.push(new SymbolInformation(
+      propertySymbols.push(new DocumentSymbol(
         property.name,
+        "",
         SymbolKind.Property,
-        component.name,
-        new Location(document.uri, property.propertyRange)
+        property.propertyRange,
+        property.nameRange
       ));
     });
+    componentSymbol.children = componentSymbol.children.concat(propertySymbols);
 
     // Component variables
+    let variableSymbols: DocumentSymbol[] = [];
     component.variables.forEach((variable: Variable) => {
-      componentSymbols.push(new SymbolInformation(
+      let detail = "";
+      if (variable.scope !== Scope.Unknown) {
+        detail = `${variable.scope}.${variable.identifier}`;
+      }
+      variableSymbols.push(new DocumentSymbol(
         variable.identifier,
-        usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable,
-        component.name,
-        variable.declarationLocation
+        detail,
+        usesConstantConvention(variable.identifier) || variable.final ? SymbolKind.Constant : SymbolKind.Variable,
+        variable.declarationLocation.range,
+        variable.declarationLocation.range
       ));
     });
+    componentSymbol.children = componentSymbol.children.concat(variableSymbols);
 
     // Component functions
+    let functionSymbols: DocumentSymbol[] = [];
     component.functions.forEach((userFunction: UserFunction, functionKey: string) => {
-      componentSymbols.push(new SymbolInformation(
+      let currFuncSymbol: DocumentSymbol = new DocumentSymbol(
         userFunction.name,
+        "",
         functionKey === "init" ? SymbolKind.Constructor : SymbolKind.Method,
-        component.name,
-        userFunction.location
-      ));
+        userFunction.location.range,
+        userFunction.nameRange
+      );
+      currFuncSymbol.children = [];
 
       // Component function local variables
+      let localVarSymbols: DocumentSymbol[] = [];
       const localVariables: Variable[] = getLocalVariables(userFunction, documentStateContext, component.isScript);
       localVariables.forEach((variable: Variable) => {
-        componentSymbols.push(new SymbolInformation(
+        let detail = "";
+        if (variable.scope !== Scope.Unknown) {
+          detail = `${variable.scope}.${variable.identifier}`;
+        }
+        localVarSymbols.push(new DocumentSymbol(
           variable.identifier,
-          usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable,
-          userFunction.name,
-          variable.declarationLocation
+          detail,
+          usesConstantConvention(variable.identifier) || variable.final ? SymbolKind.Constant : SymbolKind.Variable,
+          variable.declarationLocation.range,
+          variable.declarationLocation.range
         ));
       });
-    });
+      currFuncSymbol.children = currFuncSymbol.children.concat(localVarSymbols);
 
-    return componentSymbols;
+      functionSymbols.push(currFuncSymbol);
+    });
+    componentSymbol.children = componentSymbol.children.concat(functionSymbols);
+
+    return [componentSymbol];
   }
 
   /**
    * Provide symbol information for templates
-   * @param document The document for which to provide symbols.
+   * @param documentStateContext The document context for which to provide symbols.
    */
-  private static getTemplateSymbols(documentStateContext: DocumentStateContext): SymbolInformation[] {
-    let templateSymbols: SymbolInformation[] = [];
+  private static getTemplateSymbols(documentStateContext: DocumentStateContext): DocumentSymbol[] {
+    let templateSymbols: DocumentSymbol[] = [];
     // TODO: Cache template variables?
     const allVariables: Variable[] = parseVariableAssignments(documentStateContext, false);
     allVariables.forEach((variable: Variable) => {
-      const kind: SymbolKind = usesConstantConvention(variable.identifier) ? SymbolKind.Constant : SymbolKind.Variable;
-      templateSymbols.push(new SymbolInformation(
+      const kind: SymbolKind = usesConstantConvention(variable.identifier) || variable.final ? SymbolKind.Constant : SymbolKind.Variable;
+      let detail = "";
+      if (variable.scope !== Scope.Unknown) {
+        detail = `${variable.scope}.${variable.identifier}`;
+      }
+      templateSymbols.push(new DocumentSymbol(
         variable.identifier,
+        detail,
         kind,
-        "",
-        variable.declarationLocation
+        variable.declarationLocation.range,
+        variable.declarationLocation.range
       ));
     });
 

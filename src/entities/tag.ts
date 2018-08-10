@@ -441,6 +441,30 @@ export function getOutputVariableTags(): OutputVariableTags {
 */
 
 /**
+ * Key is tag name. Value is array of attribute names. Both all lowercased.
+ */
+export interface ComponentPathAttributes {
+  [name: string]: string[];
+}
+
+const componentPathAttributes: ComponentPathAttributes = {
+  "cfargument": [
+    "type"
+  ],
+  // Handling cfcomponent extends/implements elsewhere
+  "cffunction": [
+    "returntype"
+  ],
+  "cfproperty": [
+    "type"
+  ],
+};
+
+export function getComponentPathAttributes(): ComponentPathAttributes {
+  return componentPathAttributes;
+}
+
+/**
  * Returns a pattern that matches the most recent unclosed cf-tag, capturing the name and attributes
  */
 export function getCfTagAttributePattern(): RegExp {
@@ -834,7 +858,7 @@ export async function goToMatchingTag(): Promise<void> {
 
   const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(editor.document, position);
 
-  const currentWord = documentPositionStateContext.currentWord;
+  const currentWord: string = documentPositionStateContext.currentWord;
   let globalTag: GlobalTag = getGlobalTag(currentWord);
   if (!globalTag) {
     const cfTagAttributePattern: RegExp = documentPositionStateContext.positionIsScript ? getCfScriptTagAttributePattern() : getCfTagAttributePattern();
@@ -847,25 +871,26 @@ export async function goToMatchingTag(): Promise<void> {
 
   if (globalTag) {
     const nonClosingCfmlTags: string[] = getNonClosingCfmlTags();
-    if (nonClosingCfmlTags.includes(globalTag.name)) {
-      return;
-    }
+    if (!nonClosingCfmlTags.includes(globalTag.name)) {
+      const tags: Tag[] = getCfTags(documentPositionStateContext, documentPositionStateContext.docIsScript);
+      const foundTag: Tag = tags.find((tag: Tag) => {
+        return (tag.bodyRange && !tag.bodyRange.contains(position) && tag.tagRange.contains(position));
+      });
 
-    const tags: Tag[] = getCfTags(documentPositionStateContext, documentPositionStateContext.docIsScript);
-    const foundTag: Tag = tags.find((tag: Tag) => {
-      return (tag.bodyRange && !tag.bodyRange.contains(position) && tag.tagRange.contains(position));
-    });
+      if (foundTag) {
+        let newPosition: Position;
+        if (position.isBeforeOrEqual(foundTag.bodyRange.start)) {
+          newPosition = foundTag.bodyRange.end.translate(0, 2);
+        } else {
+          newPosition = foundTag.tagRange.start.translate(0, 1);
+        }
 
-    if (foundTag) {
-      let newPosition: Position;
-      if (position.isBeforeOrEqual(foundTag.bodyRange.start)) {
-        newPosition = foundTag.bodyRange.end.translate(0, 2);
-      } else {
-        newPosition = foundTag.tagRange.start.translate(0, 1);
+        editor.selection = new Selection(newPosition, newPosition);
+        editor.revealRange(editor.selection);
+        return;
       }
-
-      editor.selection = new Selection(newPosition, newPosition);
-      editor.revealRange(editor.selection);
     }
   }
+
+  window.showInformationMessage("No matching tag was found");
 }

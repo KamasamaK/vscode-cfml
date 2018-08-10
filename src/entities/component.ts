@@ -10,7 +10,7 @@ import { resolveCustomMappingPaths, resolveRelativePath, resolveRootPath } from 
 import { Attribute, Attributes, parseAttributes } from "./attribute";
 import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
-import { parseProperties, Properties } from "./property";
+import { parseProperties, Properties, constructGetter, constructSetter, Property } from "./property";
 import { ComponentFunctions, parseScriptFunctions, parseTagFunctions, UserFunction } from "./userFunction";
 import { parseVariableAssignments, Variable } from "./variable";
 
@@ -24,9 +24,9 @@ export const COMPONENT_PATTERN: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(
 
 export const componentExtendsPathPrefix: RegExp = /\b(extends|implements)\s*=\s*(['"])?([^'"#\s]*?)$/i;
 
-export const componentDottedPathPrefix: RegExp = /\b(import|new)\s+(['"])?([^('";\n]*?)$/i;
+export const componentDottedPathPrefix: RegExp = /\b(import|new)\s+(?:component\s*:\s*)?(['"])?([^('":;\n]*?)$/i;
 
-export const objectNewInstanceInitPrefix: RegExp = /\bnew\s+(['"])?([^('"]+?)\1\($/i;
+export const objectNewInstanceInitPrefix: RegExp = /\bnew\s+(?:component\s*:\s*)?(['"])?([^('":]+?)\1\($/i;
 
 export interface ReferencePattern {
   pattern: RegExp;
@@ -36,7 +36,7 @@ export interface ReferencePattern {
 export const objectReferencePatterns: ReferencePattern[] = [
   // new object
   {
-    pattern: /\bnew\s+(['"])?([^('"]+?)\1\(/gi,
+    pattern: /\bnew\s+(?:component\s*:\s*)?(['"])?([^('":]+?)\1\(/gi,
     refIndex: 2
   },
   // import
@@ -217,7 +217,7 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     implements: null,
     accessors: false,
     functions: new ComponentFunctions(),
-    properties: parseProperties(document),
+    properties: parseProperties(documentStateContext),
     variables: [],
     imports: []
   };
@@ -234,12 +234,12 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     Object.assign(componentAttributes, docBlockAttributes);
 
     parsedDocBlock.filter((docAttribute: DocBlockKeyValue) => {
-      return docAttribute.key === "extends";
-    }).forEach((docAttr: DocBlockKeyValue) => {
-      const extendsName: string = getComponentNameFromDotPath(docAttr.value);
+      return docAttribute.key === "extends" && docAttribute.value;
+    }).forEach((docAttribute: DocBlockKeyValue) => {
+      const extendsName: string = getComponentNameFromDotPath(docAttribute.value);
       component.extendsRange = new Range(
-        docAttr.valueRange.start.translate(0, docAttr.value.length - extendsName.length),
-        docAttr.valueRange.end
+        docAttribute.valueRange.start.translate(0, docAttribute.value.length - extendsName.length),
+        docAttribute.valueRange.end
       );
     });
   }
@@ -258,11 +258,13 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
 
     if (parsedAttributes.has("extends")) {
       const extendsAttr: Attribute = parsedAttributes.get("extends");
-      const extendsName: string = getComponentNameFromDotPath(extendsAttr.value);
-      component.extendsRange = new Range(
-        extendsAttr.valueRange.start.translate(0, extendsAttr.value.length - extendsName.length),
-        extendsAttr.valueRange.end
-      );
+      if (extendsAttr.value) {
+        const extendsName: string = getComponentNameFromDotPath(extendsAttr.value);
+        component.extendsRange = new Range(
+          extendsAttr.valueRange.start.translate(0, extendsAttr.value.length - extendsName.length),
+          extendsAttr.valueRange.end
+        );
+      }
     }
   }
 
@@ -299,9 +301,27 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     componentFunctions.set(compFun.name.toLowerCase(), compFun);
   });
 
-  component.functions = componentFunctions;
+  // Implicit functions
+  if (component.accessors) {
+    component.properties.forEach((prop: Property) => {
+      // getters
+      if (typeof prop.getter === "undefined" || prop.getter) {
+        const getterKey = "get" + prop.name.toLowerCase();
+        if (!componentFunctions.has(getterKey)) {
+          componentFunctions.set(getterKey, constructGetter(prop, component.uri));
+        }
+      }
+      // setters
+      if (typeof prop.setter === "undefined" || prop.setter) {
+        const setterKey = "set" + prop.name.toLowerCase();
+        if (!componentFunctions.has(setterKey)) {
+          componentFunctions.set(setterKey, constructSetter(prop, component.uri));
+        }
+      }
+    });
+  }
 
-  // TODO: ImplicitFunctions?
+  component.functions = componentFunctions;
 
   const componentDefinitionRange = new Range(document.positionAt(componentMatch.index + head.length), earliestFunctionRangeStart);
   documentStateContext.component = component;

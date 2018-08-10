@@ -1,7 +1,8 @@
 import { Uri } from "vscode";
-import { componentPathToUri } from "./component";
 import { equalsIgnoreCase } from "../utils/textUtil";
+import { componentPathToUri } from "./component";
 import { queryValuePattern } from "./query";
+import { functionValuePattern } from "./userFunction";
 
 export enum DataType {
   Any = "any",
@@ -224,7 +225,7 @@ export namespace DataType {
       return [DataType.String, null];
     }
 
-    if (/^function\s*\(/.test(value)) {
+    if (functionValuePattern.test(value)) {
       return [DataType.Function, null];
     }
 

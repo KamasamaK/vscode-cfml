@@ -10,7 +10,7 @@ import { DocumentPositionStateContext, getDocumentPositionStateContext } from ".
 
 export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvider {
 
-  public async provideTypeDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition> {
+  public async provideTypeDefinition(document: TextDocument, position: Position, _token: CancellationToken | boolean): Promise<Definition> {
     const results: Definition = [];
 
     const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
@@ -50,7 +50,7 @@ export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvide
             });
           });
 
-          if (func.bodyRange.contains(position)) {
+          if (!func.isImplicit && func.bodyRange.contains(position)) {
             // Argument uses
             const argumentPrefixPattern = getValidScopesPrefixPattern([Scope.Arguments], false);
             if (argumentPrefixPattern.test(docPrefix)) {
@@ -119,19 +119,21 @@ export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvide
       }
     } else if (docIsCfmFile) {
       const docVariableAssignments: Variable[] = parseVariableAssignments(documentPositionStateContext, false);
-
       const variableScopePrefixPattern: RegExp = getVariableScopePrefixPattern();
       const variableScopePrefixMatch: RegExpExecArray = variableScopePrefixPattern.exec(docPrefix);
       if (variableScopePrefixMatch) {
         const validScope: string = variableScopePrefixMatch[1];
+        let currentScope: Scope;
+        if (validScope) {
+          currentScope = Scope.valueOf(validScope);
+        }
 
         docVariableAssignments.filter((variable: Variable) => {
           if (!equalsIgnoreCase(variable.identifier, currentWord) || !variable.dataTypeComponentUri) {
             return false;
           }
 
-          if (validScope) {
-            const currentScope: Scope = Scope.valueOf(validScope);
+          if (currentScope) {
             return (variable.scope === currentScope || (variable.scope === Scope.Unknown && unscopedPrecedence.includes(currentScope)));
           }
 

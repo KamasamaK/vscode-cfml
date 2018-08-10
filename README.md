@@ -85,6 +85,7 @@ The following are the configurable Settings (Win/Linux: `Ctrl`+`Comma`; Mac: `Cm
     }
     ```
 - `cfml.definition.enable`: Whether providing definitions is enabled. [*Default*: `true`]
+- `cfml.definition.userFunctions.search.enable`: Whether to search for matching functions throughout the workspace when a reliable match cannot be determined. Peek Definition will provide a list of all matches. [*Default*: `false`]
 - `cfml.indexComponents.enable`: Whether to index all components in workspace on startup. This is done on each startup and duration depends on number and complexity of components as well as hardware specifications. Editor may be unresponsive during this period. It is currently required for most features involving components. [*Default*: `true`]
 - `cfml.autoCloseTags.enable`: Whether to enable auto-closing tags for CFML. This uses the third-party extension `auto-close-tag`. Changing this requires a restart. [*Default*: `true`]
 - `cfml.autoCloseTags.configurationTarget`: Auto-configuration target for auto-closing tags. [*Default*: `Global`]
@@ -137,6 +138,8 @@ Used in Command Palette (Win/Linux: `Ctrl`+`Shift`+`P`; Mac: `Cmd`+`Shift`+`P`).
 - Toggle CFML block comment (`Shift`+`Alt`+`A`)
 - Open Application file for currently active document
 - Go to Matching Tag
+- Open CFDocs page
+- Open CFML engine docs page
 
 ## Known Issues/Limitations
 
@@ -169,7 +172,6 @@ VS Code and this extension lack features and functionality that I find useful fo
 - [CFLint](https://marketplace.visualstudio.com/items?itemName=KamasamaK.vscode-cflint) - Integrates CFLint into VS Code as diagnostics.
 - [highlight-matching-tag](https://marketplace.visualstudio.com/items?itemName=vincaslt.highlight-matching-tag) - This doesn't work for all tags, but I've found it to work just enough to be useful.
 - [Path Autocomplete](https://marketplace.visualstudio.com/items?itemName=ionutvmi.path-autocomplete) - Provides suggestions when entering file paths
-- [Code Outline](https://marketplace.visualstudio.com/items?itemName=patrys.vscode-code-outline) - Displays document symbols in an outline view
 - [TODO Highlight](https://marketplace.visualstudio.com/items?itemName=wayou.vscode-todo-highlight)
 
 ## Release Notes

@@ -1,16 +1,18 @@
 import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, workspace, WorkspaceConfiguration } from "vscode";
 import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath } from "../entities/component";
-import { componentPathToUri, getComponent } from "./cachedEntities";
+import { componentPathToUri, getComponent, searchAllFunctionNames } from "./cachedEntities";
 import { Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern, unscopedPrecedence } from "../entities/scope";
 import { UserFunction, UserFunctionSignature, Argument, getLocalVariables, getFunctionFromPrefix } from "../entities/userFunction";
 import { Property } from "../entities/property";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { Variable, parseVariableAssignments, getApplicationVariables, getServerVariables } from "../entities/variable";
 import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
+import { SearchMode } from "../utils/collections";
+import { getFunctionSuffixPattern } from "../entities/function";
 
 export default class CFMLDefinitionProvider implements DefinitionProvider {
 
-  public async provideDefinition(document: TextDocument, position: Position, token: CancellationToken | boolean): Promise<Definition> {
+  public async provideDefinition(document: TextDocument, position: Position, _token: CancellationToken | boolean): Promise<Definition> {
     const cfmlDefinitionSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.definition", document.uri);
     if (!cfmlDefinitionSettings.get<boolean>("enable", true)) {
       return null;
@@ -81,7 +83,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
         // Component functions (related)
         thisComponent.functions.forEach((func: UserFunction) => {
           // Function return types
-          if (func.returnTypeUri && func.returnTypeRange.contains(position)) {
+          if (func.returnTypeUri && func.returnTypeRange && func.returnTypeRange.contains(position)) {
             const returnTypeComp: Component = getComponent(func.returnTypeUri);
             if (returnTypeComp) {
               results.push(new Location(
@@ -106,7 +108,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             });
           });
 
-          if (func.bodyRange.contains(position)) {
+          if (!func.isImplicit && func.bodyRange.contains(position)) {
             // Argument uses
             const argumentPrefixPattern = getValidScopesPrefixPattern([Scope.Arguments], false);
             if (argumentPrefixPattern.test(docPrefix)) {
@@ -159,19 +161,21 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       }
     } else if (docIsCfmFile) {
       const docVariableAssignments: Variable[] = parseVariableAssignments(documentPositionStateContext, false);
-
       const variableScopePrefixPattern: RegExp = getVariableScopePrefixPattern();
       const variableScopePrefixMatch: RegExpExecArray = variableScopePrefixPattern.exec(docPrefix);
       if (variableScopePrefixMatch) {
         const validScope: string = variableScopePrefixMatch[1];
+        let currentScope: Scope;
+        if (validScope) {
+          currentScope = Scope.valueOf(validScope);
+        }
 
         docVariableAssignments.filter((variable: Variable) => {
           if (!equalsIgnoreCase(variable.identifier, currentWord)) {
             return false;
           }
 
-          if (validScope) {
-            const currentScope: Scope = Scope.valueOf(validScope);
+          if (currentScope) {
             return (variable.scope === currentScope || (variable.scope === Scope.Unknown && unscopedPrecedence.includes(currentScope)));
           }
 
@@ -214,6 +218,21 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       }).forEach((variable: Variable) => {
         results.push(variable.declarationLocation);
       });
+    }
+
+    // Search for function by name
+    if (cfmlDefinitionSettings.get<boolean>("userFunctions.search.enable", false) && results.length === 0 && documentPositionStateContext.isContinuingExpression) {
+      const wordSuffix: string = documentText.slice(document.offsetAt(wordRange.end), documentText.length);
+      const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
+      if (functionSuffixPattern.test(wordSuffix)) {
+        const functionSearchResults = searchAllFunctionNames(lowerCurrentWord, SearchMode.EqualTo);
+        functionSearchResults.forEach((userFunc: UserFunction) => {
+          results.push(new Location(
+            userFunc.location.uri,
+            userFunc.nameRange
+          ));
+        });
+      }
     }
 
     return results;

@@ -2,12 +2,25 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.4.1] - 2018-08-09
+
+- Added commands `cfml.openCfDocs` and `cfml.openEngineDocs`
+- Added notification for auto-close-tag extension when not installed and setting is enabled
+- Added support for new ACF 2018 syntax
+- Added a setting that will enable a definition search in a workspace if a reliable function definition cannot be found
+- Improved support for functions defined in cfm files
+- Improved suggestions for closures assigned to variables
+- Fixed exception suggestions for type `any`
+- Fixed syntax highlighting issue for variable properties with numeric keys
+- Updated Tasks to 2.0.0
+- Updated `DocumentSymbolProvider` to provide new `DocumentSymbol` type
+
 ## [0.4.0] - 2018-06-04
 
 - Added support for custom mappings
 - Added setting for whether to provide definitions
 - Added more type definitions
-- Added scopes to settings to indicate whether they are resource-based or workspace-based
+- Added scopes to settings to indicate whether they are resource-based or window-based
 - Added ability and configuration to have attributes populated for global tag completions
 - Added command to open Application file for active document
 - Added command to go to matching CFML tag

@@ -35,7 +35,7 @@ export interface GlobalTags {
 }
 
 /**
- * (Unimplemented)
+ * TODO: Implement
  * Returns the data type of the member function variant of the given global function
  * @param functionName The global function name
  */
@@ -66,6 +66,7 @@ export function globalTagSyntaxToScript(globalTag: GlobalTag): string {
  * @param globalTag The global tag for which to construct the snippet
  * @param includeAttributesSetType Indicates which set of attributes to include in the snippet
  * @param includeAttributesCustom Provides an optional set of attributes which overrides the set type
+ * @param includeDefaultValue Whether to fill the attribute value with the default if it exists
  * @param isScript Whether this snippet for a script tag
  */
 export function constructTagSnippet(

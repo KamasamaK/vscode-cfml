@@ -4,6 +4,7 @@ import { MyMap } from "../collections";
 
 export interface MinMultiSigs extends MyMap<string, string[][]> { }
 
+// TODO: Indicate version when signature was added
 export const multiSigGlobalFunctions: MinMultiSigs =
   // Key: Function name. Value: Array of signatures, consisting of array of argument names.
   new MyMap<string, string[][]>()
@@ -20,6 +21,20 @@ export const multiSigGlobalFunctions: MinMultiSigs =
         ]
       ]
     )
+    /*
+    .set("arrayFind",
+      [
+        [
+          "array",
+          "object"
+        ],
+        [
+          "array",
+          "callback"
+        ]
+      ]
+    )
+    */
     .set("createObject",
       [
         [
