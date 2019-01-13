@@ -284,6 +284,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
             // User functions
             if (foundVar.dataTypeComponentUri) {
               let addedFunctions: MySet<string> = new MySet();
+              let addedVariables: MySet<string> = new MySet();
               const initialFoundComp: Component = getComponent(foundVar.dataTypeComponentUri);
 
               let validFunctionAccess: MySet<Access> = new MySet([Access.Remote, Access.Public]);
@@ -307,6 +308,16 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
                   addedFunctions.add(funcKey);
                   result.push(createNewProposal(
                     func.name, CompletionItemKind.Function, { detail: `(function) ${foundComponent.name}.${getSyntaxString(func)}`, description: func.description }
+                  ));
+                });
+
+                foundComponent.variables.filter((variable: Variable) => {
+                  return !addedVariables.has(variable.identifier)
+                    && variable.scope === Scope.This
+                }).forEach((variable: Variable) => {
+                  addedVariables.add(variable.identifier);
+                  result.push(createNewProposal(
+                    variable.identifier, CompletionItemKind.Variable, {detail: `(variable) ${variable.scope}.${variable.identifier}: ${variable.dataType}`, description: variable.description }
                   ));
                 });
 
