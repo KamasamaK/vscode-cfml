@@ -24,7 +24,7 @@ export default class DocBlockCompletions implements CompletionItemProvider {
    * @param position
    * @param token
    */
-  public async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): Promise<CompletionItem[]> {
+  public async provideCompletionItems(document: TextDocument, position: Position, _token: CancellationToken): Promise<CompletionItem[]> {
     let result: CompletionItem[] = [];
     let wordMatchRange: Range;
 

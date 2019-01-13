@@ -10,38 +10,24 @@ import { DocumentPositionStateContext, getDocumentPositionStateContext } from ".
 import { CFMLEngine, CFMLEngineName } from "./cfmlEngine";
 import { CFDocsDefinitionInfo, EngineCompatibilityDetail } from "./definitionInfo";
 
-const cfDocsRepoLinkPrefix: string = "https://raw.githubusercontent.com/foundeo/cfdocs/master/data/en/";
-const cfDocsLinkPrefix: string = "https://cfdocs.org/";
+const httpSuccessStatusCode = 200;
 
-// TODO: Replace content retrieval with API calls through @octokit/rest: https://octokit.github.io/rest.js/#api-Repos-getContent
+enum CFDocsSource {
+  Remote = "remote",
+  Local = "local"
+}
 
-export class CFDocsService {
-  /**
-   * Gets definition information for global identifiers based on CFDocs
-   * @param identifier The global identifier for which to get definition info
-   * @param callback An optional callback that takes the returned CFDocsDefinitionInfo
-   */
-  public static async getDefinitionInfo(identifier: string, callback?: (definition: CFDocsDefinitionInfo) => boolean): Promise<CFDocsDefinitionInfo> {
-    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
-    let definitionInfo: Promise<CFDocsDefinitionInfo> = undefined;
-    if (cfmlCfDocsSettings.get<string>("source") === "local") {
-      definitionInfo = CFDocsService.getLocalDefinitionInfo(identifier, callback);
-    } else {
-      definitionInfo = CFDocsService.getRemoteDefinitionInfo(identifier, callback);
-    }
-
-    return definitionInfo;
-  }
+export default class CFDocsService {
+  private static cfDocsRepoLinkPrefix: string = "https://raw.githubusercontent.com/foundeo/cfdocs/master/data/en/";
+  private static cfDocsLinkPrefix: string = "https://cfdocs.org/";
 
   /**
    * Gets definition information for global identifiers based on a local CFDocs directory
    * @param identifier The global identifier for which to get definition info
-   * @param callback An optional callback that takes the returned CFDocsDefinitionInfo
    */
-  private static async getLocalDefinitionInfo(identifier: string, callback?: (definition: CFDocsDefinitionInfo) => boolean): Promise<CFDocsDefinitionInfo> {
+  private static async getLocalDefinitionInfo(identifier: string): Promise<CFDocsDefinitionInfo> {
     const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
     const cfdocsPath: string = cfmlCfDocsSettings.get("localPath");
-    let definitionInfo: CFDocsDefinitionInfo;
 
     return new Promise<CFDocsDefinitionInfo>((resolve, reject) => {
       try {
@@ -50,11 +36,8 @@ export class CFDocsService {
           if (err) {
             reject(err);
           }
-          definitionInfo = CFDocsService.constructDefinitionFromJsonDoc(data);
-          if (callback) {
-            callback(definitionInfo);
-          }
-          resolve(definitionInfo);
+
+          resolve(CFDocsService.constructDefinitionFromJsonDoc(data));
         });
       } catch (e) {
         console.error(`Error with the JSON doc for ${identifier}:`, (<Error>e).message);
@@ -66,28 +49,26 @@ export class CFDocsService {
   /**
    * Gets definition information for global identifiers based on a remote CFDocs repository
    * @param identifier The global identifier for which to get definition info
-   * @param callback An optional callback that takes the returned CFDocsDefinitionInfo
    */
-  private static async getRemoteDefinitionInfo(identifier: string, callback?: (definition: CFDocsDefinitionInfo) => boolean): Promise<CFDocsDefinitionInfo> {
-    const cfDocsLink: string = cfDocsRepoLinkPrefix + CFDocsService.getJsonFileName(identifier);
-    let definitionInfo: CFDocsDefinitionInfo;
+  private static async getRemoteDefinitionInfo(identifier: string): Promise<CFDocsDefinitionInfo> {
+    const cfDocsLink: string = CFDocsService.cfDocsRepoLinkPrefix + CFDocsService.getJsonFileName(identifier);
 
     return new Promise<CFDocsDefinitionInfo>((resolve, reject) => {
+      // Unable to utilize GitHub API due to rate limiting
+
       request(cfDocsLink, (error, response, body) => {
         if (error) {
           console.error(`Error with the request for ${identifier}:`, error);
           reject(error);
-        } else {
+        } else if (response.statusCode === httpSuccessStatusCode) {
           try {
-            definitionInfo = CFDocsService.constructDefinitionFromJsonDoc(body);
-            if (callback) {
-              callback(definitionInfo);
-            }
-            resolve(definitionInfo);
+            resolve(CFDocsService.constructDefinitionFromJsonDoc(body));
           } catch (ex) {
             console.error(`Error with the JSON doc for ${identifier}:`, (<Error>ex).message);
             reject(ex);
           }
+        } else {
+          reject(`JSON doc for ${identifier} could not be retrieved`);
         }
       });
     });
@@ -111,30 +92,37 @@ export class CFDocsService {
    * @param identifier The global identifier for which to the file name will be generated
    */
   private static getJsonFileName(identifier: string): string {
-    return identifier.toLowerCase() + ".json";
+    return `${identifier.toLowerCase()}.json`;
   }
 
   /**
    * Returns a list of all global CFML functions documented on CFDocs
+   * @param source Indicates whether the data will be retrieved locally or remotely
    */
-  public static async getAllFunctionNames(): Promise<string[]> {
-    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
+  public static async getAllFunctionNames(source = CFDocsSource.Remote): Promise<string[]> {
     const jsonFileName: string = CFDocsService.getJsonFileName("functions");
 
     return new Promise<string[]>((resolve, reject) => {
-      if (cfmlCfDocsSettings.get<string>("source") === "local") {
+      if (source === CFDocsSource.Local) {
+        const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
         const cfdocsPath: string = cfmlCfDocsSettings.get("localPath");
         let docFilePath: string = path.join(cfdocsPath, jsonFileName);
-        fs.readFile(docFilePath, "utf8", (err, data) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(JSON.parse(data).related);
-        });
-      } else {
-        const cfDocsLink: string = cfDocsRepoLinkPrefix + jsonFileName;
 
-        request(cfDocsLink, (error, response, body) => {
+        try {
+          fs.readFile(docFilePath, "utf8", (err, data) => {
+            if (err) {
+              reject(err);
+            }
+            resolve(JSON.parse(data).related);
+          });
+        } catch (ex) {
+          console.error("Error retrieving all function names:", (<Error>ex).message);
+          reject(ex);
+        }
+      } else {
+        const cfDocsLink: string = CFDocsService.cfDocsRepoLinkPrefix + jsonFileName;
+
+        request(cfDocsLink, (error, _response, body) => {
           if (error) {
             console.error(`Error with the request for ${jsonFileName}:`, error);
             reject(error);
@@ -153,25 +141,32 @@ export class CFDocsService {
 
   /**
    * Returns a list of all global CFML tags documented on CFDocs
+   * @param source Indicates whether the data will be retrieved locally or remotely
    */
-  public static async getAllTagNames(): Promise<string[]> {
-    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
+  public static async getAllTagNames(source = CFDocsSource.Remote): Promise<string[]> {
     const jsonFileName: string = CFDocsService.getJsonFileName("tags");
 
     return new Promise<string[]>((resolve, reject) => {
-      if (cfmlCfDocsSettings.get<string>("source") === "local") {
+      if (source === CFDocsSource.Local) {
+        const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
         const cfdocsPath: string = cfmlCfDocsSettings.get("localPath");
         let docFilePath: string = path.join(cfdocsPath, jsonFileName);
-        fs.readFile(docFilePath, "utf8", (err, data) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(JSON.parse(data).related);
-        });
-      } else {
-        const cfDocsLink: string = cfDocsRepoLinkPrefix + jsonFileName;
 
-        request(cfDocsLink, (error, response, body) => {
+        try {
+          fs.readFile(docFilePath, "utf8", (err, data) => {
+            if (err) {
+              reject(err);
+            }
+            resolve(JSON.parse(data).related);
+          });
+        } catch (ex) {
+          console.error("Error retrieving all tag names:", (<Error>ex).message);
+          reject(ex);
+        }
+      } else {
+        const cfDocsLink: string = CFDocsService.cfDocsRepoLinkPrefix + jsonFileName;
+
+        request(cfDocsLink, (error, _response, body) => {
           if (error) {
             console.error(`Error with the request for ${jsonFileName}:`, error);
             reject(error);
@@ -225,107 +220,116 @@ export class CFDocsService {
    * Caches all documented tags and functions from CFDocs
    */
   public static async cacheAll(): Promise<boolean> {
-    let allFunctionNames: string[] = await CFDocsService.getAllFunctionNames();
-    allFunctionNames.forEach((functionName: string) => {
-      CFDocsService.getDefinitionInfo(functionName, CFDocsService.setGlobalFunction);
+    const cfmlCfDocsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.cfDocs");
+    const cfdocsSource: CFDocsSource = cfmlCfDocsSettings.get<CFDocsSource>("source", CFDocsSource.Remote);
+    const getDefinitionInfo = cfdocsSource === CFDocsSource.Remote ? CFDocsService.getRemoteDefinitionInfo : CFDocsService.getLocalDefinitionInfo;
+
+    CFDocsService.getAllFunctionNames(cfdocsSource).then((allFunctionNames: string[]) => {
+      allFunctionNames.forEach((functionName: string) => {
+        getDefinitionInfo(functionName).then((definitionInfo: CFDocsDefinitionInfo) => {
+          CFDocsService.setGlobalFunction(definitionInfo);
+        });
+      });
     });
 
-    let allTagNames: string[] = await CFDocsService.getAllTagNames();
-    allTagNames.forEach((tagName: string) => {
-      CFDocsService.getDefinitionInfo(tagName, CFDocsService.setGlobalTag);
+    CFDocsService.getAllTagNames(cfdocsSource).then((allTagNames: string[]) => {
+      allTagNames.forEach((tagName: string) => {
+        getDefinitionInfo(tagName).then((definitionInfo: CFDocsDefinitionInfo) => {
+          CFDocsService.setGlobalTag(definitionInfo);
+        });
+      });
     });
 
     return true;
   }
-}
 
-export async function openCfDocsForCurrentWord(): Promise<void> {
-  if (!window.activeTextEditor) {
-    return;
-  }
-
-  const document: TextDocument = window.activeTextEditor.document;
-  const position: Position = window.activeTextEditor.selection.start;
-  const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
-
-  if (documentPositionStateContext.positionInComment) {
-    return;
-  }
-
-  const docPrefix: string = documentPositionStateContext.docPrefix;
-  const textLine: TextLine = document.lineAt(position);
-  const wordRange: Range = documentPositionStateContext.wordRange;
-  const lineSuffix: string = documentPositionStateContext.sanitizedDocumentText.slice(document.offsetAt(wordRange.end), document.offsetAt(textLine.range.end));
-  const userEngine: CFMLEngine = documentPositionStateContext.userEngine;
-
-  const currentWord: string = documentPositionStateContext.currentWord;
-
-  let globalEntity: GlobalEntity;
-  const tagPrefixPattern: RegExp = getTagPrefixPattern();
-  const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
-
-  if ((tagPrefixPattern.test(docPrefix) || (userEngine.supportsScriptTags() && functionSuffixPattern.test(lineSuffix))) && cachedEntity.isGlobalTag(currentWord)) {
-    globalEntity = cachedEntity.getGlobalTag(currentWord);
-  } else if (!documentPositionStateContext.isContinuingExpression && functionSuffixPattern.test(lineSuffix) && cachedEntity.isGlobalFunction(currentWord)) {
-    globalEntity = cachedEntity.getGlobalFunction(currentWord);
-  }
-
-  if (globalEntity) {
-    commands.executeCommand("vscode.open", Uri.parse(cfDocsLinkPrefix + globalEntity.name));
-  } else {
-    window.showInformationMessage("No matching CFDocs entity was found");
-  }
-}
-
-export async function openEngineDocsForCurrentWord(): Promise<void> {
-  if (!window.activeTextEditor) {
-    return;
-  }
-
-  const document: TextDocument = window.activeTextEditor.document;
-  const position: Position = window.activeTextEditor.selection.start;
-  const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
-
-  if (documentPositionStateContext.positionInComment) {
-    return;
-  }
-
-  const userEngine: CFMLEngine = documentPositionStateContext.userEngine;
-
-  if (userEngine.getName() === CFMLEngineName.Unknown) {
-    window.showInformationMessage("CFML engine is not set");
-    return;
-  }
-
-  const docPrefix: string = documentPositionStateContext.docPrefix;
-  const textLine: TextLine = document.lineAt(position);
-  const wordRange: Range = documentPositionStateContext.wordRange;
-  const lineSuffix: string = documentPositionStateContext.sanitizedDocumentText.slice(document.offsetAt(wordRange.end), document.offsetAt(textLine.range.end));
-
-  const currentWord: string = documentPositionStateContext.currentWord;
-
-  let globalEntity: CFDocsDefinitionInfo;
-  const tagPrefixPattern: RegExp = getTagPrefixPattern();
-  const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
-
-  if ((tagPrefixPattern.test(docPrefix) || (userEngine.supportsScriptTags() && functionSuffixPattern.test(lineSuffix))) && cachedEntity.isGlobalTag(currentWord))
-  {
-    globalEntity = cachedEntity.getGlobalEntityDefinition(currentWord);
-  } else if (!documentPositionStateContext.isContinuingExpression && functionSuffixPattern.test(lineSuffix) && cachedEntity.isGlobalFunction(currentWord)) {
-    globalEntity = cachedEntity.getGlobalEntityDefinition(currentWord);
-  }
-
-  if (globalEntity && globalEntity.engines && globalEntity.engines.hasOwnProperty(userEngine.getName())) {
-    const engineInfo: EngineCompatibilityDetail = globalEntity.engines[userEngine.getName()];
-    if (engineInfo.docs) {
-      commands.executeCommand("vscode.open", Uri.parse(engineInfo.docs));
-    } else {
-      window.showInformationMessage("No engine docs for this entity was found");
+  public static async openCfDocsForCurrentWord(): Promise<void> {
+    if (!window.activeTextEditor) {
+      return;
     }
 
-    return;
+    const document: TextDocument = window.activeTextEditor.document;
+    const position: Position = window.activeTextEditor.selection.start;
+    const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
+
+    if (documentPositionStateContext.positionInComment) {
+      return;
+    }
+
+    const docPrefix: string = documentPositionStateContext.docPrefix;
+    const textLine: TextLine = document.lineAt(position);
+    const wordRange: Range = documentPositionStateContext.wordRange;
+    const lineSuffix: string = documentPositionStateContext.sanitizedDocumentText.slice(document.offsetAt(wordRange.end), document.offsetAt(textLine.range.end));
+    const userEngine: CFMLEngine = documentPositionStateContext.userEngine;
+
+    const currentWord: string = documentPositionStateContext.currentWord;
+
+    let globalEntity: GlobalEntity;
+    const tagPrefixPattern: RegExp = getTagPrefixPattern();
+    const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
+
+    if ((tagPrefixPattern.test(docPrefix) || (userEngine.supportsScriptTags() && functionSuffixPattern.test(lineSuffix))) && cachedEntity.isGlobalTag(currentWord)) {
+      globalEntity = cachedEntity.getGlobalTag(currentWord);
+    } else if (!documentPositionStateContext.isContinuingExpression && functionSuffixPattern.test(lineSuffix) && cachedEntity.isGlobalFunction(currentWord)) {
+      globalEntity = cachedEntity.getGlobalFunction(currentWord);
+    }
+
+    if (globalEntity) {
+      commands.executeCommand("vscode.open", Uri.parse(CFDocsService.cfDocsLinkPrefix + globalEntity.name));
+    } else {
+      window.showInformationMessage("No matching CFDocs entity was found");
+    }
   }
 
-  window.showInformationMessage("No matching compatible entity was found");
+  public static async openEngineDocsForCurrentWord(): Promise<void> {
+    if (!window.activeTextEditor) {
+      return;
+    }
 
+    const document: TextDocument = window.activeTextEditor.document;
+    const position: Position = window.activeTextEditor.selection.start;
+    const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
+
+    if (documentPositionStateContext.positionInComment) {
+      return;
+    }
+
+    const userEngine: CFMLEngine = documentPositionStateContext.userEngine;
+
+    if (userEngine.getName() === CFMLEngineName.Unknown) {
+      window.showInformationMessage("CFML engine is not set");
+      return;
+    }
+
+    const docPrefix: string = documentPositionStateContext.docPrefix;
+    const textLine: TextLine = document.lineAt(position);
+    const wordRange: Range = documentPositionStateContext.wordRange;
+    const lineSuffix: string = documentPositionStateContext.sanitizedDocumentText.slice(document.offsetAt(wordRange.end), document.offsetAt(textLine.range.end));
+
+    const currentWord: string = documentPositionStateContext.currentWord;
+
+    let globalEntity: CFDocsDefinitionInfo;
+    const tagPrefixPattern: RegExp = getTagPrefixPattern();
+    const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
+
+    if ((tagPrefixPattern.test(docPrefix) || (userEngine.supportsScriptTags() && functionSuffixPattern.test(lineSuffix))) && cachedEntity.isGlobalTag(currentWord))
+    {
+      globalEntity = cachedEntity.getGlobalEntityDefinition(currentWord);
+    } else if (!documentPositionStateContext.isContinuingExpression && functionSuffixPattern.test(lineSuffix) && cachedEntity.isGlobalFunction(currentWord)) {
+      globalEntity = cachedEntity.getGlobalEntityDefinition(currentWord);
+    }
+
+    if (globalEntity && globalEntity.engines && globalEntity.engines.hasOwnProperty(userEngine.getName())) {
+      const engineInfo: EngineCompatibilityDetail = globalEntity.engines[userEngine.getName()];
+      if (engineInfo.docs) {
+        commands.executeCommand("vscode.open", Uri.parse(engineInfo.docs));
+      } else {
+        window.showInformationMessage("No engine docs for this entity was found");
+      }
+
+      return;
+    }
+
+    window.showInformationMessage("No matching compatible entity was found");
+  }
 }

@@ -1,10 +1,10 @@
 import { DataType } from "./dataType";
-import { Signature, constructSignatureLabel } from "./signature";
+import { Signature, constructSignatureLabelParamsPart, constructSignatureLabelParamsPrefix } from "./signature";
 import { UserFunction } from "./userFunction";
 import { COMPONENT_EXT } from "./component";
 import * as path from "path";
 import { DocumentStateContext } from "../utils/documentUtil";
-import { Range, TextDocument } from "vscode";
+import { Range, TextDocument, Position } from "vscode";
 import { getNextCharacterPosition } from "../utils/contextUtil";
 
 const functionSuffixPattern: RegExp = /^\s*\(([^)]*)/;
@@ -31,14 +31,13 @@ export enum MemberType {
 /**
  * Constructs a string showing a function invocation sample
  * @param func The function for which the syntax string will be constructed
+ * @param signatureIndex The index of the signature to use
  */
-export function getSyntaxString(func: Function): string {
-  const funcDefaultSignature = func.signatures.length !== 0 ? constructSignatureLabel(func.signatures[0]) : "";
+export function constructSyntaxString(func: Function, signatureIndex: number = 0): string {
+  const funcSignatureParamsLabel = func.signatures.length !== 0 ? constructSignatureLabelParamsPart(func.signatures[signatureIndex].parameters) : "";
   const returnType: string = getReturnTypeString(func);
 
-  // TODO: If UserFunction, use ComponentName.functionName based on location
-
-  return `${func.name}(${funcDefaultSignature}): ${returnType}`;
+  return `${constructSignatureLabelParamsPrefix(func)}(${funcSignatureParamsLabel}): ${returnType}`;
 }
 
 /**
@@ -72,6 +71,7 @@ export function getReturnTypeString(func: Function): string {
  * Gets the ranges for each argument given the range for all of the arguments
  * @param documentStateContext The context information for the TextDocument containing function arguments
  * @param argsRange The full range for a set of arguments
+ * @param separatorChar The character that separates function arguments
  */
 export function getScriptFunctionArgRanges(documentStateContext: DocumentStateContext, argsRange: Range, separatorChar: string = ","): Range[] {
   let argRanges: Range[] = [];
@@ -79,9 +79,9 @@ export function getScriptFunctionArgRanges(documentStateContext: DocumentStateCo
   const argsEndOffset: number = document.offsetAt(argsRange.end);
 
   let argStartPosition = argsRange.start;
-  while (argStartPosition.isBefore(argsRange.end)) {
-    const argSeparatorPos = getNextCharacterPosition(documentStateContext, document.offsetAt(argStartPosition), argsEndOffset, separatorChar, false);
-    const argRange = new Range(argStartPosition, argSeparatorPos);
+  while (argStartPosition.isBeforeOrEqual(argsRange.end)) {
+    const argSeparatorPos: Position = getNextCharacterPosition(documentStateContext, document.offsetAt(argStartPosition), argsEndOffset, separatorChar, false);
+    const argRange: Range = new Range(argStartPosition, argSeparatorPos);
     argRanges.push(argRange);
     argStartPosition = argSeparatorPos.translate(0, 1);
   }

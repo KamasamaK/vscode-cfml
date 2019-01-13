@@ -1,12 +1,12 @@
 import { SnippetString } from "vscode";
 import { MyMap, NameWithOptionalValue } from "../utils/collections";
-import { ATTRIBUTES_PATTERN, IncludeAttributesSetType } from "./attribute";
+import { ATTRIBUTES_PATTERN, IncludeAttributesSetType, AttributeQuoteType } from "./attribute";
 import { DataType } from "./dataType";
 import { Function } from "./function";
 import { Parameter } from "./parameter";
 import { Signature } from "./signature";
 import { getCfStartTagPattern } from "./tag";
-import { equalsIgnoreCase } from "../utils/textUtil";
+import { equalsIgnoreCase, getQuote } from "../utils/textUtil";
 
 export interface GlobalEntity {
   name: string;
@@ -39,9 +39,9 @@ export interface GlobalTags {
  * Returns the data type of the member function variant of the given global function
  * @param functionName The global function name
  */
-export function getMemberFunctionType(functionName: string): DataType {
-  return DataType.Any;
-}
+// export function getMemberFunctionType(functionName: string): DataType {
+//   return DataType.Any;
+// }
 
 /**
  * Transforms the global tag syntax into script syntax
@@ -61,10 +61,12 @@ export function globalTagSyntaxToScript(globalTag: GlobalTag): string {
   return `${globalTag.name}(${attributes.join(", ")})`;
 }
 
+// TODO: Check cfml.suggest.globalTags.attributes.quoteType
 /**
  * Constructs a snippet for the given global tag which includes attributes
  * @param globalTag The global tag for which to construct the snippet
  * @param includeAttributesSetType Indicates which set of attributes to include in the snippet
+ * @param attributeQuoteType The type of quote to use for attributes
  * @param includeAttributesCustom Provides an optional set of attributes which overrides the set type
  * @param includeDefaultValue Whether to fill the attribute value with the default if it exists
  * @param isScript Whether this snippet for a script tag
@@ -72,6 +74,7 @@ export function globalTagSyntaxToScript(globalTag: GlobalTag): string {
 export function constructTagSnippet(
   globalTag: GlobalTag,
   includeAttributesSetType: IncludeAttributesSetType = IncludeAttributesSetType.Required,
+  attributeQuoteType: AttributeQuoteType = AttributeQuoteType.Double,
   includeAttributesCustom?: NameWithOptionalValue<string>[],
   includeDefaultValue: boolean = false,
   isScript: boolean = false
@@ -98,38 +101,7 @@ export function constructTagSnippet(
         });
       }
       snippetParamParts = parameters.map((param: Parameter, index: number) => {
-        const tabstopNumber: number = index + 1;
-
-        /*
-        if (param.enumeratedValues && param.enumeratedValues.length > 0 && !param.enumeratedValues.includes("|") && !param.enumeratedValues.includes(",")) {
-          snippetString += `\${${tabstopNumber}|${param.enumeratedValues.join(",")}|}`;
-        } else if (param.dataType === DataType.Boolean) {
-          snippetString += `\${${tabstopNumber}|true,false|}`;
-        } else {
-          snippetString += "$" + tabstopNumber;
-        }
-        */
-
-        let placeholder: string = "";
-
-        let customValue: string;
-        if (includeAttributesCustom !== undefined) {
-          const customEntry: NameWithOptionalValue<string> = includeAttributesCustom.find((attributeEntry: NameWithOptionalValue<string>) => {
-            return equalsIgnoreCase(attributeEntry.name, param.name);
-          });
-
-          if (customEntry !== undefined) {
-            customValue = customEntry.value;
-          }
-        }
-
-        if (customValue !== undefined) {
-          placeholder = customValue;
-        } else if (includeDefaultValue && param.default) {
-          placeholder = param.default;
-        }
-
-        return `${param.name}="\${${tabstopNumber}:${placeholder}}"`;
+        return constructAttributeSnippet(param, index, attributeQuoteType, includeDefaultValue, includeAttributesCustom);
       });
     }
 
@@ -149,4 +121,47 @@ export function constructTagSnippet(
   }
 
   return tagSnippet;
+}
+
+export function constructAttributeSnippet(
+  param: Parameter,
+  index: number,
+  attributeQuoteType: AttributeQuoteType = AttributeQuoteType.Double,
+  includeDefaultValue: boolean = false,
+  includeAttributesCustom?: NameWithOptionalValue<string>[]
+): string {
+  const tabstopNumber: number = index + 1;
+
+  /*
+  if (param.enumeratedValues && param.enumeratedValues.length > 0 && !param.enumeratedValues.includes("|") && !param.enumeratedValues.includes(",")) {
+    snippetString += `\${${tabstopNumber}|${param.enumeratedValues.join(",")}|}`;
+  } else if (param.dataType === DataType.Boolean) {
+    snippetString += `\${${tabstopNumber}|true,false|}`;
+  } else {
+    snippetString += "$" + tabstopNumber;
+  }
+  */
+
+  let placeholder: string = "";
+
+  let customValue: string;
+  if (includeAttributesCustom !== undefined) {
+    const customEntry: NameWithOptionalValue<string> = includeAttributesCustom.find((attributeEntry: NameWithOptionalValue<string>) => {
+      return equalsIgnoreCase(attributeEntry.name, param.name);
+    });
+
+    if (customEntry !== undefined) {
+      customValue = customEntry.value;
+    }
+  }
+
+  if (customValue !== undefined) {
+    placeholder = customValue;
+  } else if (includeDefaultValue && param.default) {
+    placeholder = param.default;
+  }
+
+  const quoteStr: string = getQuote(attributeQuoteType);
+
+  return `${param.name}=${quoteStr}\${${tabstopNumber}:${placeholder}}${quoteStr}`;
 }

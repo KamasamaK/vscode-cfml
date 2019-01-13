@@ -2,13 +2,13 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.25.0"
+    "vscode": "^1.30.0"
   },
   "repository": {
     "type": "git",
@@ -86,10 +86,19 @@
         },
         "cfml.cfDocs.source": {
           "type": "string",
-          "description": "Indicates which source will be used. Remote is GitHub repo. Local is based on cfml.cfDocs.localPath.",
+          "description": "Indicates the source location type to be used for CFDocs. Remote is GitHub repo. Local is based on cfml.cfDocs.localPath.",
+          "markdownDescription": "Indicates the source location type to be used for CFDocs. Remote is GitHub repo. Local is based on `cfml.cfDocs.localPath`.",
           "enum": [
             "remote",
             "local"
+          ],
+          "enumDescriptions": [
+            "Retrieve resources remotely from GitHub.",
+            "Retrieve resources locally using cfml.cfDocs.localPath."
+          ],
+          "markdownEnumDescription": [
+            "Retrieve resources remotely from GitHub.",
+            "Retrieve resources locally using `cfml.cfDocs.localPath`."
           ],
           "default": "remote",
           "scope": "window"
@@ -105,7 +114,19 @@
         },
         "cfml.hover.enable": {
           "type": "boolean",
-          "description": "Whether hover is enabled.",
+          "description": "Whether hover is enabled for CFML entities.",
+          "default": true,
+          "scope": "resource"
+        },
+        "cfml.hover.html.enable": {
+          "type": "boolean",
+          "description": "Whether hover is enabled for HTML entities.",
+          "default": true,
+          "scope": "resource"
+        },
+        "cfml.hover.css.enable": {
+          "type": "boolean",
+          "description": "Whether hover is enabled for CSS entities.",
           "default": true,
           "scope": "resource"
         },
@@ -142,27 +163,64 @@
           "default": true,
           "scope": "resource"
         },
+        "cfml.suggest.globalFunctions.firstLetterCase": {
+          "type": "string",
+          "description": "What case should be used for the first letter of global function suggestions.",
+          "enum": [
+            "unchanged",
+            "lower",
+            "upper"
+          ],
+          "enumDescriptions": [
+            "Leaves the name unchanged from source",
+            "Lowercases the first letter",
+            "Uppercases the first letter"
+          ],
+          "default": "default",
+          "scope": "resource"
+        },
         "cfml.suggest.globalTags.enable": {
           "type": "boolean",
           "description": "Whether global tags are part of completion help.",
           "default": true,
           "scope": "resource"
         },
+        "cfml.suggest.globalTags.attributes.quoteType": {
+          "type": "string",
+          "enum": [
+            "none",
+            "double",
+            "single"
+          ],
+          "enumDescriptions": [
+            "Adds no quotes for attribute value",
+            "Adds two double quotes for attribute value",
+            "Adds two single quotes for attribute value"
+          ],
+          "default": "double",
+          "description": "Which quote type to use when completing attribute suggestion.",
+          "scope": "resource"
+        },
+        "cfml.suggest.globalTags.attributes.defaultValue": {
+          "type": "boolean",
+          "description": "Whether to populate the default value for an attribute if it has one.",
+          "default": false,
+          "scope": "resource"
+        },
         "cfml.suggest.globalTags.includeAttributes.setType": {
           "type": "string",
-          "description": "What set of attributes to include when suggestion is selected",
+          "description": "What set of attributes to include when global tag suggestion is selected",
           "default": "none",
           "enum": [
             "none",
             "required",
             "all"
           ],
-          "scope": "resource"
-        },
-        "cfml.suggest.globalTags.includeAttributes.defaultValue": {
-          "type": "boolean",
-          "description": "Whether to populate the default value for an attribute if it has one.",
-          "default": false,
+          "enumDescriptions": [
+            "Adds no attributes on completion of global tags",
+            "Adds required attributes on completion of global tags",
+            "Adds all attributes on completion of global tags"
+          ],
           "scope": "resource"
         },
         "cfml.suggest.globalTags.includeAttributes.custom": {
@@ -201,6 +259,34 @@
           "additionalProperties": false,
           "scope": "resource"
         },
+        "cfml.suggest.htmlTags.enable": {
+          "type": "boolean",
+          "description": "Whether HTML tags are part of completion help.",
+          "default": true,
+          "scope": "resource"
+        },
+        "cfml.suggest.htmlTags.attributes.quoteType": {
+          "type": "string",
+          "enum": [
+            "none",
+            "double",
+            "single"
+          ],
+          "enumDescriptions": [
+            "Adds no quotes for attribute value",
+            "Adds two double quotes for attribute value",
+            "Adds two single quotes for attribute value"
+          ],
+          "default": "double",
+          "description": "Which quote type to use when completing attribute suggestion.",
+          "scope": "resource"
+        },
+        "cfml.suggest.css.enable": {
+          "type": "boolean",
+          "description": "Whether CSS properties and values are part of completion help.",
+          "default": true,
+          "scope": "resource"
+        },
         "cfml.definition.enable": {
           "type": "boolean",
           "description": "Whether providing definitions is enabled.",
@@ -215,35 +301,19 @@
         },
         "cfml.indexComponents.enable": {
           "type": "boolean",
-          "description": "Whether to index all components in workspace. This is done on each startup and is required for multiple features.",
+          "description": "Whether to index all components in workspace. This is done on each startup and is required for multiple features to work properly.",
           "default": true,
           "scope": "window"
         },
         "cfml.autoCloseTags.enable": {
           "type": "boolean",
-          "description": "Whether to enable auto-closing tags for CFML. This uses the third-party extension auto-close-tag. Change requires restart.",
+          "markdownDescription": "Whether to enable auto-closing tags for CFML. This uses the third-party extension `auto-close-tag`. This is only checked and set on startup.",
           "default": true,
           "scope": "window"
         },
         "cfml.autoCloseTags.configurationTarget": {
           "type": "string",
           "description": "Auto-configuration target for auto-closing tags.",
-          "enum": [
-            "Global",
-            "Workspace"
-          ],
-          "default": "Global",
-          "scope": "window"
-        },
-        "cfml.emmet.enable": {
-          "type": "boolean",
-          "description": "Whether to enable Emmet for CFML. Change requires restart.",
-          "default": false,
-          "scope": "window"
-        },
-        "cfml.emmet.configurationTarget": {
-          "type": "string",
-          "description": "Auto-configuration target for Emmet.",
           "enum": [
             "Global",
             "Workspace"
@@ -342,6 +412,11 @@
         }
       }
     },
+    "configurationDefaults": {
+      "[cfml]": {
+        "editor.suggest.snippetsPreventQuickSuggestions": false
+      }
+    },
     "commands": [
       {
         "command": "cfml.refreshGlobalDefinitionCache",
@@ -382,6 +457,11 @@
         "command": "cfml.openEngineDocs",
         "category": "CFML",
         "title": "Open CFML engine docs page"
+      },
+      {
+        "command": "cfml.foldAllFunctions",
+        "category": "CFML",
+        "title": "Fold all functions in active editor"
       }
     ],
     "keybindings": [
@@ -397,29 +477,39 @@
         "mac": "shift+alt+a",
         "when": "editorTextFocus && !editorReadonly && editorLangId == cfml"
       }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "server*.json",
+        "url": "./resources/schemas/server.schema.json"
+      }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "tsc -p ./",
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "postinstall": "node ./node_modules/vscode/bin/install"
+    "postinstall": "node ./node_modules/vscode/bin/install",
+    "lint": "tslint src/*.ts -t verbose"
   },
   "dependencies": {
+    "@octokit/rest": "~16.3.2",
     "findup-sync": "2.0.0",
     "html-entities": "~1.2.1",
-    "request": "~2.47.0",
-    "semver": "~5.5.0",
+    "request": "~2.88.0",
+    "semver": "^5.5.1",
     "trie-prefix-tree": "1.5.0"
   },
   "devDependencies": {
+    "@types/findup-sync": "2.0.0",
     "@types/html-entities": "~1.2.16",
-    "@types/request": "~2.47.1",
-    "@types/semver": "~5.5.0",
     "@types/mocha": "~5.2.5",
     "@types/node": "~8.9.5",
+    "@types/request": "~2.48.1",
+    "@types/semver": "~5.5.0",
     "mocha": "~5.2.0",
-    "tslint": "^5.11.0",
-    "typescript": "^2.9.2",
-    "vscode": "^1.1.18"
+    "tslint": "^5.12.1",
+    "typescript": "^3.2.2",
+    "vscode": "^1.1.26"
   }
 }

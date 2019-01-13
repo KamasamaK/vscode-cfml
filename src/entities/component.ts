@@ -1,3 +1,4 @@
+import * as findup from "findup-sync";
 import * as fs from "fs";
 import * as path from "path";
 import { Position, Range, TextDocument, Uri } from "vscode";
@@ -10,11 +11,11 @@ import { resolveCustomMappingPaths, resolveRelativePath, resolveRootPath } from 
 import { Attribute, Attributes, parseAttributes } from "./attribute";
 import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
-import { parseProperties, Properties, constructGetter, constructSetter, Property } from "./property";
+import { constructGetter, constructSetter, parseProperties, Properties, Property } from "./property";
 import { ComponentFunctions, parseScriptFunctions, parseTagFunctions, UserFunction } from "./userFunction";
 import { parseVariableAssignments, Variable } from "./variable";
 
-const findup = require("findup-sync");
+
 
 
 export const COMPONENT_EXT: string = ".cfc";
@@ -115,7 +116,7 @@ export interface Component {
   extends?: Uri;
   extendsRange?: Range;
   implements?: Uri[];
-  implementsRange?: Range;
+  implementsRanges?: Range[];
   functions: ComponentFunctions;
   properties: Properties;
   variables: Variable[];
@@ -236,9 +237,8 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     parsedDocBlock.filter((docAttribute: DocBlockKeyValue) => {
       return docAttribute.key === "extends" && docAttribute.value;
     }).forEach((docAttribute: DocBlockKeyValue) => {
-      const extendsName: string = getComponentNameFromDotPath(docAttribute.value);
       component.extendsRange = new Range(
-        docAttribute.valueRange.start.translate(0, docAttribute.value.length - extendsName.length),
+        docAttribute.valueRange.start,
         docAttribute.valueRange.end
       );
     });
@@ -259,9 +259,8 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     if (parsedAttributes.has("extends")) {
       const extendsAttr: Attribute = parsedAttributes.get("extends");
       if (extendsAttr.value) {
-        const extendsName: string = getComponentNameFromDotPath(extendsAttr.value);
         component.extendsRange = new Range(
-          extendsAttr.valueRange.start.translate(0, extendsAttr.value.length - extendsName.length),
+          extendsAttr.valueRange.start,
           extendsAttr.valueRange.end
         );
       }
@@ -269,6 +268,7 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
   }
 
   Object.getOwnPropertyNames(component).forEach((propName: string) => {
+    // TODO: Is this supposed to be checking for existence or value?
     if (componentAttributes[propName]) {
       if (propName === "extends") {
         component.extends = componentPathToUri(componentAttributes.extends, document.uri);
@@ -418,13 +418,13 @@ export function componentPathToUri(dotPath: string, baseUri: Uri): Uri | undefin
 
   // relative to web root
   const rootPath: string = resolveRootPath(baseUri, normalizedPath);
-  if (fs.existsSync(rootPath)) {
+  if (rootPath && fs.existsSync(rootPath)) {
     return Uri.file(rootPath);
   }
 
   // custom mappings
   const customMappingPaths: string[] = resolveCustomMappingPaths(baseUri, normalizedPath);
-  for (let mappedPath of customMappingPaths) {
+  for (const mappedPath of customMappingPaths) {
     if (fs.existsSync(mappedPath)) {
       return Uri.file(mappedPath);
     }
@@ -470,10 +470,13 @@ export function getServerUri(baseUri: Uri): Uri | undefined {
 
   const fileName = "Server.cfc";
   const rootPath: string = resolveRootPath(baseUri, fileName);
-  const rootUri: Uri = Uri.file(rootPath);
 
-  if (hasComponent(rootUri)) {
-    componentUri = rootUri;
+  if (rootPath) {
+    const rootUri: Uri = Uri.file(rootPath);
+
+    if (hasComponent(rootUri)) {
+      componentUri = rootUri;
+    }
   }
 
   // TODO: custom mapping

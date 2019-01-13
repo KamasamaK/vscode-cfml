@@ -2,9 +2,33 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.5.0] - 2019-01-13
+
+- Update minimum version of VS Code to v1.30
+- Update `target` and `lib` in tsconfig
+- Added `DefinitionLink` support for providing definitions. This allows a full component path to be used for definition links.
+- Added doc links for each engine on hover ([\#14](https://github.com/KamasamaK/vscode-cfml/issues/14))
+- Added completions for `this`-scoped variables for external references of the component ([\#26](https://github.com/KamasamaK/vscode-cfml/pull/26))
+- Added command `cfml.foldAllFunctions`
+- Added setting for completing tag attributes with quotes -- `cfml.suggest.globalTags.attributes.quoteType` ([\#24](https://github.com/KamasamaK/vscode-cfml/issues/24))
+- Added new `onEnterRules` rule for when the cursor is between an opening and closing tag ([\#23](https://github.com/KamasamaK/vscode-cfml/issues/23) and [\#24](https://github.com/KamasamaK/vscode-cfml/issues/24))
+- Added setting for preferred case in global function suggestions -- `cfml.suggest.globalFunctions.firstLetterCase` ([\#25](https://github.com/KamasamaK/vscode-cfml/issues/25))
+- Added folding region markers to language configuration
+- Added hover and completion for HTML tags
+- Added hover and completion for CSS properties
+- Added color support for CSS property values
+- Changed `ParameterInformation.label` to use new tuple type
+- Removed Emmet setting and added instructions in `README`
+- Fixed document symbols for implicit functions
+- Fixed issue displaying multiple signatures
+- Added CommandBox `server.json` schema
+- Added progress notification when caching all components
+- Improved parsing for signature help and added check for named parameters
+
 ## [0.4.1] - 2018-08-09
 
-- Added commands `cfml.openCfDocs` and `cfml.openEngineDocs`
+- Update minimum version of VS Code to v1.25
+- Added commands `cfml.openCfDocs` and `cfml.openEngineDocs` ([\#14](https://github.com/KamasamaK/vscode-cfml/issues/14))
 - Added notification for auto-close-tag extension when not installed and setting is enabled
 - Added support for new ACF 2018 syntax
 - Added a setting that will enable a definition search in a workspace if a reliable function definition cannot be found
@@ -17,6 +41,7 @@ All notable changes to the CFML extension will be documented in this file.
 
 ## [0.4.0] - 2018-06-04
 
+- Update minimum version of VS Code to v1.22
 - Added support for custom mappings
 - Added setting for whether to provide definitions
 - Added more type definitions
@@ -29,7 +54,7 @@ All notable changes to the CFML extension will be documented in this file.
 - Improved suggestions for queries initialized in the same file/block
 - Improved docblock parsing
 - Fixed detection of certain variable assignments within switch statements
-- Fixed some syntax highlighting issues
+- Fixed some syntax highlighting issues ([\#12](https://github.com/KamasamaK/vscode-cfml/issues/12)+)
 - Limited suggestions for script tags to only be in script context
 - Some refactoring
 
@@ -67,6 +92,7 @@ All notable changes to the CFML extension will be documented in this file.
 
 ## [0.2.0] - 2017-11-29
 
+- Update minimum version of VS Code to v1.18
 - Added global definition filtering based on engine
 - Improved type inference
 - Changed signature format

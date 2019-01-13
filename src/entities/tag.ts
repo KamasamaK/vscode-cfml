@@ -5,7 +5,9 @@ import { DocumentPositionStateContext, DocumentStateContext, getDocumentPosition
 import { Attributes, parseAttributes } from "./attribute";
 import { DataType } from "./dataType";
 import { GlobalTag } from "./globals";
+import { HTML_EMPTY_ELEMENTS } from "./html/htmlTag";
 
+const tagAttributePattern: RegExp = /<(([a-z_]+)\s+)([^<>]*)$/i;
 const cfTagAttributePattern: RegExp = /<((cf[a-z_]+)\s+)([^<>]*)$/i;
 const cfScriptTagAttributePattern: RegExp = /\b((cf[a-z_]+)\s*\(\s*)([^)]*)$/i;
 const tagPrefixPattern: RegExp = /<\s*(\/)?\s*$/;
@@ -30,25 +32,6 @@ export interface TagContext {
   name: string;
   startOffset: number;
 }
-
-const nonClosingHtmlTags: string[] = [
-  "area",
-  "base",
-  "br",
-  "col",
-  "command",
-  "embed",
-  "hr",
-  "img",
-  "input",
-  "keygen",
-  "link",
-  "meta",
-  "param",
-  "source",
-  "track",
-  "wbr"
-];
 
 const nonClosingCfmlTags: string[] = [
   "cfabort",
@@ -104,7 +87,7 @@ const nonClosingCfmlTags: string[] = [
   "cfwddx"
 ];
 
-export const nonClosingTags: string[] = nonClosingHtmlTags.concat(nonClosingCfmlTags);
+export const nonClosingTags: string[] = nonClosingCfmlTags.concat(HTML_EMPTY_ELEMENTS);
 
 export const nonIndentingTags: string[] = [
   // HTML
@@ -465,6 +448,13 @@ export function getComponentPathAttributes(): ComponentPathAttributes {
 }
 
 /**
+ * Returns a pattern that matches the most recent unclosed tag, capturing the name and attributes
+ */
+export function getTagAttributePattern(): RegExp {
+  return tagAttributePattern;
+}
+
+/**
  * Returns a pattern that matches the most recent unclosed cf-tag, capturing the name and attributes
  */
 export function getCfTagAttributePattern(): RegExp {
@@ -497,7 +487,7 @@ export function getTagPrefixPattern(): RegExp {
  */
 export function getTagPattern(tagName: string): RegExp {
   // Attributes capture fails if an attribute value contains >
-  return new RegExp(`(<${tagName}\\s*)([^>]*?)(?:>([\\s\\S]*?)<\\/${tagName}>|\\/?>)`, "gi");
+  return new RegExp(`(<${tagName}\\b\\s*)([^>]*?)(?:>([\\s\\S]*?)<\\/${tagName}>|\\/?>)`, "gi");
 }
 
 /**
@@ -509,7 +499,7 @@ export function getTagPattern(tagName: string): RegExp {
  * @param tagName The name of the tag to capture
  */
 export function getStartTagPattern(tagName: string): RegExp {
-  return new RegExp(`(<${tagName}\\s*)([^>]*?)(\\/)?>`, "gi");
+  return new RegExp(`(<${tagName}\\b\\s*)([^>]*?)(\\/)?>`, "gi");
 }
 
 /**
@@ -581,7 +571,7 @@ export function getNonClosingCfmlTags(): string[] {
 /**
  * Returns all of the information for the given tag name in the given document, optionally within a given range.
  * Nested tags of the same name will not be correctly selected. Does not account for tags in script.
- * @param documentStateContext The document to check
+ * @param documentStateContext The context information for the TextDocument to check
  * @param tagName The name of the tag to capture
  * @param range Range within which to check
  */
@@ -635,7 +625,7 @@ export function parseTags(documentStateContext: DocumentStateContext, tagName: s
 
 /**
  * Returns the start tag information for the given tag name in the given document, optionally within a given range.
- * @param documentStateContext The document to check
+ * @param documentStateContext The context information for the TextDocument to check
  * @param tagName The name of the tag to capture
  * @param isScript Whether this document or range is defined entirely in CFScript
  * @param range Range within which to check
@@ -680,8 +670,8 @@ export function parseStartTags(documentStateContext: DocumentStateContext, tagNa
 }
 
 /**
- * Returns all of the ranges for comments based on iteration. Much slower than regex, but more accurate since it ignores string contents.
- * @param document The document to check
+ * Returns all of the CF tags for the given documentStateContext
+ * @param documentStateContext The context information for the TextDocument to check
  * @param isScript Whether the document or given range is CFScript
  * @param docRange Range within which to check
  */
@@ -708,6 +698,7 @@ export function getCfTags(documentStateContext: DocumentStateContext, isScript: 
   let stringContext: StringContext = {
     inString: false,
     activeStringDelimiter: undefined,
+    start: undefined,
     embeddedCFML: false
   };
 
@@ -730,6 +721,7 @@ export function getCfTags(documentStateContext: DocumentStateContext, isScript: 
         stringContext = {
           inString: false,
           activeStringDelimiter: undefined,
+          start: undefined,
           embeddedCFML: false
         };
       }
@@ -770,6 +762,7 @@ export function getCfTags(documentStateContext: DocumentStateContext, isScript: 
         stringContext = {
           inString: true,
           activeStringDelimiter: characterAtPosition,
+          start: document.positionAt(offset),
           embeddedCFML: false
         };
       }
@@ -795,9 +788,11 @@ export function getCfTags(documentStateContext: DocumentStateContext, isScript: 
       }
     } else if (isScript) {
       if (isStringDelimiter(characterAtPosition)) {
+        const currentPosition: Position = document.positionAt(offset);
         stringContext = {
           inString: true,
           activeStringDelimiter: characterAtPosition,
+          start: currentPosition,
           embeddedCFML: false
         };
       }
@@ -848,13 +843,16 @@ export function getCfTags(documentStateContext: DocumentStateContext, isScript: 
   return tags;
 }
 
+/**
+ * Relocates cursor to the start of the tag matching the current selection
+ */
 export async function goToMatchingTag(): Promise<void> {
   if (!window.activeTextEditor) {
     return;
   }
 
   const editor: TextEditor = window.activeTextEditor;
-  const position: Position = editor.selection.start;
+  const position: Position = editor.selection.active;
 
   const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(editor.document, position);
 

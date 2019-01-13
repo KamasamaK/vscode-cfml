@@ -1,50 +1,57 @@
 {
-	"rules": {
-		"adjacent-overload-signatures": true,
-		"array-type": [
-			true,
-			"array"
-		],
-		"arrow-parens": true,
-		"class-name": true,
-		"comment-format": [
-			true,
-			"check-space"
-		],
-		"completed-docs": [
-			true,
-			"functions",
-			"methods"
-		],
-		"curly": true,
-		"indent": [
-			true,
-			"spaces",
-			4
-		],
-		"jsdoc-format": true,
-		"new-parens": true,
-		"no-any": true,
-		"no-unused-expression": true,
-    "no-duplicate-variable": true,
-    "no-magic-numbers": [true, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-		"no-trailing-whitespace": true,
-		"no-unused-variable": true,
-		"no-var-keyword": true,
-		"only-arrow-functions": [
-			true,
-			"allow-declarations",
-			"allow-named-functions"
+  "rules": {
+    "adjacent-overload-signatures": true,
+    "array-type": [
+      true,
+      "array"
     ],
-    "quotemark": [true, "double", "avoid-escape", "avoid-template"],
-		"semicolon": [
-			true,
-			"always"
-		],
-		"space-before-function-paren": [
-			true,
-			{"anonymous": "always", "named": "never"}
-		],
-		"triple-equals": true
-	}
+    "arrow-parens": true,
+    "class-name": true,
+    "comment-format": [
+      true,
+      "check-space"
+    ],
+    "completed-docs": [
+      true,
+      "functions",
+      "methods"
+    ],
+    "curly": true,
+    "indent": [
+      true,
+      "spaces",
+      4
+    ],
+    "jsdoc-format": [true, "check-multiline-start"],
+    "new-parens": true,
+    "no-any": true,
+    "no-unused-expression": true,
+    "no-duplicate-variable": true,
+    "no-trailing-whitespace": true,
+    "no-var-keyword": true,
+    "only-arrow-functions": [
+      true,
+      "allow-declarations",
+      "allow-named-functions"
+    ],
+    "quotemark": [
+      true,
+      "double",
+      "avoid-escape",
+      "avoid-template"
+    ],
+    "semicolon": [
+      true,
+      "always"
+    ],
+    "space-before-function-paren": [
+      true,
+      {
+        "anonymous": "always",
+        "named": "never"
+      }
+    ],
+    "triple-equals": true,
+    "prefer-for-of": true
+  }
 }

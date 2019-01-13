@@ -12,12 +12,22 @@ export interface Parameter {
   enumeratedValues?: string[];
 }
 
+export const namedParameterPattern: RegExp = /^\s*([\w$]+)\s*=(?!=)/;
+
+/**
+ * Gets the parameter's name
+ * @param param The Parameter object from which to get the name
+ */
+export function getParameterName(param: Parameter): string {
+  return param.name.split("=")[0];
+}
+
 /**
  * Constructs a string label representation of a parameter
  * @param param The Parameter object on which to base the label
  */
 export function constructParameterLabel(param: Parameter): string {
-  let paramLabel = param.name.split("=")[0];
+  let paramLabel = getParameterName(param);
   if (!param.required) {
     paramLabel += "?";
   }

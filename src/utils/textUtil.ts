@@ -1,6 +1,7 @@
 import { MarkdownString, Range, TextDocument, Position } from "vscode";
-import { getCommentRanges, isCfcFile } from "./contextUtil";
+import { getDocumentContextRanges, isCfcFile } from "./contextUtil";
 import { getComponent, hasComponent } from "../features/cachedEntities";
+import { AttributeQuoteType } from "../entities/attribute";
 
 export enum Quote {
   Single = "single",
@@ -10,8 +11,21 @@ export enum Quote {
 /**
  * Returns the quote of the given type
  */
-export function getQuote(quote: Quote): string {
-  return quote === Quote.Single ? "'" : '"';
+export function getQuote(quote: Quote | AttributeQuoteType): string {
+  let quoteStr: string = "";
+
+  switch (quote) {
+    case Quote.Single:
+      quoteStr = "'";
+      break;
+    case Quote.Double:
+      quoteStr = '"';
+      break;
+    default:
+      break;
+  }
+
+  return quoteStr;
 }
 
 /**
@@ -24,11 +38,19 @@ export function equalsIgnoreCase(string1: string, string2: string): boolean {
 }
 
 /**
+ * Transforms text to Markdown-compatible string
+ * @param text A candidate string
+ */
+export function textToMarkdownCompatibleString(text: string): string {
+  return text.replace(/\n(?!\n)/g, "  \n");
+}
+
+/**
  * Transforms text to MarkdownString
  * @param text A candidate string
  */
 export function textToMarkdownString(text: string): MarkdownString {
-  return new MarkdownString(text.replace(/\n(?!\n)/g, "  \n"));
+  return new MarkdownString(textToMarkdownCompatibleString(text));
 }
 
 /**
@@ -69,7 +91,7 @@ export function getSanitizedDocumentText(document: TextDocument, commentRanges?:
     documentCommentRanges = commentRanges;
   } else {
     const docIsScript: boolean = (isCfcFile(document) && hasComponent(document.uri) && getComponent(document.uri).isScript);
-    documentCommentRanges = getCommentRanges(document, docIsScript);
+    documentCommentRanges = getDocumentContextRanges(document, docIsScript).commentRanges;
   }
 
   return replaceRangeWithSpaces(document, documentCommentRanges);
@@ -88,4 +110,16 @@ export function getPrefixText(document: TextDocument, position: Position, replac
   }
 
   return documentText.slice(0, document.offsetAt(position));
+}
+
+
+// RFC 2396, Appendix A: https://www.ietf.org/rfc/rfc2396.txt
+const schemePattern = /^[a-zA-Z][a-zA-Z0-9\+\-\.]+:/;
+
+/**
+ * A valid uri starts with a scheme and the scheme has at least 2 characters so that it doesn't look like a drive letter.
+ * @param str The candidate URI to check
+ */
+export function isUri(str: string): boolean {
+  return str && schemePattern.test(str);
 }

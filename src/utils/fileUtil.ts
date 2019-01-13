@@ -58,7 +58,7 @@ export function resolveDottedPaths(dotPath: string, baseUri: Uri): string[] {
 
   // relative to web root
   const rootPath: string = resolveRootPath(baseUri, normalizedPath);
-  if (fs.existsSync(rootPath)) {
+  if (rootPath && fs.existsSync(rootPath)) {
     paths.push(rootPath);
 
     if (normalizedPath.length > 0) {
@@ -68,7 +68,7 @@ export function resolveDottedPaths(dotPath: string, baseUri: Uri): string[] {
 
   // custom mappings
   const customMappingPaths: string[] = resolveCustomMappingPaths(baseUri, normalizedPath);
-  for (let mappedPath of customMappingPaths) {
+  for (const mappedPath of customMappingPaths) {
     if (fs.existsSync(mappedPath)) {
       paths.push(mappedPath);
 
@@ -91,12 +91,17 @@ export function resolveRelativePath(baseUri: Uri, appendingPath: string): string
 }
 
 /**
- * Resolves a full path relative to the root of the given URI
+ * Resolves a full path relative to the root of the given URI, or undefined if not in workspace
  * @param baseUri The URI from which the root path will be resolved
  * @param appendingPath A path appended to the resolved root path
  */
-export function resolveRootPath(baseUri: Uri, appendingPath: string): string {
+export function resolveRootPath(baseUri: Uri, appendingPath: string): string | undefined {
   const root: WorkspaceFolder = workspace.getWorkspaceFolder(baseUri);
+
+  // When baseUri is not in workspace
+  if (!root) {
+    return undefined;
+  }
 
   return path.join(root.uri.fsPath, appendingPath);
 }
@@ -111,7 +116,7 @@ export function resolveCustomMappingPaths(baseUri: Uri, appendingPath: string): 
 
   const cfmlMappings: CFMLMapping[] = workspace.getConfiguration("cfml", baseUri).get<CFMLMapping[]>("mappings", []);
   const normalizedPath: string = appendingPath.replace(/\\/g, "/");
-  for (let cfmlMapping of cfmlMappings) {
+  for (const cfmlMapping of cfmlMappings) {
     const slicedLogicalPath: string = cfmlMapping.logicalPath.slice(1);
     const logicalPathStartPattern = new RegExp(`^${slicedLogicalPath}(?:\/|$)`);
     if (logicalPathStartPattern.test(normalizedPath)) {

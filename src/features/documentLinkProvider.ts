@@ -1,13 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { CancellationToken, DocumentLink, DocumentLinkProvider, Position, Range, TextDocument, Uri, workspace, WorkspaceFolder } from "vscode";
+import { isUri } from "../utils/textUtil";
 
 export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
 
   private linkPatterns: LinkPattern[] = [
     // attribute/value link
     {
-      pattern: /\b(href|src|template|action|url)\s*(?:=|:)\s*(['"])([^'"]+?)\2/gi,
+      pattern: /\b(href|src|template|action|url)\s*(?:=|:|\()\s*(['"])([^'"]+?)\2/gi,
       linkIndex: 3
     },
     // include script
@@ -19,7 +20,7 @@ export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
 
   /**
    * Provide links for the given document.
-   * @param document The document in which the command was invoked.
+   * @param document The document in which the links are located.
    * @param _token A cancellation token.
    */
   public async provideDocumentLinks(document: TextDocument, _token: CancellationToken): Promise<DocumentLink[]> {
@@ -60,27 +61,41 @@ export default class CFMLDocumentLinkProvider implements DocumentLinkProvider {
    * @param document The document containing link text
    * @param link The link text to resolve
    */
-  private resolveLink(document: TextDocument, link: string): Uri {
-    const uri: Uri = Uri.parse(link);
-    if (uri.scheme) {
-      return uri;
+  private resolveLink(document: TextDocument, link: string): Uri | undefined {
+    if (link.startsWith("#")) {
+      return undefined;
     }
 
-    // assume it must be a file
-    const base: string = path.dirname(document.fileName);
-    let resourcePath: string = uri.path;
-    if (!uri.path) {
-      resourcePath = document.uri.path;
-    } else if (uri.path[0] === "/") {
+    // Check for URI
+    if (isUri(link)) {
+      try {
+        const uri: Uri = Uri.parse(link);
+        if (uri.scheme) {
+          return uri;
+        }
+      } catch (e) {
+        // noop
+      }
+    }
+
+    // Check for relative local file
+    const linkPath: string = link.split(/[?#]/)[0];
+    let resourcePath: string;
+    if (linkPath && linkPath[0] === "/") {
+      // Relative to root
       const root: WorkspaceFolder = workspace.getWorkspaceFolder(document.uri);
       if (root) {
-        resourcePath = path.join(root.uri.fsPath, uri.path);
+        resourcePath = path.join(root.uri.fsPath, linkPath);
       }
     } else {
-      resourcePath = path.join(base, uri.path);
+      // Relative to document location
+      const base: string = path.dirname(document.fileName);
+      resourcePath = path.join(base, linkPath);
     }
 
-    if (fs.existsSync(resourcePath)) {
+    // Check custom virtual directories?
+
+    if (resourcePath && fs.existsSync(resourcePath) && fs.statSync(resourcePath).isFile()) {
       return Uri.file(resourcePath);
     }
 

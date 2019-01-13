@@ -10,7 +10,7 @@ import { DocumentPositionStateContext, getDocumentPositionStateContext } from ".
 
 export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvider {
 
-  public async provideTypeDefinition(document: TextDocument, position: Position, _token: CancellationToken | boolean): Promise<Definition> {
+  public async provideTypeDefinition(document: TextDocument, position: Position, _token: CancellationToken): Promise<Definition> {
     const results: Definition = [];
 
     const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
@@ -51,24 +51,6 @@ export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvide
           });
 
           if (!func.isImplicit && func.bodyRange.contains(position)) {
-            // Argument uses
-            const argumentPrefixPattern = getValidScopesPrefixPattern([Scope.Arguments], false);
-            if (argumentPrefixPattern.test(docPrefix)) {
-              func.signatures.forEach((signature: UserFunctionSignature) => {
-                signature.parameters.filter((arg: Argument) => {
-                  return equalsIgnoreCase(arg.name, currentWord) && arg.dataTypeComponentUri;
-                }).forEach((arg: Argument) => {
-                  const argTypeComp: Component = getComponent(arg.dataTypeComponentUri);
-                  if (argTypeComp) {
-                    results.push(new Location(
-                      argTypeComp.uri,
-                      argTypeComp.declarationRange
-                    ));
-                  }
-                });
-              });
-            }
-
             // Local variable uses
             const localVariables = getLocalVariables(func, documentPositionStateContext, thisComponent.isScript);
             const localVarPrefixPattern = getValidScopesPrefixPattern([Scope.Local], true);
@@ -84,6 +66,26 @@ export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvide
                   ));
                 }
               });
+            }
+
+            // Argument uses
+            if (results.length === 0) {
+              const argumentPrefixPattern = getValidScopesPrefixPattern([Scope.Arguments], true);
+              if (argumentPrefixPattern.test(docPrefix)) {
+                func.signatures.forEach((signature: UserFunctionSignature) => {
+                  signature.parameters.filter((arg: Argument) => {
+                    return equalsIgnoreCase(arg.name, currentWord) && arg.dataTypeComponentUri;
+                  }).forEach((arg: Argument) => {
+                    const argTypeComp: Component = getComponent(arg.dataTypeComponentUri);
+                    if (argTypeComp) {
+                      results.push(new Location(
+                        argTypeComp.uri,
+                        argTypeComp.declarationRange
+                      ));
+                    }
+                  });
+                });
+              }
             }
           }
         });

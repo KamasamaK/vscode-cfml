@@ -1,5 +1,8 @@
 import * as semver from "semver";
 import { DataType } from "../../entities/dataType";
+import { Uri } from "vscode";
+import { extensionContext } from "../../cfmlMain";
+import * as fs from "fs";
 
 export enum CFMLEngineName {
   ColdFusion = "coldfusion",
@@ -165,5 +168,17 @@ export class CFMLEngine {
     } else {
       return undefined;
     }
+  }
+
+  /**
+   * Gets the CFML engine icon URI
+   */
+  public static getIconUri(name: CFMLEngineName): Uri | undefined {
+    const iconPath = extensionContext.asAbsolutePath(`images/${name}.png`);
+    if (fs.existsSync(iconPath)) {
+      return Uri.file(iconPath);
+    }
+
+    return undefined;
   }
 }

@@ -1,3 +1,5 @@
+import { equalsIgnoreCase } from "./textUtil";
+
 export class MyMap<K, V> extends Map<K, V> {
   public filter(callbackfn: (value: V, key: K, map: MyMap<K, V>) => boolean): MyMap<K, V> {
     let myMap = new MyMap<K, V>();
@@ -22,6 +24,12 @@ export class MySet<T> extends Set<T> {
 
     return mySet;
   }
+}
+
+export function stringArrayIncludesIgnoreCase(arr: string[], item: string): boolean {
+  return arr.some((val: string) => {
+    return equalsIgnoreCase(val, item);
+  });
 }
 
 // TODO: Find a better place for this

@@ -3,7 +3,7 @@ import { GlobalFunction, GlobalTag } from "../../entities/globals";
 import { Parameter } from "../../entities/parameter";
 import { Signature } from "../../entities/signature";
 import { equalsIgnoreCase } from "../textUtil";
-import { CFDocsService } from "./cfDocsService";
+import CFDocsService from "./cfDocsService";
 import { CFMLEngine, CFMLEngineName } from "./cfmlEngine";
 import { multiSigGlobalFunctions } from "./multiSignatures";
 import * as htmlEntities from "html-entities";
@@ -184,7 +184,7 @@ export class CFDocsDefinitionInfo {
         let parameters: Parameter[] = [];
         thisMultiSig.forEach((multiSigParam: string) => {
           let paramFound = false;
-          for (let param of this.params) {
+          for (const param of this.params) {
             let multiSigParamParsed: string = multiSigParam.split("=")[0];
             if (param.name === multiSigParamParsed) {
               let parameter: Parameter = {
@@ -339,7 +339,7 @@ export class CFDocsDefinitionInfo {
    */
   public static async isFunctionName(name: string): Promise<boolean> {
     let allFunctionNames: string[] = await CFDocsDefinitionInfo.getAllFunctionNames();
-    return (allFunctionNames.indexOf(name.toLowerCase()) !== -1);
+    return allFunctionNames.includes(name.toLowerCase());
   }
 
   /**
@@ -348,7 +348,7 @@ export class CFDocsDefinitionInfo {
    */
   public static async isTagName(name: string): Promise<boolean> {
     let allTagNames: string[] = await CFDocsDefinitionInfo.getAllTagNames();
-    return (allTagNames.indexOf(name.toLowerCase()) !== -1);
+    return allTagNames.includes(name.toLowerCase());
   }
 
   /**

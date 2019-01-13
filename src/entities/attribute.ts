@@ -7,6 +7,7 @@ export const VALUE_PATTERN = /\b([\w:-]+)\s*(?:=|:)\s*(?:(['"])?((?:(?!\2).)*)|(
 export interface Attribute {
   name: string; // lowercased
   value: string;
+  // range: Range;
   valueRange: Range;
 }
 
@@ -14,6 +15,13 @@ export enum IncludeAttributesSetType {
   None = "none",
   Required = "required",
   All = "all"
+}
+
+// Extends Quote from textUtils.ts
+export enum AttributeQuoteType {
+  None = "none",
+  Double = "double",
+  Single = "single"
 }
 
 export interface IncludeAttributesCustom {

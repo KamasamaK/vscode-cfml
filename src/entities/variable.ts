@@ -1,9 +1,10 @@
+import * as path from "path";
 import { DataType } from "./dataType";
 import { Scope, unscopedPrecedence } from "./scope";
 import { Location, TextDocument, Range, Uri, Position, WorkspaceConfiguration, workspace } from "vscode";
 import { getCfScriptRanges, isCfcFile, getClosingPosition } from "../utils/contextUtil";
-import { Component, getApplicationUri, getServerUri } from "./component";
-import { UserFunction, UserFunctionSignature, Argument, getLocalVariables, UserFunctionVariable, parseScriptFunctionArgs, functionValuePattern } from "./userFunction";
+import { Component, getApplicationUri, getServerUri, COMPONENT_EXT } from "./component";
+import { UserFunction, UserFunctionSignature, Argument, getLocalVariables, UserFunctionVariable, parseScriptFunctionArgs, functionValuePattern, isUserFunctionVariable } from "./userFunction";
 import * as cachedEntities from "../features/cachedEntities";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
@@ -14,6 +15,7 @@ import { getSelectColumnsFromQueryText, Query, QueryColumns, queryValuePattern }
 import { CFMLEngineName, CFMLEngine } from "../utils/cfdocs/cfmlEngine";
 import { DocumentStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
 import { getScriptFunctionArgRanges } from "./function";
+import { constructParameterLabel } from "./parameter";
 
 
 // FIXME: Erroneously matches implicit struct key assignments using = since '{' can also open a code block. Also matches within string or comment.
@@ -771,7 +773,7 @@ export function getBestMatchingVariable(variables: Variable[], varName: string, 
       });
     }
   } else {
-    for (let checkScope of unscopedPrecedence) {
+    for (const checkScope of unscopedPrecedence) {
       foundVar = variables.find((currentVar: Variable) => {
         return currentVar.scope === checkScope && equalsIgnoreCase(currentVar.identifier, varName);
       });
@@ -875,7 +877,7 @@ export function collectDocumentVariableAssignments(documentPositionStateContext:
           const currInitFunc: UserFunction = currComponent.functions.get(initMethod);
 
           const currInitVariables: Variable[] = parseVariableAssignments(documentPositionStateContext, currComponent.isScript, currInitFunc.bodyRange).filter((variable: Variable) => {
-            return variable.scope === Scope.Variables && !componentVariables.some((existingVariable: Variable) => {
+            return [Scope.Variables, Scope.This].includes(variable.scope) && !componentVariables.some((existingVariable: Variable) => {
               return existingVariable.scope === variable.scope && equalsIgnoreCase(existingVariable.identifier, variable.identifier);
             });
           });
@@ -917,6 +919,26 @@ export function collectDocumentVariableAssignments(documentPositionStateContext:
   return allVariableAssignments;
 }
 
+/**
+ * Creates a type string for the given variable
+ * @param variable A variable for which to get the type
+ */
+export function getVariableTypeString(variable: Variable): string {
+  let varType: string = variable.dataType;
+  if (variable.dataTypeComponentUri) {
+    varType = path.basename(variable.dataTypeComponentUri.fsPath, COMPONENT_EXT);
+  } else if (variable.dataType === DataType.Function) {
+    let argString: string = "...";
+    if (isUserFunctionVariable(variable)) {
+      argString = variable.signature.parameters.map(constructParameterLabel).join(", ");
+    }
+    varType = `function(${argString})`;
+  }
+
+  return varType;
+}
+
+// TODO: Add identifierRange and have declarationLocation contain full declaration range
 export interface Variable {
   identifier: string;
   dataType: DataType;

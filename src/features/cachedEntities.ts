@@ -1,17 +1,18 @@
 import * as path from "path";
-import { ConfigurationTarget, TextDocument, Uri, WorkspaceConfiguration, extensions, workspace } from "vscode";
-import { COMPONENT_EXT, COMPONENT_FILE_GLOB, Component, ComponentsByName, ComponentsByUri, parseComponent } from "../entities/component";
+import { ConfigurationTarget, extensions, ProgressLocation, TextDocument, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
+import { Component, ComponentsByName, ComponentsByUri, COMPONENT_EXT, COMPONENT_FILE_GLOB, parseComponent } from "../entities/component";
 import { GlobalFunction, GlobalFunctions, GlobalTag, GlobalTags } from "../entities/globals";
 import { Scope } from "../entities/scope";
 import { ComponentFunctions, UserFunction, UserFunctionByUri, UserFunctionsByName } from "../entities/userFunction";
-import { Variable, VariablesByUri, parseVariableAssignments } from "../entities/variable";
+import { parseVariableAssignments, Variable, VariablesByUri } from "../entities/variable";
+import { CFDocsDefinitionInfo } from "../utils/cfdocs/definitionInfo";
+import { MyMap, SearchMode } from "../utils/collections";
+import { APPLICATION_CFM_GLOB } from "../utils/contextUtil";
 import { DocumentStateContext, getDocumentStateContext } from "../utils/documentUtil";
 import { resolveCustomMappingPaths, resolveRelativePath, resolveRootPath } from "../utils/fileUtil";
-import { MyMap, SearchMode } from "../utils/collections";
-import { CFDocsDefinitionInfo } from "../utils/cfdocs/definitionInfo";
-import { APPLICATION_CFM_GLOB } from "../utils/contextUtil";
+import { ITrie } from "../typings/trie-prefix-tree";
 
-const trie = require("trie-prefix-tree");
+import trie = require("trie-prefix-tree");
 
 let allGlobalEntityDefinitions = new MyMap<string, CFDocsDefinitionInfo>();
 
@@ -25,8 +26,8 @@ let allComponentsByName: ComponentsByName = {};
 // let allUserFunctionsByUri: UserFunctionsByUri = {};
 let allUserFunctionsByName: UserFunctionsByName = {};
 
-let allComponentNames = trie([]);
-let allFunctionNames = trie([]);
+let allComponentNames: ITrie = trie([]);
+let allFunctionNames: ITrie = trie([]);
 
 let allServerVariables: VariablesByUri = new VariablesByUri();
 let allApplicationVariables: VariablesByUri = new VariablesByUri();
@@ -166,9 +167,7 @@ function setComponent(comp: Component): void {
  */
 export function getComponent(uri: Uri): Component {
   if (!hasComponent(uri)) {
-    /* TODO: If not already cached, attempt to parse and cache
-    cacheGivenComponents([uri]);
-    */
+    /* TODO: If not already cached, attempt to read, parse and cache. Tricky since read is async */
   }
 
   return allComponentsByUri[uri.toString()];
@@ -223,7 +222,7 @@ export function searchAllFunctionNames(query: string, searchMode: SearchMode = S
       functions = functions.concat(Object.values(allUserFunctionsByName[funcKey]));
     });
   } else if (searchMode === SearchMode.Contains) {
-    for (let name in allUserFunctionsByName) {
+    for (const name in allUserFunctionsByName) {
       const lowerName = name.toLowerCase();
       if (lowerName.includes(lowerQuery)) {
         functions = functions.concat(Object.values(allUserFunctionsByName[lowerName]));
@@ -253,14 +252,16 @@ export function componentPathToUri(dotPath: string, baseUri: Uri): Uri | undefin
 
   // relative to web root
   const rootPath: string = resolveRootPath(baseUri, normalizedPath);
-  const rootFile: Uri = Uri.file(rootPath);
-  if (allComponentsByUri[rootFile.toString()]) {
-    return rootFile;
+  if (rootPath) {
+    const rootFile: Uri = Uri.file(rootPath);
+    if (allComponentsByUri[rootFile.toString()]) {
+      return rootFile;
+    }
   }
 
   // custom mappings
   const customMappingPaths: string[] = resolveCustomMappingPaths(baseUri, normalizedPath);
-  for (let mappedPath of customMappingPaths) {
+  for (const mappedPath of customMappingPaths) {
     const mappedFile: Uri = Uri.file(mappedPath);
     if (allComponentsByUri[mappedFile.toString()]) {
       return mappedFile;
@@ -305,45 +306,77 @@ export function cacheComponent(component: Component, documentStateContext: Docum
 export async function cacheAllComponents(): Promise<void> {
   clearAllCachedComponents();
 
-  return workspace.findFiles(COMPONENT_FILE_GLOB).then((componentUris: Uri[]) => {
-    // TODO: Revisit when https://github.com/Microsoft/vscode/issues/15178 is addressed
-    const cflintExt = extensions.getExtension("KamasamaK.vscode-cflint");
-    if (cflintExt) {
-      const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
-      const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
-      const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
-      // const cflintRunModesValues = cflintSettings.inspect<{}>("runModes");
-      // const cflintRunModesPrevWSValue = cflintRunModesValues.workspaceValue;
-      cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(async () => {
-        await cacheGivenComponents(componentUris);
-        await cacheAllApplicationCfms();
-        cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
-      });
-    } else {
-      cacheGivenComponents(componentUris);
-      cacheAllApplicationCfms();
+  return workspace.findFiles(COMPONENT_FILE_GLOB).then(
+    async (componentUris: Uri[]) => {
+      // TODO: Remove cflint setting update for workspace state when CFLint checks it. Remove workspace state when CFLint can get list of open editors.
+      const cflintExt = extensions.getExtension("KamasamaK.vscode-cflint");
+      if (cflintExt) {
+        const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
+        const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
+        const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
+        // const cflintRunModesValues = cflintSettings.inspect<{}>("runModes");
+        // const cflintRunModesPrevWSValue = cflintRunModesValues.workspaceValue;
+        cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(async () => {
+          await cacheGivenComponents(componentUris);
+          await cacheAllApplicationCfms();
+          cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
+        });
+      } else {
+        cacheGivenComponents(componentUris);
+        cacheAllApplicationCfms();
+      }
+    },
+    (reason) => {
+      console.error(reason);
     }
-  },
-  (reason) => {
-    console.error(reason);
-  });
+  );
 }
 
 /**
  * Reads and parses given cfc files and caches their definitions
- * @param componentUris List of URIs to parse and cache
+ * @param componentUris List of URIs to read, parse, and cache
  */
 async function cacheGivenComponents(componentUris: Uri[]): Promise<void> {
-  componentUris.forEach((componentUri: Uri) => {
-    // TODO: Consider displaying progress
-    workspace.openTextDocument(componentUri).then((document: TextDocument) => {
-      const documentStateContext: DocumentStateContext = getDocumentStateContext(document, true);
-      const parsedComponent: Component = parseComponent(documentStateContext);
-      if (parsedComponent) {
-        cacheComponent(parsedComponent, documentStateContext);
+  await window.withProgress(
+    {
+      location: ProgressLocation.Notification,
+      title: "Caching components",
+      cancellable: true
+    },
+    async (progress, token) => {
+      const componentCount = componentUris.length;
+      let i = 0;
+
+      for (const componentUri of componentUris) {
+        if (token.isCancellationRequested) { break; }
+
+        const document: TextDocument = await workspace.openTextDocument(componentUri);
+        i++;
+        progress.report({
+          message: `${i} / ${componentCount}`,
+          increment: (100 / componentCount)
+        });
+        cacheComponentFromDocument(document, true);
       }
-    });
-  });
+    }
+  );
+}
+
+/**
+ * Parses given document and caches its definitions
+ * @param document The text document to parse and cache
+ * @param fast Whether to use the faster, but less accurate parsing
+ */
+export function cacheComponentFromDocument(document: TextDocument, fast: boolean = false): boolean {
+  const documentStateContext: DocumentStateContext = getDocumentStateContext(document, fast);
+  const parsedComponent: Component | undefined = parseComponent(documentStateContext);
+  if (!parsedComponent) {
+    return false;
+  }
+
+  cacheComponent(parsedComponent, documentStateContext);
+
+  return true;
 }
 
 /**
@@ -370,7 +403,7 @@ export function clearCachedComponent(componentUri: Uri): void {
       }
 
       if (prevCompFunctions) {
-        for (let funcName of prevCompFunctions.keys()) {
+        for (const funcName of prevCompFunctions.keys()) {
           const userFunctions: UserFunctionByUri = allUserFunctionsByName[funcName];
           if (userFunctions) {
             const userFunctionsLen: number = Object.keys(userFunctions).length;
@@ -406,8 +439,6 @@ function clearAllCachedComponents(): void {
  * Reads and parses all Application.cfm files in the current workspace and caches their definitions
  */
 export async function cacheAllApplicationCfms(): Promise<void> {
-  clearAllApplicationVariables();
-
   return workspace.findFiles(APPLICATION_CFM_GLOB).then(
     cacheGivenApplicationCfms,
     (reason) => {
@@ -435,7 +466,7 @@ async function cacheGivenApplicationCfms(applicationUris: Uri[]): Promise<void> 
 
 /**
  * Retrieves the cached application variables identified by the given URI
- * @param uri The URI of the component to be check
+ * @param uri The URI of the application file
  */
 export function getApplicationVariables(uri: Uri): Variable[] {
   return allApplicationVariables.get(uri.toString());
@@ -456,13 +487,6 @@ export function setApplicationVariables(uri: Uri, applicationVariables: Variable
  */
 export function removeApplicationVariables(uri: Uri): boolean {
   return allApplicationVariables.delete(uri.toString());
-}
-
-/**
- * Clears all cached references to Application variables
- */
-function clearAllApplicationVariables(): void {
-  allApplicationVariables.clear();
 }
 
 /**

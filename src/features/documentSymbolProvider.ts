@@ -39,6 +39,10 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
     const document: TextDocument = documentStateContext.document;
     const component: Component = getComponent(document.uri);
 
+    if (!component) {
+      return [];
+    }
+
     let componentSymbol: DocumentSymbol = new DocumentSymbol(
       component.name,
       "",
@@ -90,23 +94,25 @@ export default class CFMLDocumentSymbolProvider implements DocumentSymbolProvide
       );
       currFuncSymbol.children = [];
 
-      // Component function local variables
-      let localVarSymbols: DocumentSymbol[] = [];
-      const localVariables: Variable[] = getLocalVariables(userFunction, documentStateContext, component.isScript);
-      localVariables.forEach((variable: Variable) => {
-        let detail = "";
-        if (variable.scope !== Scope.Unknown) {
-          detail = `${variable.scope}.${variable.identifier}`;
-        }
-        localVarSymbols.push(new DocumentSymbol(
-          variable.identifier,
-          detail,
-          usesConstantConvention(variable.identifier) || variable.final ? SymbolKind.Constant : SymbolKind.Variable,
-          variable.declarationLocation.range,
-          variable.declarationLocation.range
-        ));
-      });
-      currFuncSymbol.children = currFuncSymbol.children.concat(localVarSymbols);
+      if (!userFunction.isImplicit) {
+        // Component function local variables
+        let localVarSymbols: DocumentSymbol[] = [];
+        const localVariables: Variable[] = getLocalVariables(userFunction, documentStateContext, component.isScript);
+        localVariables.forEach((variable: Variable) => {
+          let detail = "";
+          if (variable.scope !== Scope.Unknown) {
+            detail = `${variable.scope}.${variable.identifier}`;
+          }
+          localVarSymbols.push(new DocumentSymbol(
+            variable.identifier,
+            detail,
+            usesConstantConvention(variable.identifier) || variable.final ? SymbolKind.Constant : SymbolKind.Variable,
+            variable.declarationLocation.range,
+            variable.declarationLocation.range
+          ));
+        });
+        currFuncSymbol.children = currFuncSymbol.children.concat(localVarSymbols);
+      }
 
       functionSymbols.push(currFuncSymbol);
     });

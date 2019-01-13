@@ -1,20 +1,17 @@
-import {
-  SignatureHelpProvider, SignatureHelp, SignatureInformation, ParameterInformation, CancellationToken,
-  TextDocument, Position, Range, WorkspaceConfiguration, workspace, Uri
-} from "vscode";
-import * as cachedEntity from "./cachedEntities";
-import { Function, getSyntaxString } from "../entities/function";
-import { Signature } from "../entities/signature";
+import { CancellationToken, ParameterInformation, Position, Range, SignatureHelp, SignatureHelpProvider, SignatureInformation, TextDocument, Uri, workspace, WorkspaceConfiguration, SignatureHelpContext } from "vscode";
 import { Component, objectNewInstanceInitPrefix } from "../entities/component";
-import { getComponent, componentPathToUri } from "./cachedEntities";
-import { Parameter, constructParameterLabel } from "../entities/parameter";
-import { textToMarkdownString, equalsIgnoreCase } from "../utils/textUtil";
-import { getFunctionFromPrefix, UserFunction, variablesToUserFunctions, isUserFunctionVariable, UserFunctionVariable } from "../entities/userFunction";
-import { getDocumentPositionStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
-import { BackwardIterator, readArguments, getPrecedingIdentifierRange, isContinuingExpression } from "../utils/contextUtil";
-import { collectDocumentVariableAssignments, Variable } from "../entities/variable";
 import { DataType } from "../entities/dataType";
+import { constructSyntaxString, Function, getScriptFunctionArgRanges } from "../entities/function";
+import { Parameter, namedParameterPattern } from "../entities/parameter";
 import { getVariableScopePrefixPattern, Scope, unscopedPrecedence } from "../entities/scope";
+import { constructSignatureLabelParamsPrefix, getSignatureParamsLabelOffsetTuples, Signature } from "../entities/signature";
+import { getFunctionFromPrefix, isUserFunctionVariable, UserFunction, UserFunctionVariable, variablesToUserFunctions } from "../entities/userFunction";
+import { collectDocumentVariableAssignments, Variable } from "../entities/variable";
+import { BackwardIterator, getPrecedingIdentifierRange, isContinuingExpression, getStartSigPosition as findStartSigPosition, getClosingPosition } from "../utils/contextUtil";
+import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
+import { equalsIgnoreCase, textToMarkdownString } from "../utils/textUtil";
+import * as cachedEntity from "./cachedEntities";
+import { componentPathToUri, getComponent } from "./cachedEntities";
 
 export default class CFMLSignatureHelpProvider implements SignatureHelpProvider {
   /**
@@ -22,8 +19,9 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
    * @param document The document in which the command was invoked.
    * @param position The position at which the command was invoked.
    * @param _token A cancellation token.
+   * @param _context Information about how signature help was triggered.
    */
-  public async provideSignatureHelp(document: TextDocument, position: Position, _token: CancellationToken): Promise<SignatureHelp | null> {
+  public async provideSignatureHelp(document: TextDocument, position: Position, _token: CancellationToken, _context: SignatureHelpContext): Promise<SignatureHelp | null> {
     const cfmlSignatureSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.signature", document.uri);
     if (!cfmlSignatureSettings.get<boolean>("enable", true)) {
       return null;
@@ -37,16 +35,28 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
 
     const sanitizedDocumentText: string = documentPositionStateContext.sanitizedDocumentText;
 
-    let iterator: BackwardIterator = new BackwardIterator(document, new Position(position.line, position.character - 1));
+    let backwardIterator: BackwardIterator = new BackwardIterator(documentPositionStateContext, position);
 
-    let functionArgs: string[] = readArguments(iterator);
-    const paramCount: number = functionArgs.length - 1;
-    if (paramCount < 0) {
+    backwardIterator.next();
+    const iteratedSigPosition: Position = findStartSigPosition(backwardIterator);
+    if (!iteratedSigPosition) {
       return null;
     }
 
-    const startSigPosition: Position = iterator.getPosition();
-    const startSigPositionPrefix: string = sanitizedDocumentText.slice(0, document.offsetAt(startSigPosition) + 2);
+    const startSigPosition: Position = document.positionAt(document.offsetAt(iteratedSigPosition) + 2);
+    const endSigPosition: Position = getClosingPosition(documentPositionStateContext, document.offsetAt(startSigPosition), ")").translate(0, -1);
+    const functionArgRanges: Range[] = getScriptFunctionArgRanges(documentPositionStateContext, new Range(startSigPosition, endSigPosition));
+
+    let paramIndex: number = 0;
+    paramIndex = functionArgRanges.findIndex((range: Range) => {
+      return range.contains(position);
+    });
+    if (paramIndex === -1) {
+      return null;
+    }
+    const paramText: string = sanitizedDocumentText.slice(document.offsetAt(functionArgRanges[paramIndex].start), document.offsetAt(functionArgRanges[paramIndex].end));
+
+    const startSigPositionPrefix: string = sanitizedDocumentText.slice(0, document.offsetAt(startSigPosition));
 
     let entry: Function;
 
@@ -67,7 +77,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
     }
 
     if (!entry) {
-      const identWordRange: Range = getPrecedingIdentifierRange(document, iterator.getPosition());
+      let identWordRange: Range = getPrecedingIdentifierRange(documentPositionStateContext, backwardIterator.getPosition());
       if (!identWordRange) {
         return null;
       }
@@ -87,7 +97,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
         const userFun: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, lowerIdent, startIdentPositionPrefix);
 
         // Ensure this does not trigger on script function definition
-        if (userFun && !userFun.isImplicit && userFun.location.range.contains(position) && !userFun.bodyRange.contains(position)) {
+        if (userFun && !userFun.isImplicit && userFun.location.uri === document.uri && userFun.location.range.contains(position) && !userFun.bodyRange.contains(position)) {
           return null;
         }
 
@@ -132,25 +142,45 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
 
     let sigHelp = new SignatureHelp();
 
-    entry.signatures.forEach((signature: Signature) => {
+    entry.signatures.forEach((signature: Signature, sigIndex: number) => {
       const sigDesc: string = signature.description ? signature.description : entry.description;
-      let signatureInfo = new SignatureInformation(getSyntaxString(entry), textToMarkdownString(sigDesc));
-      signatureInfo.parameters = signature.parameters.map((param: Parameter) => {
-        return new ParameterInformation(constructParameterLabel(param), textToMarkdownString(param.description));
+      const sigLabel: string = constructSyntaxString(entry, sigIndex);
+      let signatureInfo = new SignatureInformation(sigLabel, textToMarkdownString(sigDesc));
+
+      const sigParamsPrefixLength: number = constructSignatureLabelParamsPrefix(entry).length + 1;
+      const sigParamsLabelOffsetTuples: [number, number][] = getSignatureParamsLabelOffsetTuples(signature.parameters).map((val: [number, number]) => {
+        return [val[0] + sigParamsPrefixLength, val[1] + sigParamsPrefixLength] as [number, number];
+      });
+
+      signatureInfo.parameters = signature.parameters.map((param: Parameter, paramIdx: number) => {
+        let paramInfo: ParameterInformation = new ParameterInformation(sigParamsLabelOffsetTuples[paramIdx], textToMarkdownString(param.description));
+        return paramInfo;
       });
       sigHelp.signatures.push(signatureInfo);
     });
 
     sigHelp.activeSignature = 0;
-
     for (let i = 0; i < sigHelp.signatures.length; i++) {
       const currSig = sigHelp.signatures[i];
-      if (paramCount < currSig.parameters.length) {
+      if (paramIndex < currSig.parameters.length) {
         sigHelp.activeSignature = i;
         break;
       }
     }
-    sigHelp.activeParameter = Math.min(paramCount, sigHelp.signatures[sigHelp.activeSignature].parameters.length - 1);
+
+    // Consider named parameters
+    let namedParamMatch: RegExpExecArray = null;
+    if (namedParamMatch = namedParameterPattern.exec(paramText)) {
+      const paramName: string = namedParamMatch[1];
+      const namedParamIndex: number = entry.signatures[sigHelp.activeSignature].parameters.findIndex((param: Parameter) => {
+        return equalsIgnoreCase(paramName, param.name);
+      });
+      if (namedParamIndex !== -1) {
+        paramIndex = namedParamIndex;
+      }
+    }
+
+    sigHelp.activeParameter = Math.min(paramIndex, sigHelp.signatures[sigHelp.activeSignature].parameters.length - 1);
 
     return sigHelp;
   }

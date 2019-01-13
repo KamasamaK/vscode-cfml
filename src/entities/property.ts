@@ -1,7 +1,6 @@
 import { Location, Range, TextDocument, Uri } from "vscode";
 import { MyMap, MySet } from "../utils/collections";
 import { Attribute, Attributes, parseAttributes } from "./attribute";
-import { getComponentNameFromDotPath } from "./component";
 import { DataType } from "./dataType";
 import { DocBlockKeyValue, parseDocBlock } from "./docblock";
 import { Access, UserFunction, UserFunctionSignature } from "./userFunction";
@@ -157,9 +156,8 @@ export function parseProperties(documentStateContext: DocumentStateContext): Pro
       );
 
       const dataTypeOffset: number = propertyMatch.index + removedName.lastIndexOf(dataTypeString);
-      const typeName: string = getComponentNameFromDotPath(dataTypeString);
       property.dataTypeRange = new Range(
-        document.positionAt(dataTypeOffset + dataTypeString.length - typeName.length),
+        document.positionAt(dataTypeOffset),
         document.positionAt(dataTypeOffset + dataTypeString.length)
       );
     }

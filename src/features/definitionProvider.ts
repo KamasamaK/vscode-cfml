@@ -1,5 +1,5 @@
-import { DefinitionProvider, TextDocument, Position, CancellationToken, Definition, Uri, Range, Location, workspace, WorkspaceConfiguration } from "vscode";
-import { objectReferencePatterns, ReferencePattern, Component, getComponentNameFromDotPath } from "../entities/component";
+import { DefinitionProvider, TextDocument, Position, CancellationToken, DefinitionLink, Uri, Range, workspace, WorkspaceConfiguration } from "vscode";
+import { objectReferencePatterns, ReferencePattern, Component } from "../entities/component";
 import { componentPathToUri, getComponent, searchAllFunctionNames } from "./cachedEntities";
 import { Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern, unscopedPrecedence } from "../entities/scope";
 import { UserFunction, UserFunctionSignature, Argument, getLocalVariables, getFunctionFromPrefix } from "../entities/userFunction";
@@ -12,7 +12,7 @@ import { getFunctionSuffixPattern } from "../entities/function";
 
 export default class CFMLDefinitionProvider implements DefinitionProvider {
 
-  public async provideDefinition(document: TextDocument, position: Position, _token: CancellationToken | boolean): Promise<Definition> {
+  public async provideDefinition(document: TextDocument, position: Position, _token: CancellationToken): Promise<DefinitionLink[]> {
     const cfmlDefinitionSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.definition", document.uri);
     if (!cfmlDefinitionSettings.get<boolean>("enable", true)) {
       return null;
@@ -24,7 +24,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       return null;
     }
 
-    const results: Definition = [];
+    const results: DefinitionLink[] = [];
 
     const docIsCfcFile: boolean = documentPositionStateContext.isCfcFile;
     const docIsCfmFile: boolean = documentPositionStateContext.isCfmFile;
@@ -44,22 +44,23 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       const pattern: RegExp = element.pattern;
       while ((referenceMatch = pattern.exec(documentText))) {
         const path: string = referenceMatch[element.refIndex];
-        const name: string = getComponentNameFromDotPath(path);
-        const offset: number = referenceMatch.index + referenceMatch[0].lastIndexOf(name);
-        const nameRange = new Range(
+        const offset: number = referenceMatch.index + referenceMatch[0].lastIndexOf(path);
+        const pathRange = new Range(
           document.positionAt(offset),
-          document.positionAt(offset + name.length)
+          document.positionAt(offset + path.length)
         );
 
-        if (nameRange.contains(position)) {
+        if (pathRange.contains(position)) {
           const componentUri: Uri = componentPathToUri(path, document.uri);
           if (componentUri) {
             const comp: Component = getComponent(componentUri);
             if (comp) {
-              results.push(new Location(
-                comp.uri,
-                comp.declarationRange
-              ));
+              results.push({
+                originSelectionRange: pathRange,
+                targetUri: comp.uri,
+                targetRange: comp.declarationRange,
+                targetSelectionRange: comp.declarationRange
+              });
             }
           }
         }
@@ -73,10 +74,12 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
         if (thisComponent.extendsRange && thisComponent.extendsRange.contains(position)) {
           const extendsComp: Component = getComponent(thisComponent.extends);
           if (extendsComp) {
-            results.push(new Location(
-              extendsComp.uri,
-              extendsComp.declarationRange
-            ));
+            results.push({
+              originSelectionRange: thisComponent.extendsRange,
+              targetUri: extendsComp.uri,
+              targetRange: extendsComp.declarationRange,
+              targetSelectionRange: extendsComp.declarationRange
+            });
           }
         }
 
@@ -86,10 +89,12 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
           if (func.returnTypeUri && func.returnTypeRange && func.returnTypeRange.contains(position)) {
             const returnTypeComp: Component = getComponent(func.returnTypeUri);
             if (returnTypeComp) {
-              results.push(new Location(
-                returnTypeComp.uri,
-                returnTypeComp.declarationRange
-              ));
+              results.push({
+                originSelectionRange: func.returnTypeRange,
+                targetUri: returnTypeComp.uri,
+                targetRange: returnTypeComp.declarationRange,
+                targetSelectionRange: returnTypeComp.declarationRange
+              });
             }
           }
 
@@ -100,29 +105,17 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             }).forEach((arg: Argument) => {
               const argTypeComp: Component = getComponent(arg.dataTypeComponentUri);
               if (argTypeComp) {
-                results.push(new Location(
-                  argTypeComp.uri,
-                  argTypeComp.declarationRange
-                ));
+                results.push({
+                  originSelectionRange: arg.dataTypeRange,
+                  targetUri: argTypeComp.uri,
+                  targetRange: argTypeComp.declarationRange,
+                  targetSelectionRange: argTypeComp.declarationRange
+                });
               }
             });
           });
 
           if (!func.isImplicit && func.bodyRange.contains(position)) {
-            // Argument uses
-            const argumentPrefixPattern = getValidScopesPrefixPattern([Scope.Arguments], false);
-            if (argumentPrefixPattern.test(docPrefix)) {
-              func.signatures.forEach((signature: UserFunctionSignature) => {
-                signature.parameters.filter((arg: Argument) => {
-                  return equalsIgnoreCase(arg.name, currentWord);
-                }).forEach((arg: Argument) => {
-                  results.push(new Location(
-                    thisComponent.uri,
-                    arg.nameRange
-                  ));
-                });
-              });
-            }
             // Local variable uses
             const localVariables = getLocalVariables(func, documentPositionStateContext, thisComponent.isScript);
             const localVarPrefixPattern = getValidScopesPrefixPattern([Scope.Local], true);
@@ -130,8 +123,30 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
               localVariables.filter((localVar: Variable) => {
                 return position.isAfterOrEqual(localVar.declarationLocation.range.start) && equalsIgnoreCase(localVar.identifier, currentWord);
               }).forEach((localVar: Variable) => {
-                results.push(localVar.declarationLocation);
+                results.push({
+                  targetUri: localVar.declarationLocation.uri,
+                  targetRange: localVar.declarationLocation.range,
+                  targetSelectionRange: localVar.declarationLocation.range
+                });
               });
+            }
+
+            // Argument uses
+            if (results.length === 0) {
+              const argumentPrefixPattern = getValidScopesPrefixPattern([Scope.Arguments], true);
+              if (argumentPrefixPattern.test(docPrefix)) {
+                func.signatures.forEach((signature: UserFunctionSignature) => {
+                  signature.parameters.filter((arg: Argument) => {
+                    return equalsIgnoreCase(arg.name, currentWord);
+                  }).forEach((arg: Argument) => {
+                    results.push({
+                      targetUri: thisComponent.uri,
+                      targetRange: arg.nameRange,
+                      targetSelectionRange: arg.nameRange
+                    });
+                  });
+                });
+              }
             }
           }
         });
@@ -142,10 +157,12 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
         }).forEach((prop: Property) => {
           const dataTypeComp: Component = getComponent(prop.dataTypeComponentUri);
           if (dataTypeComp) {
-            results.push(new Location(
-              dataTypeComp.uri,
-              dataTypeComp.declarationRange
-            ));
+            results.push({
+              originSelectionRange: prop.dataTypeRange,
+              targetUri: dataTypeComp.uri,
+              targetRange: dataTypeComp.declarationRange,
+              targetSelectionRange: dataTypeComp.declarationRange
+            });
           }
         });
 
@@ -155,7 +172,11 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
           thisComponent.variables.filter((variable: Variable) => {
             return equalsIgnoreCase(variable.identifier, currentWord);
           }).forEach((variable: Variable) => {
-            results.push(variable.declarationLocation);
+            results.push({
+              targetUri: variable.declarationLocation.uri,
+              targetRange: variable.declarationLocation.range,
+              targetSelectionRange: variable.declarationLocation.range
+            });
           });
         }
       }
@@ -181,18 +202,23 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
 
           return (unscopedPrecedence.includes(variable.scope) || variable.scope === Scope.Unknown);
         }).forEach((variable: Variable) => {
-          results.push(variable.declarationLocation);
+          results.push({
+            targetUri: variable.declarationLocation.uri,
+            targetRange: variable.declarationLocation.range,
+            targetSelectionRange: variable.declarationLocation.range
+          });
         });
       }
     }
 
     // User function
-    const externalUserFunc: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, lowerCurrentWord);
-    if (externalUserFunc) {
-      results.push(new Location(
-        externalUserFunc.location.uri,
-        externalUserFunc.nameRange
-      ));
+    const userFunc: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, lowerCurrentWord);
+    if (userFunc) {
+      results.push({
+        targetUri: userFunc.location.uri,
+        targetRange: userFunc.nameRange, // TODO: userFunc.location.range
+        targetSelectionRange: userFunc.nameRange
+      });
     }
 
     // Application variables
@@ -205,7 +231,11 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       applicationDocVariables.filter((variable: Variable) => {
         return variable.scope === currentScope && equalsIgnoreCase(variable.identifier, currentWord);
       }).forEach((variable: Variable) => {
-        results.push(variable.declarationLocation);
+        results.push({
+          targetUri: variable.declarationLocation.uri,
+          targetRange: variable.declarationLocation.range,
+          targetSelectionRange: variable.declarationLocation.range
+        });
       });
     }
 
@@ -216,21 +246,26 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
       serverDocVariables.filter((variable: Variable) => {
         return variable.scope === Scope.Server && equalsIgnoreCase(variable.identifier, currentWord);
       }).forEach((variable: Variable) => {
-        results.push(variable.declarationLocation);
+        results.push({
+          targetUri: variable.declarationLocation.uri,
+          targetRange: variable.declarationLocation.range,
+          targetSelectionRange: variable.declarationLocation.range
+        });
       });
     }
 
     // Search for function by name
-    if (cfmlDefinitionSettings.get<boolean>("userFunctions.search.enable", false) && results.length === 0 && documentPositionStateContext.isContinuingExpression) {
+    if (results.length === 0 && documentPositionStateContext.isContinuingExpression && cfmlDefinitionSettings.get<boolean>("userFunctions.search.enable", false)) {
       const wordSuffix: string = documentText.slice(document.offsetAt(wordRange.end), documentText.length);
       const functionSuffixPattern: RegExp = getFunctionSuffixPattern();
       if (functionSuffixPattern.test(wordSuffix)) {
         const functionSearchResults = searchAllFunctionNames(lowerCurrentWord, SearchMode.EqualTo);
         functionSearchResults.forEach((userFunc: UserFunction) => {
-          results.push(new Location(
-            userFunc.location.uri,
-            userFunc.nameRange
-          ));
+          results.push({
+            targetUri: userFunc.location.uri,
+            targetRange: userFunc.nameRange, // TODO: userFunc.location.range
+            targetSelectionRange: userFunc.nameRange
+          });
         });
       }
     }

@@ -4,7 +4,7 @@ import { Location, Uri, TextDocument, Position, Range } from "vscode";
 import { Function, getScriptFunctionArgRanges } from "./function";
 import { Parameter } from "./parameter";
 import { Signature } from "./signature";
-import { getComponentNameFromDotPath, Component, isSubcomponentOrEqual } from "./component";
+import { Component, isSubcomponentOrEqual } from "./component";
 import { Variable, parseVariableAssignments, collectDocumentVariableAssignments, getApplicationVariables, getBestMatchingVariable, getVariableExpressionPrefixPattern } from "./variable";
 import { Scope } from "./scope";
 import { DocBlockKeyValue, parseDocBlock, getKeyPattern } from "./docblock";
@@ -199,8 +199,9 @@ export function parseScriptFunctions(documentStateContext: DocumentStateContext)
 
     const functionBodyStartPos: Position = getNextCharacterPosition(documentStateContext, document.offsetAt(argumentsEndPosition), componentBody.length - 1, "{");
     let functionEndPosition: Position;
-    const comp: Component = getComponent(document.uri);
-    if (comp && comp.isInterface) {
+
+    // TODO: Should a non-implemented function have a body? Also check for abstract
+    if (documentStateContext.component && documentStateContext.component.isInterface) {
       functionEndPosition = functionBodyStartPos;
     } else {
       functionEndPosition = getClosingPosition(documentStateContext, document.offsetAt(functionBodyStartPos), "}");
@@ -243,10 +244,10 @@ export function parseScriptFunctions(documentStateContext: DocumentStateContext)
         if (checkDataType[1]) {
           userFunction.returnTypeUri = checkDataType[1];
         }
-        const returnTypeName: string = getComponentNameFromDotPath(returnType);
+        const returnTypeOffset: number = scriptFunctionMatch.index + returnTypePrefix.length;
         userFunction.returnTypeRange = new Range(
-          document.positionAt(scriptFunctionMatch.index + returnTypePrefix.length + returnType.length - returnTypeName.length),
-          document.positionAt(scriptFunctionMatch.index + returnTypePrefix.length + returnType.length)
+          document.positionAt(returnTypeOffset),
+          document.positionAt(returnTypeOffset + returnType.length)
         );
       }
     }
@@ -291,12 +292,10 @@ export function parseScriptFunctions(documentStateContext: DocumentStateContext)
             const returnTypeKeyMatch: RegExpExecArray = getKeyPattern("returnType").exec(fullDocBlock);
             if (returnTypeKeyMatch) {
               const returnTypePath: string = returnTypeKeyMatch[1];
-              const returnTypeName: string = getComponentNameFromDotPath(returnTypePath);
-              const prefixLen: number = returnTypeKeyMatch[0].lastIndexOf(returnTypeName);
-              const returnTypeOffset: number = scriptFunctionMatch.index + returnTypeKeyMatch.index + prefixLen;
+              const returnTypeOffset: number = scriptFunctionMatch.index + returnTypeKeyMatch.index;
               userFunction.returnTypeRange = new Range(
                 document.positionAt(returnTypeOffset),
-                document.positionAt(returnTypeOffset + returnTypeName.length)
+                document.positionAt(returnTypeOffset + returnTypePath.length)
               );
             }
             if (checkDataType[1]) {
@@ -386,10 +385,9 @@ export function parseScriptFunctionArgs(documentStateContext: DocumentStateConte
             typeUri = checkDataType[1];
           }
 
-          const argTypeName: string = getComponentNameFromDotPath(argType);
           const argTypeOffset: number = fullArg.indexOf(argType);
           argTypeRange = new Range(
-            document.positionAt(argOffset + argTypeOffset + argType.length - argTypeName.length),
+            document.positionAt(argOffset + argTypeOffset),
             document.positionAt(argOffset + argTypeOffset + argType.length)
           );
         }
@@ -411,7 +409,7 @@ export function parseScriptFunctionArgs(documentStateContext: DocumentStateConte
         if (argDefault.length > 1 && /['"]/.test(argDefault.charAt(0)) && /['"]/.test(argDefault.charAt(argDefault.length - 1))) {
           argDefault = argDefault.slice(1, -1).trim();
         }
-        if (argDefault.length > 2 && argDefault.startsWith("#") && argDefault.endsWith("#") && argDefault.slice(1, -1).indexOf("#") === -1) {
+        if (argDefault.length > 2 && argDefault.startsWith("#") && argDefault.endsWith("#") && !argDefault.slice(1, -1).includes("#")) {
           argDefault = argDefault.slice(1, -1).trim();
         }
         argument.default = argDefault;
@@ -442,9 +440,9 @@ export function parseScriptFunctionArgs(documentStateContext: DocumentStateConte
               if (checkDataType[1]) {
                 argument.dataTypeComponentUri = checkDataType[1];
               }
-              const argTypeName: string = getComponentNameFromDotPath(argAttrVal);
+
               argument.dataTypeRange = new Range(
-                attr.valueRange.start.translate(0, argAttrVal.length - argTypeName.length),
+                attr.valueRange.start,
                 attr.valueRange.end
               );
             }
@@ -468,9 +466,9 @@ export function parseScriptFunctionArgs(documentStateContext: DocumentStateConte
             if (checkDataType[1]) {
               argument.dataTypeComponentUri = checkDataType[1];
             }
-            const argTypeName: string = getComponentNameFromDotPath(docElem.value);
+
             argument.dataTypeRange = new Range(
-              docElem.valueRange.start.translate(0, docElem.value.length - argTypeName.length),
+              docElem.valueRange.start,
               docElem.valueRange.end
             );
           }
@@ -576,9 +574,8 @@ function parseTagFunctionArguments(documentStateContext: DocumentStateContext, f
           typeUri = checkDataType[1];
         }
         argTypeRange = parsedAttributes.get("type").valueRange;
-        const argTypeName: string = getComponentNameFromDotPath(argType);
         argTypeRange = new Range(
-          argTypeRange.start.translate(0, argType.length - argTypeName.length),
+          argTypeRange.start,
           argTypeRange.end
         );
       }
@@ -598,7 +595,7 @@ function parseTagFunctionArguments(documentStateContext: DocumentStateContext, f
       if (argDefault.length > 1 && /['"]/.test(argDefault.charAt(0)) && /['"]/.test(argDefault.charAt(argDefault.length - 1))) {
         argDefault = argDefault.slice(1, -1).trim();
       }
-      if (argDefault.length > 2 && argDefault.startsWith("#") && argDefault.endsWith("#") && argDefault.slice(1, -1).indexOf("#") === -1) {
+      if (argDefault.length > 2 && argDefault.startsWith("#") && argDefault.endsWith("#") && !argDefault.slice(1, -1).includes("#")) {
         argDefault = argDefault.slice(1, -1).trim();
       }
       argument.default = argDefault;
@@ -638,9 +635,8 @@ function assignFunctionAttributes(userFunction: UserFunction, functionAttributes
             userFunction.returnTypeUri = checkDataType[1];
           }
           const returnTypeRange: Range = functionAttributes.get("returntype").valueRange;
-          const returnTypeName: string = getComponentNameFromDotPath(attrVal);
           userFunction.returnTypeRange = new Range(
-            returnTypeRange.start.translate(0, attrVal.length - returnTypeName.length),
+            returnTypeRange.start,
             returnTypeRange.end
           );
         }
@@ -659,7 +655,7 @@ function assignFunctionAttributes(userFunction: UserFunction, functionAttributes
 
 /**
  * Parses a set of attribute/value pairs for a function argument and returns an object conforming to the ArgumentAttributes interface
- * @param attributeStr A string with the set of attribute/value pairs for a function argument
+ * @param attributes A set of attribute/value pairs for a function argument
  */
 function processArgumentAttributes(attributes: Attributes): ArgumentAttributes {
   let attributeObj = {};
@@ -677,10 +673,14 @@ function processArgumentAttributes(attributes: Attributes): ArgumentAttributes {
 /**
  * Parses the given user function to extract the local variables into an array of Variable objects that is returned
  * @param func The UserFunction within which to parse local variables
- * @param document The document containing the given function
+ * @param documentStateContext The contextual information of the state of a document containing the given function
  * @param isScript Whether this function is defined entirely in CFScript
  */
 export function getLocalVariables(func: UserFunction, documentStateContext: DocumentStateContext, isScript: boolean): Variable[] {
+  if (!func || !func.bodyRange) {
+    return [];
+  }
+
   const allVariables: Variable[] = parseVariableAssignments(documentStateContext, isScript, func.bodyRange);
 
   return allVariables.filter((variable: Variable) => {
@@ -693,7 +693,7 @@ export function getLocalVariables(func: UserFunction, documentStateContext: Docu
  * @param modifier A string representing the function modifier
  */
 function parseModifier(modifier: string): string {
-  if (accessArr.includes(modifier)) {
+  if (accessArr.includes(modifier.toLowerCase())) {
     return "access";
   }
 
@@ -783,6 +783,7 @@ export async function getFunctionFromPrefix(documentPositionStateContext: Docume
  * @param lowerFunctionName The function name all lowercased
  * @param callerUri The URI of the document from which the function is being called
  * @param disallowedAccess An access specifier to disallow
+ * @param disallowImplicit Whether to disallow implicit functions from being checked
  */
 export function getFunctionFromComponent(component: Component, lowerFunctionName: string, callerUri: Uri, disallowedAccess?: Access, disallowImplicit: boolean = false): UserFunction | undefined {
   let validFunctionAccess: MySet<Access> = new MySet([Access.Remote, Access.Public]);
@@ -863,5 +864,3 @@ export function variablesToUserFunctions(variables: UserFunctionVariable[]): Use
     return userFun;
   });
 }
-
-// FIXME: Nothing

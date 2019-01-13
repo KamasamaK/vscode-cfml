@@ -2,7 +2,7 @@ import { Position, Range, TextDocument, WorkspaceConfiguration, workspace } from
 import { Component, isScriptComponent } from "../entities/component";
 import { getComponent } from "../features/cachedEntities";
 import { CFMLEngine, CFMLEngineName } from "./cfdocs/cfmlEngine";
-import { getCfScriptRanges, getCommentRanges, isCfcFile, isCfmFile, isContinuingExpression, isInRanges } from "./contextUtil";
+import { getCfScriptRanges, getDocumentContextRanges, isCfcFile, isCfmFile, isContinuingExpression, isInRanges, DocumentContextRanges } from "./contextUtil";
 import { getSanitizedDocumentText } from "./textUtil";
 
 export interface DocumentStateContext {
@@ -11,6 +11,8 @@ export interface DocumentStateContext {
   isCfcFile: boolean;
   docIsScript: boolean;
   commentRanges: Range[];
+  stringRanges?: Range[];
+  stringEmbeddedCfmlRanges?: Range[];
   sanitizedDocumentText: string;
   component?: Component;
   userEngine: CFMLEngine;
@@ -40,8 +42,10 @@ export function getDocumentStateContext(document: TextDocument, fast: boolean = 
   const docIsCfcFile: boolean = isCfcFile(document);
   const thisComponent: Component = getComponent(document.uri);
   const docIsScript: boolean = (docIsCfcFile && isScriptComponent(document));
-  const commentRanges: Range[] = getCommentRanges(document, docIsScript, undefined, fast);
-
+  const documentRanges: DocumentContextRanges = getDocumentContextRanges(document, docIsScript, undefined, fast);
+  const commentRanges: Range[] = documentRanges.commentRanges;
+  const stringRanges: Range[] = documentRanges.stringRanges;
+  const stringEmbeddedCfmlRanges: Range[] = documentRanges.stringEmbeddedCfmlRanges;
   const sanitizedDocumentText: string = getSanitizedDocumentText(document, commentRanges);
 
   return {
@@ -50,6 +54,8 @@ export function getDocumentStateContext(document: TextDocument, fast: boolean = 
     isCfcFile: docIsCfcFile,
     docIsScript,
     commentRanges,
+    stringRanges,
+    stringEmbeddedCfmlRanges,
     sanitizedDocumentText,
     component: thisComponent,
     userEngine

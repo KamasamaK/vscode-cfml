@@ -1,11 +1,14 @@
+import * as Octokit from "@octokit/rest";
 import * as fs from "fs";
 import * as path from "path";
 import { commands, ConfigurationChangeEvent, ConfigurationTarget, DocumentSelector, ExtensionContext, extensions, FileSystemWatcher, IndentAction, languages, TextDocument, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
-import { COMPONENT_FILE_GLOB, getApplicationUri, parseComponent } from "./entities/component";
+import { COMPONENT_FILE_GLOB } from "./entities/component";
 import { Scope } from "./entities/scope";
 import { decreasingIndentingTags, goToMatchingTag, nonClosingTags, nonIndentingTags } from "./entities/tag";
 import { parseVariableAssignments, Variable } from "./entities/variable";
 import * as cachedEntity from "./features/cachedEntities";
+import CFMLDocumentColorProvider from "./features/colorProvider";
+import { foldAllFunctions, openActiveApplicationFile, refreshGlobalDefinitionCache, refreshWorkspaceDefinitionCache } from "./features/commands";
 import { CommentType, toggleComment } from "./features/comment";
 import CFMLCompletionItemProvider from "./features/completionItemProvider";
 import CFMLDefinitionProvider from "./features/definitionProvider";
@@ -16,8 +19,8 @@ import CFMLHoverProvider from "./features/hoverProvider";
 import CFMLSignatureHelpProvider from "./features/signatureHelpProvider";
 import CFMLTypeDefinitionProvider from "./features/typeDefinitionProvider";
 import CFMLWorkspaceSymbolProvider from "./features/workspaceSymbolProvider";
-import { CFDocsService, openCfDocsForCurrentWord, openEngineDocsForCurrentWord } from "./utils/cfdocs/cfDocsService";
-import { isCfcFile, APPLICATION_CFM_GLOB } from "./utils/contextUtil";
+import CFDocsService from "./utils/cfdocs/cfDocsService";
+import { APPLICATION_CFM_GLOB, isCfcFile } from "./utils/contextUtil";
 import { DocumentStateContext, getDocumentStateContext } from "./utils/documentUtil";
 
 export const LANGUAGE_ID: string = "cfml";
@@ -32,16 +35,10 @@ const DOCUMENT_SELECTOR: DocumentSelector = [
   }
 ];
 
-export interface Snippets {
-  [key: string]: Snippet;
-}
-export interface Snippet {
-  prefix: string;
-  body: string | string[];
-  description: string;
-}
+const octokit = new Octokit();
+const httpSuccessStatusCode: number = 200;
 
-export let snippets: Snippets;
+export let extensionContext: ExtensionContext;
 
 /**
  * Gets a ConfigurationTarget enumerable based on a string representation
@@ -67,10 +64,37 @@ export function getConfigurationTarget(target: string): ConfigurationTarget {
 }
 
 /**
+ * Gets the latest CommandBox Server schema from the CommandBox git repository
+ */
+async function getLatestCommandBoxServerSchema(): Promise<void> {
+  const cmdboxServerSchemaFileName: string = "server.schema.json";
+  const cmdboxServerSchemaFilePath: string = path.join(extensionContext.extensionPath, "resources", "schemas", cmdboxServerSchemaFileName);
+
+  try {
+    const cmdboxServerSchemaResult = await octokit.repos.getContents({
+      owner: "Ortus-Solutions",
+      repo: "commandbox",
+      path: `src/cfml/system/config/${cmdboxServerSchemaFileName}`,
+      ref: "master"
+    });
+
+    if (cmdboxServerSchemaResult && cmdboxServerSchemaResult.hasOwnProperty("status") && cmdboxServerSchemaResult.status === httpSuccessStatusCode && cmdboxServerSchemaResult.data.type === "file") {
+      const resultText: string = new Buffer(cmdboxServerSchemaResult.data.content, cmdboxServerSchemaResult.data.encoding).toString("utf8");
+
+      fs.writeFileSync(cmdboxServerSchemaFilePath, resultText);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/**
  * This method is called when the extension is activated.
  * @param context The context object for this extension.
  */
 export function activate(context: ExtensionContext): void {
+
+  extensionContext = context;
 
   languages.setLanguageConfiguration(LANGUAGE_ID, {
     indentationRules: {
@@ -83,78 +107,42 @@ export function activate(context: ExtensionContext): void {
         beforeText: /^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/,
         afterText: /^\s*\*\/$/,
         action: { indentAction: IndentAction.IndentOutdent, appendText: " * " }
-      }, {
+      },
+      {
         // e.g. /** ...|
         beforeText: /^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/,
         action: { indentAction: IndentAction.None, appendText: " * " }
-      }, {
+      },
+      {
         // e.g.  * ...|
         beforeText: /^(\t|(\ \ ))*\ \*(\ ([^\*]|\*(?!\/))*)?$/,
         action: { indentAction: IndentAction.None, appendText: "* " }
-      }, {
+      },
+      {
         // e.g.  */|
         beforeText: /^(\t|(\ \ ))*\ \*\/\s*$/,
         action: { indentAction: IndentAction.None, removeText: 1 }
+      },
+      {
+        // e.g. <cfloop> | </cfloop>
+        beforeText: new RegExp(`<(?!(?:${nonIndentingTags.join("|")})\\b)([_:\\w][_:\\w-.\\d]*)([^/>]*(?!/)>)[^<]*$`, "i"),
+        afterText: new RegExp(`^(<\\/([_:\\w][_:\\w-.\\d]*)\\s*>|<(?:${decreasingIndentingTags.join("|")})\\b)`, "i"),
+        action: { indentAction: IndentAction.IndentOutdent }
       }
     ]
   });
 
-  context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", async () => {
-    cachedEntity.clearAllGlobalFunctions();
-    cachedEntity.clearAllGlobalTags();
-    cachedEntity.clearAllGlobalEntityDefinitions();
+  getLatestCommandBoxServerSchema();
 
-    const cfmlGlobalDefinitionsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.globalDefinitions");
-    if (cfmlGlobalDefinitionsSettings.get<string>("source") === "cfdocs") {
-      CFDocsService.cacheAll();
-    }
-  }));
-
-  context.subscriptions.push(commands.registerCommand("cfml.refreshWorkspaceDefinitionCache", async () => {
-    const cfmlIndexComponentsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.indexComponents");
-    if (cfmlIndexComponentsSettings.get<boolean>("enable")) {
-      cachedEntity.cacheAllComponents();
-    }
-  }));
-
+  context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", refreshGlobalDefinitionCache));
+  context.subscriptions.push(commands.registerCommand("cfml.refreshWorkspaceDefinitionCache", refreshWorkspaceDefinitionCache));
   context.subscriptions.push(commands.registerCommand("cfml.toggleLineComment", toggleComment(CommentType.Line)));
   context.subscriptions.push(commands.registerCommand("cfml.toggleBlockComment", toggleComment(CommentType.Block)));
-
-  context.subscriptions.push(commands.registerCommand("cfml.openActiveApplicationFile", async () => {
-    if (window.activeTextEditor === undefined) {
-      window.showErrorMessage("No active text editor was found.");
-      return;
-    }
-
-    const activeDocumentUri: Uri = window.activeTextEditor.document.uri;
-
-    if (activeDocumentUri.scheme === "untitled") {
-      return;
-    }
-
-    const applicationUri: Uri = getApplicationUri(activeDocumentUri);
-    if (applicationUri) {
-      const applicationDocument: TextDocument = await workspace.openTextDocument(applicationUri);
-      if (!applicationDocument) {
-        window.showErrorMessage("No Application found for the currently active document.");
-        return;
-      }
-
-      window.showTextDocument(applicationDocument);
-    }
-  }));
-
-  context.subscriptions.push(commands.registerCommand("cfml.goToMatchingTag", async () => {
-    goToMatchingTag();
-  }));
-
-  context.subscriptions.push(commands.registerCommand("cfml.openCfDocs", async () => {
-    openCfDocsForCurrentWord();
-  }));
-
-  context.subscriptions.push(commands.registerCommand("cfml.openEngineDocs", async () => {
-    openEngineDocsForCurrentWord();
-  }));
+  context.subscriptions.push(commands.registerCommand("cfml.openActiveApplicationFile", openActiveApplicationFile));
+  context.subscriptions.push(commands.registerCommand("cfml.goToMatchingTag", goToMatchingTag));
+  context.subscriptions.push(commands.registerCommand("cfml.openCfDocs", CFDocsService.openCfDocsForCurrentWord));
+  context.subscriptions.push(commands.registerCommand("cfml.openEngineDocs", CFDocsService.openEngineDocsForCurrentWord));
+  context.subscriptions.push(commands.registerCommand("cfml.foldAllFunctions", foldAllFunctions));
 
   context.subscriptions.push(languages.registerHoverProvider(DOCUMENT_SELECTOR, new CFMLHoverProvider()));
   context.subscriptions.push(languages.registerDocumentSymbolProvider(DOCUMENT_SELECTOR, new CFMLDocumentSymbolProvider()));
@@ -165,11 +153,11 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(languages.registerCompletionItemProvider(DOCUMENT_SELECTOR, new DocBlockCompletions(), "*", "@", "."));
   context.subscriptions.push(languages.registerDefinitionProvider(DOCUMENT_SELECTOR, new CFMLDefinitionProvider()));
   context.subscriptions.push(languages.registerTypeDefinitionProvider(DOCUMENT_SELECTOR, new CFMLTypeDefinitionProvider()));
+  context.subscriptions.push(languages.registerColorProvider(DOCUMENT_SELECTOR, new CFMLDocumentColorProvider()));
 
   context.subscriptions.push(workspace.onDidSaveTextDocument((document: TextDocument) => {
     if (isCfcFile(document)) {
-      const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
-      cachedEntity.cacheComponent(parseComponent(documentStateContext), documentStateContext);
+      cachedEntity.cacheComponentFromDocument(document);
     } else if (path.basename(document.fileName) === "Application.cfm") {
       const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
       const thisApplicationVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript);
@@ -184,12 +172,16 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(componentWatcher);
   componentWatcher.onDidCreate((componentUri: Uri) => {
     workspace.openTextDocument(componentUri).then((document: TextDocument) => {
-      const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
-      cachedEntity.cacheComponent(parseComponent(documentStateContext), documentStateContext);
+      cachedEntity.cacheComponentFromDocument(document);
     });
   });
   componentWatcher.onDidDelete((componentUri: Uri) => {
     cachedEntity.clearCachedComponent(componentUri);
+
+    const fileName: string = path.basename(componentUri.fsPath);
+    if (fileName === "Application.cfc") {
+      cachedEntity.removeApplicationVariables(componentUri);
+    }
   });
 
   const applicationCfmWatcher: FileSystemWatcher = workspace.createFileSystemWatcher(APPLICATION_CFM_GLOB, false, true, false);
@@ -232,10 +224,11 @@ export function activate(context: ExtensionContext): void {
         );
       }
 
-      nonClosingTags.forEach((tagName: string) => {
-        if (!autoCloseExcludedTags.includes(tagName)) {
-          autoCloseExcludedTags.push(tagName);
-        }
+      nonClosingTags.filter((tagName: string) => {
+        // Consider ignoring case
+        return !autoCloseExcludedTags.includes(tagName);
+      }).forEach((tagName: string) => {
+        autoCloseExcludedTags.push(tagName);
       });
       autoCloseTagsSettings.update(
         "excludedTags",
@@ -254,11 +247,11 @@ export function activate(context: ExtensionContext): void {
       }
     }
   } else if (enableAutoCloseTags) {
-    window.showInformationMessage("You have autoCloseTags enabled, but do not have the necessary extension installed.", "Install", "Disable").then(
+    window.showInformationMessage("You have the autoCloseTags setting enabled, but do not have the necessary extension installed/enabled.", "Install/Enable Extension", "Disable Setting").then(
       (selection: string) => {
-        if (selection === "Install") {
-          commands.executeCommand("vscode.open", Uri.parse("https://marketplace.visualstudio.com/items?itemName=formulahendry.auto-close-tag"));
-        } else if (selection === "Disable") {
+        if (selection === "Install/Enable Extension") {
+          commands.executeCommand("extension.open", "formulahendry.auto-close-tag");
+        } else if (selection === "Disable Setting") {
           cfmlSettings.update(
             "autoCloseTags.enable",
             false,
@@ -269,30 +262,8 @@ export function activate(context: ExtensionContext): void {
     );
   }
 
-  // TODO: Remove this. Provide instructions instead.
-  const emmetExt = extensions.getExtension("vscode.emmet");
-  if (emmetExt) {
-    const emmetSettings: WorkspaceConfiguration = workspace.getConfiguration("emmet", null);
-    const emmetIncludeLanguages = emmetSettings.get("includeLanguages", {});
-    if (cfmlSettings.get<boolean>("emmet.enable")) {
-      emmetIncludeLanguages["cfml"] = "html";
-    } else {
-      emmetIncludeLanguages["cfml"] = undefined;
-    }
-
-    emmetSettings.update(
-      "includeLanguages",
-      emmetIncludeLanguages,
-      getConfigurationTarget(cfmlSettings.get<string>("emmet.configurationTarget"))
-    );
-  }
-
   commands.executeCommand("cfml.refreshGlobalDefinitionCache");
   commands.executeCommand("cfml.refreshWorkspaceDefinitionCache");
-
-  fs.readFile(context.asAbsolutePath("./snippets/snippets.json"), "utf8", (err, data) => {
-    snippets = JSON.parse(data);
-  });
 }
 
 /**
