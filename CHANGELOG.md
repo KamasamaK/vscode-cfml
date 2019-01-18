@@ -2,6 +2,11 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.5.2] - 2019-01-18
+
+- Added some existence checks
+- Added some exception handling
+
 ## [0.5.1] - 2019-01-17
 
 - Improved support and fixed bugs for interfaces and abstract functions ([\#27](https://github.com/KamasamaK/vscode-cfml/issues/27))

@@ -2,7 +2,7 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",
@@ -509,7 +509,7 @@
     "@types/semver": "~5.5.0",
     "mocha": "~5.2.0",
     "tslint": "^5.12.1",
-    "typescript": "^3.2.2",
+    "typescript": "^3.2.4",
     "vscode": "^1.1.26"
   }
 }

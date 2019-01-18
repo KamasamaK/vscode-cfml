@@ -430,6 +430,10 @@ function processAttributes(attributes: Attributes): ComponentAttributes {
  * @param baseUri The URI from which the component path will be resolved
  */
 export function componentPathToUri(dotPath: string, baseUri: Uri): Uri | undefined {
+  if (!dotPath) {
+    return undefined;
+  }
+
   const cachedResult: Uri = cachedEntities.componentPathToUri(dotPath, baseUri);
   if (cachedResult) {
     return cachedResult;

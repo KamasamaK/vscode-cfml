@@ -158,7 +158,12 @@ function setComponent(comp: Component): void {
   }
   allComponentsByName[componentKey][comp.uri.toString()] = comp;
 
-  allComponentNames.addWord(componentKey);
+  try {
+    allComponentNames.addWord(componentKey);
+  } catch (ex) {
+    console.error(ex);
+    console.error(`Unable to add ${componentKey} to trie`);
+  }
 }
 
 /**
@@ -205,7 +210,12 @@ function setUserFunction(userFunction: UserFunction): void {
   }
   allUserFunctionsByName[functionKey][userFunction.location.uri.toString()] = userFunction;
 
-  allFunctionNames.addWord(functionKey);
+  try {
+    allFunctionNames.addWord(functionKey);
+  } catch (ex) {
+    console.error(ex);
+    console.error(`Unable to add ${functionKey} to trie`);
+  }
 }
 
 /**
@@ -223,13 +233,14 @@ export function searchAllFunctionNames(query: string, searchMode: SearchMode = S
     });
   } else if (searchMode === SearchMode.Contains) {
     for (const name in allUserFunctionsByName) {
-      const lowerName = name.toLowerCase();
-      if (lowerName.includes(lowerQuery)) {
-        functions = functions.concat(Object.values(allUserFunctionsByName[lowerName]));
+      if (name.includes(lowerQuery)) {
+        functions = functions.concat(Object.values(allUserFunctionsByName[name]));
       }
     }
   } else if (searchMode === SearchMode.EqualTo) {
-    functions = Object.values(allUserFunctionsByName[lowerQuery]);
+    if (allUserFunctionsByName.hasOwnProperty(lowerQuery)) {
+      functions = Object.values(allUserFunctionsByName[lowerQuery]);
+    }
   }
 
   return functions;
@@ -241,6 +252,10 @@ export function searchAllFunctionNames(query: string, searchMode: SearchMode = S
  * @param baseUri The URI from which the component path will be resolved
  */
 export function componentPathToUri(dotPath: string, baseUri: Uri): Uri | undefined {
+  if (!dotPath) {
+    return undefined;
+  }
+
   const normalizedPath: string = dotPath.replace(/\./g, path.sep) + COMPONENT_EXT;
 
   // relative to local directory

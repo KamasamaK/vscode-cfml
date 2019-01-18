@@ -216,10 +216,20 @@ export function parseScriptFunctions(documentStateContext: DocumentStateContext)
       functionBodyStartPos = getNextCharacterPosition(documentStateContext, document.offsetAt(argumentsEndPosition), componentBody.length - 1, "{");
       functionEndPosition = getClosingPosition(documentStateContext, document.offsetAt(functionBodyStartPos), "}");
 
-      functionAttributeRange = new Range(
-        argumentsEndPosition,
-        functionBodyStartPos.translate(0, -1)
-      );
+      try {
+        functionAttributeRange = new Range(
+          argumentsEndPosition,
+          functionBodyStartPos.translate(0, -1)
+        );
+      } catch (ex) {
+        console.error(ex);
+        console.error(`Error parsing ${document.uri.fsPath}:${functionName}`);
+        functionAttributeRange = new Range(
+          argumentsEndPosition,
+          functionBodyStartPos
+        );
+      }
+
       functionBodyRange = new Range(
         functionBodyStartPos,
         functionEndPosition.translate(0, -1)

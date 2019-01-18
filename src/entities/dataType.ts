@@ -166,8 +166,8 @@ export namespace DataType {
    * Checks whether a string is a valid data type
    * @param dataType A string to check
    */
-  export function isDataType(dataType: string): boolean {
-    return (equalsIgnoreCase(dataType, "any") || valueOf(dataType) !== DataType.Any);
+  function isDataType(dataType: string): boolean {
+    return (dataType && (equalsIgnoreCase(dataType, "any") || valueOf(dataType) !== DataType.Any));
   }
 
   /**
@@ -191,6 +191,10 @@ export namespace DataType {
    * @param documentUri The document's URI that contains this type string
    */
   export function getDataTypeAndUri(dataType: string, documentUri: Uri): [DataType, Uri] {
+    if (!dataType) {
+      return undefined;
+    }
+
     if (isDataType(dataType)) {
       return [valueOf(dataType), null];
     } else {
