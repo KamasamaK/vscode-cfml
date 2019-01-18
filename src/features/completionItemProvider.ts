@@ -340,56 +340,58 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
           if (foundVar) {
             // From component variable
             if (foundVar.dataTypeComponentUri) {
-              let addedFunctions: MySet<string> = new MySet();
-              let addedVariables: MySet<string> = new MySet();
               const initialFoundComp: Component = getComponent(foundVar.dataTypeComponentUri);
 
-              let validFunctionAccess: MySet<Access> = new MySet([Access.Remote, Access.Public]);
-              if (thisComponent) {
-                if (isSubcomponentOrEqual(thisComponent, initialFoundComp)) {
-                  validFunctionAccess.add(Access.Private);
+              if (initialFoundComp) {
+                let addedFunctions: MySet<string> = new MySet();
+                let addedVariables: MySet<string> = new MySet();
+                let validFunctionAccess: MySet<Access> = new MySet([Access.Remote, Access.Public]);
+                if (thisComponent) {
+                  if (isSubcomponentOrEqual(thisComponent, initialFoundComp)) {
+                    validFunctionAccess.add(Access.Private);
+                    validFunctionAccess.add(Access.Package);
+                  }
+                }
+                if (!validFunctionAccess.has(Access.Package) && path.dirname(documentUri.fsPath) === path.dirname(initialFoundComp.uri.fsPath)) {
                   validFunctionAccess.add(Access.Package);
                 }
-              }
-              if (!validFunctionAccess.has(Access.Package) && path.dirname(documentUri.fsPath) === path.dirname(initialFoundComp.uri.fsPath)) {
-                validFunctionAccess.add(Access.Package);
-              }
 
-              let foundComponent: Component = initialFoundComp;
-              while (foundComponent) {
-                // component functions
-                foundComponent.functions.filter((func: UserFunction, funcKey: string) => {
-                  return currentWordMatches(funcKey)
-                    && validFunctionAccess.has(func.access)
-                    && !addedFunctions.has(funcKey);
-                }).forEach((func: UserFunction, funcKey: string) => {
-                  result.push(createNewProposal(
-                    func.name, CompletionItemKind.Function, { detail: `(function) ${foundComponent.name}.${constructSyntaxString(func)}`, description: func.description }
-                  ));
-                  addedFunctions.add(funcKey);
-                });
+                let foundComponent: Component = initialFoundComp;
+                while (foundComponent) {
+                  // component functions
+                  foundComponent.functions.filter((func: UserFunction, funcKey: string) => {
+                    return currentWordMatches(funcKey)
+                      && validFunctionAccess.has(func.access)
+                      && !addedFunctions.has(funcKey);
+                  }).forEach((func: UserFunction, funcKey: string) => {
+                    result.push(createNewProposal(
+                      func.name, CompletionItemKind.Function, { detail: `(function) ${foundComponent.name}.${constructSyntaxString(func)}`, description: func.description }
+                    ));
+                    addedFunctions.add(funcKey);
+                  });
 
-                // component this-scoped variables
-                foundComponent.variables.filter((variable: Variable) => {
-                  const varKey = variable.identifier.toLowerCase();
-                  return variable.scope === Scope.This
-                    && !addedVariables.has(varKey);
-                }).forEach((variable: Variable) => {
-                  const varKey = variable.identifier.toLowerCase();
-                  const varKind: CompletionItemKind = usesConstantConvention(variable.identifier) || variable.final ? CompletionItemKind.Constant : CompletionItemKind.Variable;
-                  const varType: string = getVariableTypeString(variable);
+                  // component this-scoped variables
+                  foundComponent.variables.filter((variable: Variable) => {
+                    const varKey = variable.identifier.toLowerCase();
+                    return variable.scope === Scope.This
+                      && !addedVariables.has(varKey);
+                  }).forEach((variable: Variable) => {
+                    const varKey = variable.identifier.toLowerCase();
+                    const varKind: CompletionItemKind = usesConstantConvention(variable.identifier) || variable.final ? CompletionItemKind.Constant : CompletionItemKind.Variable;
+                    const varType: string = getVariableTypeString(variable);
 
-                  result.push(createNewProposal(
-                    variable.identifier, varKind, { detail: `(${variable.scope}) ${variable.identifier}: ${varType}`, description: variable.description }
-                  ));
+                    result.push(createNewProposal(
+                      variable.identifier, varKind, { detail: `(${variable.scope}) ${variable.identifier}: ${varType}`, description: variable.description }
+                    ));
 
-                  addedVariables.add(varKey);
-                });
+                    addedVariables.add(varKey);
+                  });
 
-                if (foundComponent.extends) {
-                  foundComponent = getComponent(foundComponent.extends);
-                } else {
-                  foundComponent = undefined;
+                  if (foundComponent.extends) {
+                    foundComponent = getComponent(foundComponent.extends);
+                  } else {
+                    foundComponent = undefined;
+                  }
                 }
               }
             // From other variable type

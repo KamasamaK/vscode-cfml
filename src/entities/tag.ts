@@ -9,6 +9,7 @@ import { HTML_EMPTY_ELEMENTS } from "./html/htmlTag";
 
 const tagAttributePattern: RegExp = /<(([a-z_]+)\s+)([^<>]*)$/i;
 const cfTagAttributePattern: RegExp = /<((cf[a-z_]+)\s+)([^<>]*)$/i;
+// FIXME: If an attribute value contains ) then subsequent attributes will not match this
 const cfScriptTagAttributePattern: RegExp = /\b((cf[a-z_]+)\s*\(\s*)([^)]*)$/i;
 const tagPrefixPattern: RegExp = /<\s*(\/)?\s*$/;
 

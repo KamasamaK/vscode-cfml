@@ -128,7 +128,7 @@ export interface UserFunction extends Function {
   returnTypeUri?: Uri; // Only when returntype is Component
   returnTypeRange?: Range;
   nameRange: Range;
-  bodyRange: Range;
+  bodyRange?: Range;
   signatures: UserFunctionSignature[];
   location: Location;
   isImplicit: boolean;
@@ -197,29 +197,38 @@ export function parseScriptFunctions(documentStateContext: DocumentStateContext)
       argumentsEndPosition.translate(0, -1)
     );
 
-    const functionBodyStartPos: Position = getNextCharacterPosition(documentStateContext, document.offsetAt(argumentsEndPosition), componentBody.length - 1, "{");
+    let functionBodyStartPos: Position;
     let functionEndPosition: Position;
+    let functionAttributeRange: Range;
+    let functionBodyRange: Range;
 
-    // TODO: Should a non-implemented function have a body? Also check for abstract
-    if (documentStateContext.component && documentStateContext.component.isInterface) {
+    if ((documentStateContext.component && documentStateContext.component.isInterface && !equalsIgnoreCase(modifier1, "default") && !equalsIgnoreCase(modifier2, "default"))
+      || equalsIgnoreCase(modifier1, "abstract") || equalsIgnoreCase(modifier2, "abstract")
+    )
+    {
+      functionBodyStartPos = getNextCharacterPosition(documentStateContext, document.offsetAt(argumentsEndPosition), componentBody.length - 1, ";", false);
       functionEndPosition = functionBodyStartPos;
+      functionAttributeRange = new Range(
+        argumentsEndPosition,
+        functionEndPosition
+      );
     } else {
+      functionBodyStartPos = getNextCharacterPosition(documentStateContext, document.offsetAt(argumentsEndPosition), componentBody.length - 1, "{");
       functionEndPosition = getClosingPosition(documentStateContext, document.offsetAt(functionBodyStartPos), "}");
+
+      functionAttributeRange = new Range(
+        argumentsEndPosition,
+        functionBodyStartPos.translate(0, -1)
+      );
+      functionBodyRange = new Range(
+        functionBodyStartPos,
+        functionEndPosition.translate(0, -1)
+      );
     }
 
     const functionRange: Range = new Range(
       document.positionAt(scriptFunctionMatch.index),
       functionEndPosition
-    );
-
-    const functionAttributeRange: Range = new Range(
-      argumentsEndPosition,
-      functionBodyStartPos.translate(0, -1)
-    );
-
-    const functionBodyRange: Range = new Range(
-      functionBodyStartPos,
-      functionEndPosition.translate(0, -1)
     );
 
     let userFunction: UserFunction = {

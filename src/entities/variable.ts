@@ -329,7 +329,7 @@ export function parseVariableAssignments(documentStateContext: DocumentStateCont
     const comp: Component = cachedEntities.getComponent(document.uri);
     if (comp) {
       comp.functions.forEach((func: UserFunction) => {
-        if (!func.isImplicit && (!docRange || func.bodyRange.contains(docRange))) {
+        if (!func.isImplicit && (!docRange || (func.bodyRange && func.bodyRange.contains(docRange)))) {
           if (func.signatures) {
             func.signatures.forEach((signature: UserFunctionSignature) => {
               signature.parameters.forEach((param: Argument) => {
@@ -876,13 +876,14 @@ export function collectDocumentVariableAssignments(documentPositionStateContext:
         if (currComponent.functions.has(initMethod)) {
           const currInitFunc: UserFunction = currComponent.functions.get(initMethod);
 
-          const currInitVariables: Variable[] = parseVariableAssignments(documentPositionStateContext, currComponent.isScript, currInitFunc.bodyRange).filter((variable: Variable) => {
-            return [Scope.Variables, Scope.This].includes(variable.scope) && !componentVariables.some((existingVariable: Variable) => {
-              return existingVariable.scope === variable.scope && equalsIgnoreCase(existingVariable.identifier, variable.identifier);
+          if (currInitFunc.bodyRange) {
+            const currInitVariables: Variable[] = parseVariableAssignments(documentPositionStateContext, currComponent.isScript, currInitFunc.bodyRange).filter((variable: Variable) => {
+              return [Scope.Variables, Scope.This].includes(variable.scope) && !componentVariables.some((existingVariable: Variable) => {
+                return existingVariable.scope === variable.scope && equalsIgnoreCase(existingVariable.identifier, variable.identifier);
+              });
             });
-          });
-
-          componentVariables = componentVariables.concat(currInitVariables);
+            componentVariables = componentVariables.concat(currInitVariables);
+          }
         }
 
         allVariableAssignments = allVariableAssignments.concat(componentVariables);
@@ -897,7 +898,7 @@ export function collectDocumentVariableAssignments(documentPositionStateContext:
       // function arguments
       let functionArgs: Argument[] = [];
       thisComponent.functions.filter((func: UserFunction) => {
-        return !func.isImplicit && func.bodyRange.contains(documentPositionStateContext.position) && func.signatures && func.signatures.length !== 0;
+        return func.bodyRange && func.bodyRange.contains(documentPositionStateContext.position) && func.signatures && func.signatures.length !== 0;
       }).forEach((func: UserFunction) => {
         func.signatures.forEach((signature: UserFunctionSignature) => {
           functionArgs = signature.parameters;
@@ -908,7 +909,7 @@ export function collectDocumentVariableAssignments(documentPositionStateContext:
       // function local variables
       let localVariables: Variable[] = [];
       thisComponent.functions.filter((func: UserFunction) => {
-        return !func.isImplicit && func.bodyRange.contains(documentPositionStateContext.position);
+        return func.bodyRange && func.bodyRange.contains(documentPositionStateContext.position);
       }).forEach((func: UserFunction) => {
         localVariables = localVariables.concat(getLocalVariables(func, documentPositionStateContext, thisComponent.isScript));
       });

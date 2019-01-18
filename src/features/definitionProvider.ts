@@ -83,6 +83,23 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
           }
         }
 
+        // Implements
+        if (thisComponent.implementsRanges) {
+          thisComponent.implementsRanges.forEach((range: Range, idx: number) => {
+            if (range && range.contains(position)) {
+              const implComp: Component = getComponent(thisComponent.implements[idx]);
+              if (implComp) {
+                results.push({
+                  originSelectionRange: range,
+                  targetUri: implComp.uri,
+                  targetRange: implComp.declarationRange,
+                  targetSelectionRange: implComp.declarationRange
+                });
+              }
+            }
+          });
+        }
+
         // Component functions (related)
         thisComponent.functions.forEach((func: UserFunction) => {
           // Function return types
@@ -115,7 +132,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
             });
           });
 
-          if (!func.isImplicit && func.bodyRange.contains(position)) {
+          if (func.bodyRange && func.bodyRange.contains(position)) {
             // Local variable uses
             const localVariables = getLocalVariables(func, documentPositionStateContext, thisComponent.isScript);
             const localVarPrefixPattern = getValidScopesPrefixPattern([Scope.Local], true);

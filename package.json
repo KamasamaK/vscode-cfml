@@ -2,7 +2,7 @@
   "name": "vscode-cfml",
   "displayName": "CFML",
   "description": "CFML language",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "preview": true,
   "author": "KamasamaK",
   "publisher": "KamasamaK",

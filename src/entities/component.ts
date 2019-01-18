@@ -15,9 +15,6 @@ import { constructGetter, constructSetter, parseProperties, Properties, Property
 import { ComponentFunctions, parseScriptFunctions, parseTagFunctions, UserFunction } from "./userFunction";
 import { parseVariableAssignments, Variable } from "./variable";
 
-
-
-
 export const COMPONENT_EXT: string = ".cfc";
 export const COMPONENT_FILE_GLOB: string = "**/*" + COMPONENT_EXT;
 
@@ -113,6 +110,7 @@ export interface Component {
   hint: string;
   accessors: boolean;
   initmethod?: string;
+  // TODO: Investigate matching implements since interfaces can extend multiple interfaces
   extends?: Uri;
   extendsRange?: Range;
   implements?: Uri[];
@@ -242,6 +240,23 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
         docAttribute.valueRange.end
       );
     });
+
+    const implDocAttr = parsedDocBlock.find((docAttribute: DocBlockKeyValue) => {
+      return docAttribute.key === "implements" && !!docAttribute.value;
+    });
+    if (implDocAttr) {
+      component.implementsRanges = [];
+      const implInitialOffset = document.offsetAt(implDocAttr.valueRange.start);
+      let implOffset: number = 0;
+      implDocAttr.value.split(",").forEach((element: string) => {
+        const whitespaceMatch: RegExpExecArray = /\s+/.exec(element);
+        const whitespaceLen = whitespaceMatch ? whitespaceMatch[0].length : 0;
+        const interfacePathWordRange: Range = document.getWordRangeAtPosition(document.positionAt(implInitialOffset + implOffset + whitespaceLen), /[$\w.]+/);
+        component.implementsRanges.push(interfacePathWordRange);
+
+        implOffset += element.length + 1;
+      });
+    }
   }
 
   if (componentAttrs) {
@@ -265,10 +280,27 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
         );
       }
     }
+
+    if (parsedAttributes.has("implements")) {
+      const implementsAttr: Attribute = parsedAttributes.get("implements");
+      if (implementsAttr.value) {
+        component.implementsRanges = [];
+        const implInitialOffset = document.offsetAt(implementsAttr.valueRange.start);
+        let implOffset: number = 0;
+        implementsAttr.value.split(",").forEach((element: string) => {
+          const whitespaceMatch: RegExpExecArray = /\s+/.exec(element);
+          const whitespaceLen = whitespaceMatch ? whitespaceMatch[0].length : 0;
+          const interfacePathWordRange: Range = document.getWordRangeAtPosition(document.positionAt(implInitialOffset + implOffset + whitespaceLen), /[$\w.]+/);
+          component.implementsRanges.push(interfacePathWordRange);
+
+          implOffset += element.length + 1;
+        });
+      }
+    }
   }
 
   Object.getOwnPropertyNames(component).forEach((propName: string) => {
-    // TODO: Is this supposed to be checking for existence or value?
+    // TODO: Is this just supposed to be checking for existence or also value? Because it is ignoring falsy property values too
     if (componentAttributes[propName]) {
       if (propName === "extends") {
         component.extends = componentPathToUri(componentAttributes.extends, document.uri);
@@ -290,6 +322,7 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
     }
   });
 
+  documentStateContext.component = component;
   let componentFunctions = new ComponentFunctions();
   let userFunctions: UserFunction[] = parseScriptFunctions(documentStateContext);
   userFunctions = userFunctions.concat(parseTagFunctions(documentStateContext));
@@ -324,7 +357,6 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
   component.functions = componentFunctions;
 
   const componentDefinitionRange = new Range(document.positionAt(componentMatch.index + head.length), earliestFunctionRangeStart);
-  documentStateContext.component = component;
   component.variables = parseVariableAssignments(documentStateContext, componentIsScript, componentDefinitionRange);
 
   // TODO: Get imports

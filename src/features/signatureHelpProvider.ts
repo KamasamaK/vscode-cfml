@@ -97,7 +97,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
         const userFun: UserFunction = await getFunctionFromPrefix(documentPositionStateContext, lowerIdent, startIdentPositionPrefix);
 
         // Ensure this does not trigger on script function definition
-        if (userFun && !userFun.isImplicit && userFun.location.uri === document.uri && userFun.location.range.contains(position) && !userFun.bodyRange.contains(position)) {
+        if (userFun && userFun.location.uri === document.uri && userFun.location.range.contains(position) && (!userFun.bodyRange || !userFun.bodyRange.contains(position))) {
           return null;
         }
 
@@ -171,6 +171,7 @@ export default class CFMLSignatureHelpProvider implements SignatureHelpProvider 
     // Consider named parameters
     let namedParamMatch: RegExpExecArray = null;
     if (namedParamMatch = namedParameterPattern.exec(paramText)) {
+      // TODO: Consider argumentCollection
       const paramName: string = namedParamMatch[1];
       const namedParamIndex: number = entry.signatures[sigHelp.activeSignature].parameters.findIndex((param: Parameter) => {
         return equalsIgnoreCase(paramName, param.name);

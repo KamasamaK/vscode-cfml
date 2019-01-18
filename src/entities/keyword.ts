@@ -59,4 +59,14 @@ export const keywords: Keywords = {
     onlyScript: true,
     links: []
   },
+  "true": {
+    description: "",
+    onlyScript: false,
+    links: []
+  },
+  "false": {
+    description: "",
+    onlyScript: false,
+    links: []
+  },
 };

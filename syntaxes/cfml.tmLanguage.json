@@ -9460,47 +9460,78 @@
         }
       ]
     },
-    "extends": {
+    "source-cfml-extends": {
       "name": "meta.class.inheritance.cfml",
-      "begin": "(?i)\\b(extends)\\s*(=)\\s*",
+      "begin": "(?i)\\b(extends|implements)\\s*(=)\\s*",
       "beginCaptures": {
         "1": {
-          "name": "entity.other.attribute-name.cfml storage.modifier.extends.cfml"
+          "name": "entity.other.attribute-name.cfml storage.modifier.$1.cfml"
         },
         "2": {
           "name": "punctuation.separator.key-value.cfml"
         }
       },
-      "end": "((\")([\\w$:.]+)?(\"))|((')([\\w$:.]+)?('))|([\\w$:.]+)|(?=[^\\w$:.])",
-      "endCaptures": {
-        "1": {
-          "name": "string.quoted.double.cfml"
+      "end": "(?<=[^\\s=])|(?=[</>{;])",
+      "patterns": [
+        {
+          "name": "string.quoted.double.cfml",
+          "begin": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.cfml"
+            }
+          },
+          "end": "(\")(?!\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.cfml"
+            }
+          },
+          "patterns": [
+            {
+              "match": "[\\w$:.]+",
+              "captures": {
+                "0": {
+                  "name": "entity.other.inherited-class.cfml"
+                }
+              }
+            }
+          ]
         },
-        "2": {
-          "name": "punctuation.definition.string.begin.cfml"
+        {
+          "name": "string.quoted.single.cfml",
+          "begin": "'",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.cfml"
+            }
+          },
+          "end": "(')(?!')",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.cfml"
+            }
+          },
+          "patterns": [
+            {
+              "match": "[\\w$:.]+",
+              "captures": {
+                "0": {
+                  "name": "entity.other.inherited-class.cfml"
+                }
+              }
+            }
+          ]
         },
-        "3": {
-          "name": "entity.other.inherited-class.cfml"
-        },
-        "4": {
-          "name": "punctuation.definition.string.end.cfml"
-        },
-        "5": {
-          "name": "string.quoted.single.cfml"
-        },
-        "6": {
-          "name": "punctuation.definition.string.begin.cfml"
-        },
-        "7": {
-          "name": "entity.other.inherited-class.cfml"
-        },
-        "8": {
-          "name": "punctuation.definition.string.end.cfml"
-        },
-        "9": {
-          "name": "string.unquoted.cfml entity.other.inherited-class.cfml"
+        {
+          "match": "([\\w$:.]+)|(?=[^\\w$:.])",
+          "captures": {
+            "1": {
+              "name": "string.unquoted.cfml entity.other.inherited-class.cfml"
+            }
+          }
         }
-      }
+      ]
     },
     "text-html-cfml-tag-generic-attribute": {
       "name": "entity.other.attribute-name.html",
@@ -10359,7 +10390,7 @@
           },
           "patterns": [
             {
-              "include": "#extends"
+              "include": "#source-cfml-extends"
             },
             {
               "include": "#tag-generic-attribute"
@@ -13727,7 +13758,7 @@
           "end": "(?=>)",
           "patterns": [
             {
-              "include": "#extends"
+              "include": "#source-cfml-extends"
             },
             {
               "include": "#tag-generic-attribute"
@@ -14686,46 +14717,7 @@
     "source-cfml-script-component-attributes": {
       "patterns": [
         {
-          "name": "meta.class.inheritance.cfml",
-          "begin": "(?i)\\b(extends)\\s*(=)\\s*",
-          "beginCaptures": {
-            "1": {
-              "name": "entity.other.attribute-name.cfml storage.modifier.extends.cfml"
-            },
-            "2": {
-              "name": "punctuation.separator.key-value.cfml"
-            }
-          },
-          "end": "((\")([\\w$:.]+)?(\"))|((')([\\w$:.]+)?('))|([\\w$:.]+)|(?=[^\\w$:.])",
-          "endCaptures": {
-            "1": {
-              "name": "string.quoted.double.cfml"
-            },
-            "2": {
-              "name": "punctuation.definition.string.begin.cfml"
-            },
-            "3": {
-              "name": "entity.other.inherited-class.cfml"
-            },
-            "4": {
-              "name": "punctuation.definition.string.end.cfml"
-            },
-            "5": {
-              "name": "string.quoted.single.cfml"
-            },
-            "6": {
-              "name": "punctuation.definition.string.begin.cfml"
-            },
-            "7": {
-              "name": "entity.other.inherited-class.cfml"
-            },
-            "8": {
-              "name": "punctuation.definition.string.end.cfml"
-            },
-            "9": {
-              "name": "string.unquoted.cfml entity.other.inherited-class.cfml"
-            }
-          }
+          "include": "#source-cfml-extends"
         },
         {
           "include": "#source-cfml-script-tag-generic-attribute"

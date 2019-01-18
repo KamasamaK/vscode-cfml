@@ -245,8 +245,6 @@ export class CFDocsDefinitionInfo {
    * Returns a GlobalTag object based on this object
    */
   public toGlobalTag(): GlobalTag {
-    // TODO: Account for multiple signatures
-
     let parameters: Parameter[] = this.params.map((param: Param) => {
       return {
         name: param.name,

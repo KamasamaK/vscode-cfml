@@ -600,10 +600,17 @@ export function isInComment(document: TextDocument, position: Position, isScript
  * Returns whether the given position is within a set of ranges
  * @param ranges The set of ranges within which to check
  * @param positionOrRange Position or range to check
+ * @param ignoreEnds Whether to ignore `start` and `end` in `ranges` when `positionOrRange` is `Position`
  */
-export function isInRanges(ranges: Range[], positionOrRange: Position | Range): boolean {
+export function isInRanges(ranges: Range[], positionOrRange: Position | Range, ignoreEnds: boolean = false): boolean {
   return ranges.some((range: Range) => {
-    return range.contains(positionOrRange);
+    let isContained: boolean = range.contains(positionOrRange);
+    if (ignoreEnds) {
+      if (positionOrRange instanceof Position) {
+        isContained = isContained && !range.start.isEqual(positionOrRange)&& !range.end.isEqual(positionOrRange);
+      }
+    }
+    return isContained;
   });
 }
 
@@ -896,7 +903,7 @@ export function getStartSigPosition(iterator: BackwardIterator): Position | unde
     if (stringRanges) {
       const position: Position = iterator.getPosition().translate(0, 1);
       const stringRange: Range = stringRanges.find((range: Range) => {
-        return range.contains(position);
+        return range.contains(position) && !range.end.isEqual(position);
       });
       if (stringRange && !(stringEmbeddedCfmlRanges && isInRanges(stringEmbeddedCfmlRanges, position))) {
         iterator.setPosition(stringRange.start.translate(0, -1));

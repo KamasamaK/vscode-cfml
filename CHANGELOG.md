@@ -2,6 +2,11 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.5.1] - 2019-01-DD
+
+- Improved support and fixed bugs for interfaces and abstract functions ([\#27](https://github.com/KamasamaK/vscode-cfml/issues/27))
+- Fixed a minor issue with signature help detection in a specific case
+
 ## [0.5.0] - 2019-01-13
 
 - Update minimum version of VS Code to v1.30

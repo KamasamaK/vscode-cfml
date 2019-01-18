@@ -50,7 +50,7 @@ export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvide
             });
           });
 
-          if (!func.isImplicit && func.bodyRange.contains(position)) {
+          if (func.bodyRange && func.bodyRange.contains(position)) {
             // Local variable uses
             const localVariables = getLocalVariables(func, documentPositionStateContext, thisComponent.isScript);
             const localVarPrefixPattern = getValidScopesPrefixPattern([Scope.Local], true);
