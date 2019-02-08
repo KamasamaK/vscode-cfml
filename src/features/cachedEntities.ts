@@ -326,16 +326,20 @@ export async function cacheAllComponents(): Promise<void> {
       // TODO: Remove cflint setting update for workspace state when CFLint checks it. Remove workspace state when CFLint can get list of open editors.
       const cflintExt = extensions.getExtension("KamasamaK.vscode-cflint");
       if (cflintExt) {
-        const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint");
-        const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
-        const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
-        // const cflintRunModesValues = cflintSettings.inspect<{}>("runModes");
-        // const cflintRunModesPrevWSValue = cflintRunModesValues.workspaceValue;
-        cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(async () => {
-          await cacheGivenComponents(componentUris);
-          await cacheAllApplicationCfms();
-          cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
-        });
+        const cflintSettings: WorkspaceConfiguration = workspace.getConfiguration("cflint", null);
+        const runModes: {} = cflintSettings.get<{}>("runModes");
+        if (runModes && runModes.hasOwnProperty("onOpen") && runModes["onOpen"]) {
+          const cflintEnabledValues = cflintSettings.inspect<boolean>("enabled");
+          const cflintEnabledPrevWSValue: boolean = cflintEnabledValues.workspaceValue;
+          cflintSettings.update("enabled", false, ConfigurationTarget.Workspace).then(async () => {
+            await cacheGivenComponents(componentUris);
+            await cacheAllApplicationCfms();
+            cflintSettings.update("enabled", cflintEnabledPrevWSValue, ConfigurationTarget.Workspace);
+          });
+        } else {
+          cacheGivenComponents(componentUris);
+          cacheAllApplicationCfms();
+        }
       } else {
         cacheGivenComponents(componentUris);
         cacheAllApplicationCfms();
@@ -365,13 +369,18 @@ async function cacheGivenComponents(componentUris: Uri[]): Promise<void> {
       for (const componentUri of componentUris) {
         if (token.isCancellationRequested) { break; }
 
-        const document: TextDocument = await workspace.openTextDocument(componentUri);
-        i++;
-        progress.report({
-          message: `${i} / ${componentCount}`,
-          increment: (100 / componentCount)
-        });
-        cacheComponentFromDocument(document, true);
+        try {
+          const document: TextDocument = await workspace.openTextDocument(componentUri);
+          cacheComponentFromDocument(document, true);
+        } catch (ex) {
+          console.error(`Cannot parse document at ${componentUri}`);
+        } finally {
+          i++;
+          progress.report({
+            message: `${i} / ${componentCount}`,
+            increment: (100 / componentCount)
+          });
+        }
       }
     }
   );
@@ -467,15 +476,18 @@ export async function cacheAllApplicationCfms(): Promise<void> {
  * @param applicationUris List of URIs to parse and cache
  */
 async function cacheGivenApplicationCfms(applicationUris: Uri[]): Promise<void> {
-  applicationUris.forEach((applicationUri: Uri) => {
-    workspace.openTextDocument(applicationUri).then((document: TextDocument) => {
+  applicationUris.forEach(async (applicationUri: Uri) => {
+    try {
+      const document: TextDocument = await workspace.openTextDocument(applicationUri);
       const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
       const thisApplicationVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript);
       const thisApplicationFilteredVariables: Variable[] = thisApplicationVariables.filter((variable: Variable) => {
         return [Scope.Application, Scope.Session, Scope.Request].includes(variable.scope);
       });
       setApplicationVariables(applicationUri, thisApplicationFilteredVariables);
-    });
+    } catch (ex) {
+      console.error(`Cannot parse document at ${applicationUri}`);
+    }
   });
 }
 

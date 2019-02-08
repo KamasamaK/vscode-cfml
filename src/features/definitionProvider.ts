@@ -118,7 +118,7 @@ export default class CFMLDefinitionProvider implements DefinitionProvider {
           // Argument types
           func.signatures.forEach((signature: UserFunctionSignature) => {
             signature.parameters.filter((arg: Argument) => {
-              return arg.dataTypeComponentUri && arg.dataTypeRange.contains(position);
+              return arg.dataTypeComponentUri && arg.dataTypeRange && arg.dataTypeRange.contains(position);
             }).forEach((arg: Argument) => {
               const argTypeComp: Component = getComponent(arg.dataTypeComponentUri);
               if (argTypeComp) {

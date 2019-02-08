@@ -18,7 +18,8 @@ import { parseVariableAssignments, Variable } from "./variable";
 export const COMPONENT_EXT: string = ".cfc";
 export const COMPONENT_FILE_GLOB: string = "**/*" + COMPONENT_EXT;
 
-export const COMPONENT_PATTERN: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(<cf)?(component|interface)\b)([^>{]*)/i;
+export const COMPONENT_TAG_PATTERN: RegExp = /((<cf)(component|interface)\b)([^>]*)/i;
+export const COMPONENT_SCRIPT_PATTERN: RegExp = /((\/\*\*((?:\*(?!\/)|[^*])*)\*\/\s+)?(component|interface)\b)([^{]*)/i;
 
 export const componentExtendsPathPrefix: RegExp = /\b(extends|implements)\s*=\s*(['"])?([^'"#\s]*?)$/i;
 
@@ -157,19 +158,17 @@ export interface ComponentsByName {
   [name: string]: ComponentsByUri; // key is Component name lowercased
 }
 
+/**
+ * Determines whether the given document is a script-based component
+ * @param document The document to check
+ */
 export function isScriptComponent(document: TextDocument): boolean {
-  const component: Component = getComponent(document.uri);
-  if (component) {
-    return component.isScript;
-  }
-
-  const componentMatch: RegExpExecArray = COMPONENT_PATTERN.exec(document.getText());
-  if (!componentMatch) {
+  const componentTagMatch: RegExpExecArray = COMPONENT_TAG_PATTERN.exec(document.getText());
+  if (componentTagMatch) {
     return false;
   }
-  const checkTag: string = componentMatch[4];
 
-  return isCfcFile(document) && !checkTag;
+  return isCfcFile(document);
 }
 
 /**
@@ -179,21 +178,43 @@ export function isScriptComponent(document: TextDocument): boolean {
 export function parseComponent(documentStateContext: DocumentStateContext): Component | undefined {
   const document: TextDocument = documentStateContext.document;
   const documentText: string = document.getText();
-  const componentMatch: RegExpExecArray = COMPONENT_PATTERN.exec(documentText);
+  const componentIsScript: boolean = documentStateContext.docIsScript;
 
-  if (!componentMatch) {
-    return undefined;
+  let componentMatch: RegExpExecArray;
+  let head: string;
+  let attributePrefix: string;
+  let fullPrefix: string | undefined;
+  let componentDoc: string | undefined;
+  let checkTag: string | undefined;
+  let componentType: string;
+  let componentAttrs: string;
+
+  if (!componentIsScript) {
+    componentMatch = COMPONENT_TAG_PATTERN.exec(documentText);
+
+    if (!componentMatch) {
+      return undefined;
+    }
+
+    head = componentMatch[0];
+    attributePrefix = componentMatch[1];
+    checkTag = componentMatch[2];
+    componentType = componentMatch[3];
+    componentAttrs = componentMatch[4];
+  } else {
+    componentMatch = COMPONENT_SCRIPT_PATTERN.exec(documentText);
+
+    if (!componentMatch) {
+      return undefined;
+    }
+
+    head = componentMatch[0];
+    attributePrefix = componentMatch[1];
+    fullPrefix = componentMatch[2];
+    componentDoc = componentMatch[3];
+    componentType = componentMatch[4];
+    componentAttrs = componentMatch[5];
   }
-
-  const head: string = componentMatch[0];
-  const attributePrefix: string = componentMatch[1];
-  const fullPrefix: string = componentMatch[2];
-  const componentDoc: string = componentMatch[3];
-  const checkTag: string = componentMatch[4];
-  const componentType: string = componentMatch[5];
-  const componentAttrs: string = componentMatch[6];
-
-  const componentIsScript: boolean = !checkTag;
 
   let declarationStartOffset: number = componentMatch.index;
   if (fullPrefix) {
@@ -371,7 +392,8 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
 export function isInComponentHead(documentPositionStateContext: DocumentPositionStateContext): boolean {
   const document: TextDocument = documentPositionStateContext.document;
   const documentText: string = documentPositionStateContext.sanitizedDocumentText;
-  const componentMatch: RegExpExecArray = COMPONENT_PATTERN.exec(documentText);
+  const componentPattern: RegExp = documentPositionStateContext.docIsScript ? COMPONENT_SCRIPT_PATTERN : COMPONENT_TAG_PATTERN;
+  const componentMatch: RegExpExecArray = componentPattern.exec(documentText);
 
   if (!componentMatch) {
     return false;

@@ -11902,7 +11902,7 @@
       "end": "(?i)(</)(cffunction)(>)",
       "endCaptures": {
         "0": {
-          "name": "meta.tag.cfml"
+          "name": "meta.tag.cfml meta.function.cfml"
         },
         "1": {
           "name": "punctuation.definition.tag.begin.cfml"
@@ -13731,7 +13731,7 @@
       "end": "(?i)(</)(cfcomponent)(>)",
       "endCaptures": {
         "0": {
-          "name": "meta.tag.cfml"
+          "name": "meta.tag.cfml meta.class.cfml"
         },
         "1": {
           "name": "punctuation.definition.tag.begin.cfml"

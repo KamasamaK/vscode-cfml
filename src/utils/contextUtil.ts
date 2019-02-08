@@ -6,6 +6,7 @@ import { getTagPattern, parseTags, Tag, TagContext } from "../entities/tag";
 import { cfmlCommentRules, CommentContext, CommentType } from "../features/comment";
 import { DocumentStateContext } from "./documentUtil";
 import { equalsIgnoreCase } from "./textUtil";
+import { stringArrayIncludesIgnoreCase } from "./collections";
 
 const CFM_FILE_EXTS: string[] = [".cfm", ".cfml"];
 export const APPLICATION_CFM_GLOB: string = "**/Application.cfm";
@@ -905,7 +906,7 @@ export function getStartSigPosition(iterator: BackwardIterator): Position | unde
       const stringRange: Range = stringRanges.find((range: Range) => {
         return range.contains(position) && !range.end.isEqual(position);
       });
-      if (stringRange && !(stringEmbeddedCfmlRanges && isInRanges(stringEmbeddedCfmlRanges, position))) {
+      if (stringRange && !(stringEmbeddedCfmlRanges && isInRanges(stringEmbeddedCfmlRanges, position, true))) {
         iterator.setPosition(stringRange.start.translate(0, -1));
         continue;
       }
@@ -924,7 +925,7 @@ export function getStartSigPosition(iterator: BackwardIterator): Position | unde
               if (isValidIdentifierPart(charStr)) {
                 const nameRange = document.getWordRangeAtPosition(iterPos);
                 const name = document.getText(nameRange);
-                if (isValidIdentifier(name) && !equalsIgnoreCase(name, "function")) {
+                if (isValidIdentifier(name) && !stringArrayIncludesIgnoreCase(["function","if","for","while","switch","catch"], name)) {
                   return candidatePosition;
                 }
               }

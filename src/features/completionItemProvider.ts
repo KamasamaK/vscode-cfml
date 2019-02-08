@@ -1,30 +1,33 @@
 import * as fs from "fs";
 import * as path from "path";
-import { CancellationToken, CompletionContext, CompletionItem, CompletionItemKind, CompletionItemProvider, Position, Range, SnippetString, TextDocument, WorkspaceConfiguration, workspace, Uri, Command } from "vscode";
-import { Attributes, IncludeAttributesSetType, VALUE_PATTERN, parseAttributes, IncludeAttributesCustom, AttributeQuoteType } from "../entities/attribute";
-import { CatchInfo, catchProperties, parseCatches, CatchPropertyDetails } from "../entities/catch";
+import { CancellationToken, Command, CompletionContext, CompletionItem, CompletionItemKind, CompletionItemProvider, Position, Range, SnippetString, TextDocument, Uri, workspace, WorkspaceConfiguration } from "vscode";
+import { AttributeQuoteType, Attributes, IncludeAttributesCustom, IncludeAttributesSetType, parseAttributes, VALUE_PATTERN } from "../entities/attribute";
+import { CatchInfo, catchProperties, CatchPropertyDetails, parseCatches } from "../entities/catch";
 import { cgiVariables } from "../entities/cgi";
-import { COMPONENT_EXT, Component, componentDottedPathPrefix, componentExtendsPathPrefix, isInComponentHead, isSubcomponentOrEqual } from "../entities/component";
+import { Component, componentDottedPathPrefix, componentExtendsPathPrefix, COMPONENT_EXT, isInComponentHead, isSubcomponentOrEqual } from "../entities/component";
+import { IPropertyData, IAtDirectiveData } from "../entities/css/cssLanguageTypes";
+import { cssDataManager, getEntryDescription as getCSSEntryDescription, cssWordRegex } from "../entities/css/languageFacts";
 import { DataType } from "../entities/dataType";
 import { constructSyntaxString } from "../entities/function";
-import { GlobalFunction, GlobalFunctions, GlobalTag, GlobalTags, constructTagSnippet, globalTagSyntaxToScript, constructAttributeSnippet } from "../entities/globals";
-import { keywords, KeywordDetails } from "../entities/keyword";
+import { constructAttributeSnippet, constructTagSnippet, GlobalFunction, GlobalFunctions, GlobalTag, GlobalTags, globalTagSyntaxToScript } from "../entities/globals";
+import { IAttributeData as HTMLAttributeData, IValueData as HTMLValueData } from "../entities/html/htmlLanguageTypes";
+import { constructHTMLAttributeSnippet } from "../entities/html/htmlTag";
+import { getAttribute, htmlDataProvider, isKnownTag as isKnownHTMLTag } from "../entities/html/languageFacts";
+import { KeywordDetails, keywords } from "../entities/keyword";
 import { Parameter } from "../entities/parameter";
 import { isQuery, queryObjectProperties } from "../entities/query";
-import { Scope, getValidScopesPrefixPattern, getVariableScopePrefixPattern, scopes, unscopedPrecedence } from "../entities/scope";
+import { getValidScopesPrefixPattern, getVariableScopePrefixPattern, Scope, scopes, unscopedPrecedence } from "../entities/scope";
 import { Signature } from "../entities/signature";
-import { getCfScriptTagAttributePattern, getCfTagAttributePattern, getTagPrefixPattern, getComponentPathAttributes, ComponentPathAttributes, getTagAttributePattern } from "../entities/tag";
-import { Access, UserFunction, parseTagFunctions, parseScriptFunctions } from "../entities/userFunction";
-import { Variable, getApplicationVariables, getServerVariables, getVariablePrefixPattern, usesConstantConvention, getMatchingVariables, collectDocumentVariableAssignments, getBestMatchingVariable, getVariableExpressionPrefixPattern, getVariableTypeString } from "../entities/variable";
+import { ComponentPathAttributes, expressionCfmlTags, getCfScriptTagAttributePattern, getCfTagAttributePattern, getComponentPathAttributes, getTagAttributePattern, getTagPrefixPattern } from "../entities/tag";
+import { Access, parseScriptFunctions, parseTagFunctions, UserFunction } from "../entities/userFunction";
+import { collectDocumentVariableAssignments, getApplicationVariables, getBestMatchingVariable, getMatchingVariables, getServerVariables, getVariableExpressionPrefixPattern, getVariablePrefixPattern, getVariableTypeString, usesConstantConvention, Variable } from "../entities/variable";
 import { CFMLEngine } from "../utils/cfdocs/cfmlEngine";
 import { MyMap, MySet } from "../utils/collections";
-import { getCfScriptRanges, isInRanges, isInCss } from "../utils/contextUtil";
+import { getCfScriptRanges, isInCss, isInRanges } from "../utils/contextUtil";
 import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
 import { CFMLMapping, filterComponents, filterDirectories, resolveDottedPaths, resolveRootPath } from "../utils/fileUtil";
-import { equalsIgnoreCase, textToMarkdownString, escapeMarkdown } from "../utils/textUtil";
+import { equalsIgnoreCase, escapeMarkdown, textToMarkdownString } from "../utils/textUtil";
 import { getAllGlobalFunctions, getAllGlobalTags, getComponent, getGlobalTag } from "./cachedEntities";
-import { HTMLTagSpecification, HTML_TAGS, valueSets as htmlAttributeValues, constructHTMLAttributeSnippet, getHTMLAttributes, getHTMLAttributeNames } from "../entities/html/htmlTag";
-import { getCssProperties, CssProperty } from "../entities/css/property";
 
 const snippets: Snippets = require("../../snippets/snippets.json");
 
@@ -130,7 +133,7 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
 
     // Global tag attributes
     if (!positionIsCfScript || userEngine.supportsScriptTags()) {
-      const ignoredTags: string[] = ["cfset", "cfif", "cfelseif", "cfreturn"];
+      const ignoredTags: string[] = expressionCfmlTags;
       const cfTagAttributePattern: RegExp = positionIsCfScript ? getCfScriptTagAttributePattern() : getCfTagAttributePattern();
       const cfTagAttributeMatch: RegExpExecArray = cfTagAttributePattern.exec(docPrefix);
       if (cfTagAttributeMatch) {
@@ -174,20 +177,19 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
         const tagAttributeMatchOffset: number = tagAttributeMatch.index;
         const tagAttributePrefix: string = tagAttributeMatch[1];
         const tagAttributeStartOffset: number = tagAttributeMatchOffset + tagAttributePrefix.length;
-        const tagName: string = tagAttributeMatch[2];
+        const tagName: string = tagAttributeMatch[2].toLowerCase();
         const tagAttributesLength: number = tagAttributeMatch[3].length;
-        if (HTML_TAGS.hasOwnProperty(tagName.toLowerCase())) {
-          const htmlTag: HTMLTagSpecification = HTML_TAGS[tagName];
+        if (isKnownHTMLTag(tagName)) {
           const attributeValueMatch: RegExpExecArray = VALUE_PATTERN.exec(docPrefix);
           if (attributeValueMatch) {
-            const attributeName: string = attributeValueMatch[1];
+            const attributeName: string = attributeValueMatch[1].toLowerCase();
             const currentValue: string = attributeValueMatch[3] !== undefined ? attributeValueMatch[3] : attributeValueMatch[4];
-            const attributeValueCompletions: CompletionItem[] = getHTMLTagAttributeValueCompletions(htmlTag, attributeName, currentValue);
+            const attributeValueCompletions: CompletionItem[] = getHTMLTagAttributeValueCompletions(tagName, attributeName, currentValue);
             if (attributeValueCompletions.length > 0) {
               return attributeValueCompletions;
             }
           } else {
-            return getHTMLTagAttributeCompletions(completionState, htmlTag, tagAttributeStartOffset, tagAttributesLength);
+            return getHTMLTagAttributeCompletions(completionState, tagName, tagAttributeStartOffset, tagAttributesLength);
           }
         }
       }
@@ -445,12 +447,24 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
     // CSS
     const shouldProvideCss: boolean = cfmlCompletionSettings.get<boolean>("css.enable", true);
     if (shouldProvideCss && docIsCfmFile && isInCss(documentPositionStateContext, position)) {
+      const cssWordRange: Range = document.getWordRangeAtPosition(position, cssWordRegex);
+      const currentCssWord: string = cssWordRange ? document.getText(cssWordRange) : "";
+
       // Properties
       if (/[{;]\s*([a-z-]*)$/i.test(docPrefix)) {
+        completionState.wordRange = cssWordRange;
+        completionState.currentWord = currentCssWord;
         result = result.concat(getCSSPropertyCompletions(completionState));
       }
 
-      // TODO: Values
+      // TODO: Property values
+
+      // At directives
+      if (currentCssWord.startsWith("@")) {
+        completionState.wordRange = cssWordRange;
+        completionState.currentWord = currentCssWord;
+        result = result.concat(getCSSAtDirectiveCompletions(completionState));
+      }
     }
 
     // Keywords
@@ -530,14 +544,16 @@ function getCFTagAttributeCompletions(state: CompletionState, globalTag: GlobalT
     let attributeItem = new CompletionItem(param.name, CompletionItemKind.Property);
     attributeItem.detail = `${param.required ? "(required) " : ""}${param.name}: ${param.dataType}`;
     attributeItem.documentation = param.description;
-    if (cfmlGTAttributesQuoteType === AttributeQuoteType.None) {
-      attributeItem.insertText = param.name + "=";
-    } else {
-      attributeItem.insertText = new SnippetString(constructAttributeSnippet(param, 0, cfmlGTAttributesQuoteType, cfmlGTAttributesDefault));
+    const wordSuffix: string = state.sanitizedDocumentText.slice(state.document.offsetAt(state.wordRange.end));
+    if (!wordSuffix.trim().startsWith("=")) {
+      if (cfmlGTAttributesQuoteType === AttributeQuoteType.None) {
+        attributeItem.insertText = param.name + "=";
+      } else {
+        attributeItem.insertText = new SnippetString(constructAttributeSnippet(param, 0, cfmlGTAttributesQuoteType, cfmlGTAttributesDefault));
+      }
     }
     attributeItem.sortText = "!" + param.name + "=";
 
-    /* Not working. */
     const attributeValueCompletions: CompletionItem[] = getGlobalTagAttributeValueCompletions(state, globalTag, param.name.toLowerCase(), "");
     if (attributeValueCompletions.length > 0) {
       attributeItem.command = triggerCompletionCommand;
@@ -601,24 +617,30 @@ function getGlobalTagAttributeValueCompletions(state: CompletionState, globalTag
  * @param attributeStartOffset The offset within the document that the tag's attributes start
  * @param attributesLength The length of the tag's attributes string
  */
-function getHTMLTagAttributeCompletions(state: CompletionState, htmlTag: HTMLTagSpecification, attributeStartOffset: number, attributesLength: number): CompletionItem[] {
-  const attributeNames: MySet<string> = new MySet(getHTMLAttributeNames(htmlTag));
+function getHTMLTagAttributeCompletions(state: CompletionState, htmlTagName: string, attributeStartOffset: number, attributesLength: number): CompletionItem[] {
+  const attributeNames: string[] = htmlDataProvider.provideAttributes(htmlTagName.toLowerCase()).map((a) => a.name);
   const tagAttributeRange = new Range(state.document.positionAt(attributeStartOffset), state.document.positionAt(attributeStartOffset + attributesLength));
-  const parsedAttributes: Attributes = parseAttributes(state.document, tagAttributeRange, attributeNames);
+  const parsedAttributes: Attributes = parseAttributes(state.document, tagAttributeRange, new MySet(attributeNames));
   const usedAttributeNames: MySet<string> = new MySet(parsedAttributes.keys());
-  const unusedAttributeNames: string[] = Array.from(attributeNames).filter((attr: string) => {
+  const unusedAttributeNames: string[] = attributeNames.filter((attr: string) => {
     return !usedAttributeNames.has(attr.toLowerCase()) && state.currentWordMatches(attr);
   });
 
   const attributeCompletions: CompletionItem[] = unusedAttributeNames.map((attr: string) => {
     const htmlTagAttributesQuoteType: AttributeQuoteType = state.cfmlCompletionSettings.get<AttributeQuoteType>("htmlTags.attributes.quoteType", AttributeQuoteType.Double);
 
-    let attributeItem =  new CompletionItem(attr, CompletionItemKind.Property);
-    attributeItem.insertText = new SnippetString(constructHTMLAttributeSnippet(htmlTag, attr, htmlTagAttributesQuoteType));
-    attributeItem.sortText = "!" + attr + "=";
+    const attribute: HTMLAttributeData = getAttribute(htmlTagName, attr);
 
-    /* Not working */
-    const attributeValueCompletions: CompletionItem[] = getHTMLTagAttributeValueCompletions(htmlTag, attr, "");
+    let attributeItem =  new CompletionItem(attr, CompletionItemKind.Property);
+
+    const wordSuffix: string = state.sanitizedDocumentText.slice(state.document.offsetAt(state.wordRange.end));
+    if (!wordSuffix.trim().startsWith("=")) {
+      attributeItem.insertText = new SnippetString(constructHTMLAttributeSnippet(htmlTagName.toLowerCase(), attr, htmlTagAttributesQuoteType));
+    }
+    attributeItem.sortText = "!" + attr + "=";
+    attributeItem.documentation = attribute.description;
+
+    const attributeValueCompletions: CompletionItem[] = getHTMLTagAttributeValueCompletions(htmlTagName.toLowerCase(), attr, "");
     if (attributeValueCompletions.length > 0) {
       attributeItem.command = triggerCompletionCommand;
     }
@@ -631,28 +653,18 @@ function getHTMLTagAttributeCompletions(state: CompletionState, htmlTag: HTMLTag
 
 /**
  * Gets an HTML tag's attribute values as completion items for a given attribute
- * @param htmlTag The HTML tag that's attribute values will be checked
+ * @param htmlTagName The name of the HTML tag that's attribute values will be checked
  * @param attributeName The name of the attribute that's values will be presented
  * @param currentValue The current value of the given attribute
  */
-function getHTMLTagAttributeValueCompletions(htmlTag: HTMLTagSpecification, attributeName: string, currentValue: string): CompletionItem[] {
+function getHTMLTagAttributeValueCompletions(htmlTagName: string, attributeName: string, currentValue: string): CompletionItem[] {
   let attrValCompletions: CompletionItem[] = [];
 
-  const attribute: string = getHTMLAttributes(htmlTag).find((attr: string) => {
-    return attr.split(":")[0] === attributeName;
+  htmlDataProvider.provideValues(htmlTagName.toLowerCase(), attributeName.toLowerCase()).filter((val: HTMLValueData) => {
+    return matches(currentValue, val.name);
+  }).forEach((val: HTMLValueData) => {
+    attrValCompletions.push(createNewProposal(val.name, CompletionItemKind.Unit, { description: val.description }, "!"));
   });
-
-  if (attribute.split(":").length === 2 && attribute.split(":")[1] !== "v") {
-    const valueType: string = attribute.split(":")[1];
-
-    if (htmlAttributeValues.hasOwnProperty(valueType)) {
-      htmlAttributeValues[valueType].forEach((enumVal: string) => {
-        if (matches(currentValue, enumVal)) {
-          attrValCompletions.push(createNewProposal(enumVal, CompletionItemKind.Unit, undefined, "!"));
-        }
-      });
-    }
-  }
 
   return attrValCompletions;
 }
@@ -851,9 +863,8 @@ function getGlobalTagScriptCompletions(state: CompletionState): CompletionItem[]
     const cfmlGTAttributesCustom: IncludeAttributesCustom = state.cfmlCompletionSettings.get<IncludeAttributesCustom>("globalTags.includeAttributes.custom", {});
     const globalTags: GlobalTags = getAllGlobalTags();
     for (const tagName in globalTags) {
-      // TODO: Filter tags not available in script
-      if (state.currentWordMatches(tagName)) {
-        const globalTag: GlobalTag = globalTags[tagName];
+      const globalTag: GlobalTag = globalTags[tagName];
+      if (globalTag.scriptSyntax && globalTag.scriptSyntax.startsWith(tagName) && state.currentWordMatches(tagName)) {
         let thisGlobalTagScriptCompletion: CompletionItem = createNewProposal(
           globalTag.name,
           CompletionItemKind.Function,
@@ -881,13 +892,12 @@ function getHTMLTagCompletions(state: CompletionState): CompletionItem[] {
   const tagPrefixPattern: RegExp = getTagPrefixPattern();
   const tagPrefixMatch: RegExpExecArray = tagPrefixPattern.exec(state.docPrefix);
   if (tagPrefixMatch) {
-    for (const tagName in HTML_TAGS) {
-      if (state.currentWordMatches(tagName)) {
-        const htmlTag: HTMLTagSpecification = HTML_TAGS[tagName];
+    for (const htmlTag of htmlDataProvider.provideTags()) {
+      if (state.currentWordMatches(htmlTag.name)) {
         let thisHTMLTagCompletion: CompletionItem = createNewProposal(
           htmlTag.name,
           CompletionItemKind.TypeParameter,
-          { detail: `<${htmlTag.name}>`, description: htmlTag.description }
+          { description: htmlTag.description }
         );
 
         htmlTagCompletions.push(thisHTMLTagCompletion);
@@ -904,16 +914,12 @@ function getHTMLTagCompletions(state: CompletionState): CompletionItem[] {
  */
 function getCSSPropertyCompletions(state: CompletionState): CompletionItem[] {
   let cssPropertyCompletions: CompletionItem[] = [];
+  const cssProperties: IPropertyData[] = cssDataManager.getProperties();
 
-  const cssWordRange: Range = state.document.getWordRangeAtPosition(state.position, /(#?-?\d*\.\d\w*%?)|(::?[\w-]*(?=[^,{;]*[,{]))|(([@#.!])?[\w-?]+%?|[@#!.])/);
-  const currentCssWord: string = cssWordRange ? state.document.getText(cssWordRange) : "";
-
-  const cssProperties = getCssProperties();
-
-  cssProperties.filter((prop: CssProperty) => {
-    return matches(currentCssWord, prop.name);
-  }).forEach((prop: CssProperty) => {
-    let entry: CompletionEntry = { detail: prop.name, description: prop.desc };
+  cssProperties.filter((prop: IPropertyData) => {
+    return state.currentWordMatches(prop.name);
+  }).forEach((prop: IPropertyData) => {
+    let entry: CompletionEntry = { detail: prop.name, description: getCSSEntryDescription(prop) };
     if (prop.syntax) {
       entry.detail = `${prop.name}: ${prop.syntax}`;
     }
@@ -922,7 +928,32 @@ function getCSSPropertyCompletions(state: CompletionState): CompletionItem[] {
       CompletionItemKind.Property,
       entry
     );
-    thisCssPropertyCompletion.range = cssWordRange;
+    thisCssPropertyCompletion.range = state.wordRange;
+
+    cssPropertyCompletions.push(thisCssPropertyCompletion);
+  });
+
+  return cssPropertyCompletions;
+}
+
+/**
+ * Gets the CSS at directive completions for the given state
+ * @param state An object representing the state of completion
+ */
+function getCSSAtDirectiveCompletions(state: CompletionState): CompletionItem[] {
+  let cssPropertyCompletions: CompletionItem[] = [];
+  const cssAtDirectives: IAtDirectiveData[] = cssDataManager.getAtDirectives();
+
+  cssAtDirectives.filter((atDir: IAtDirectiveData) => {
+    return state.currentWordMatches(atDir.name);
+  }).forEach((atDir: IAtDirectiveData) => {
+    let entry: CompletionEntry = { detail: atDir.name, description: getCSSEntryDescription(atDir) };
+    let thisCssPropertyCompletion: CompletionItem = createNewProposal(
+      atDir.name,
+      CompletionItemKind.Keyword,
+      entry
+    );
+    thisCssPropertyCompletion.range = state.wordRange;
 
     cssPropertyCompletions.push(thisCssPropertyCompletion);
   });

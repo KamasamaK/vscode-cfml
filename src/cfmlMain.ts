@@ -169,7 +169,6 @@ export function activate(context: ExtensionContext): void {
   }));
 
   const componentWatcher: FileSystemWatcher = workspace.createFileSystemWatcher(COMPONENT_FILE_GLOB, false, true, false);
-  context.subscriptions.push(componentWatcher);
   componentWatcher.onDidCreate((componentUri: Uri) => {
     workspace.openTextDocument(componentUri).then((document: TextDocument) => {
       cachedEntity.cacheComponentFromDocument(document);
@@ -183,6 +182,7 @@ export function activate(context: ExtensionContext): void {
       cachedEntity.removeApplicationVariables(componentUri);
     }
   });
+  context.subscriptions.push(componentWatcher);
 
   const applicationCfmWatcher: FileSystemWatcher = workspace.createFileSystemWatcher(APPLICATION_CFM_GLOB, false, true, false);
   context.subscriptions.push(applicationCfmWatcher);

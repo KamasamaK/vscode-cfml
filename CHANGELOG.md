@@ -2,6 +2,17 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.5.3] - 2019-02-07
+
+- Improved component parsing
+- Added some more existence checks
+- Fixed a hover error for expression tags
+- Fixed a color provider error
+- Fixed a couple issues with signature help detection
+- Fixed a couple grammar scopes ([\#29](https://github.com/KamasamaK/vscode-cfml/issues/29))
+- Fixed issue when reading compiled files
+- Integrated `vscode-css-languageservice` and `vscode-html-languageservice` instead of using copied data
+
 ## [0.5.2] - 2019-01-18
 
 - Added some existence checks

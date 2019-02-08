@@ -165,6 +165,9 @@ export const decreasingIndentingTags: string[] = [
   "cfelseif"
 ];
 
+// These tags contain an expression instead of attributes
+export const expressionCfmlTags: string[] = ["cfset", "cfif", "cfelseif", "cfreturn"];
+
 export interface VariableAttribute {
   attributeName: string;
   dataType: DataType;
@@ -775,7 +778,7 @@ export function getCfTags(documentStateContext: DocumentStateContext, isScript: 
         tags.push({
           name: unclosedTag.name,
           attributes: unclosedTag.attributes,
-          tagRange: new Range(unclosedTag.tagRange.start, document.positionAt(offset+1)),
+          tagRange: new Range(unclosedTag.tagRange.start, document.positionAt(offset + 1)),
           bodyRange: bodyRange,
           isScript: false
         });

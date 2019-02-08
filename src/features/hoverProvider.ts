@@ -1,25 +1,28 @@
 import * as path from "path";
 import { CancellationToken, Hover, HoverProvider, MarkdownString, Position, Range, TextDocument, TextLine, Uri, workspace, WorkspaceConfiguration } from "vscode";
-import { LANGUAGE_ID, extensionContext } from "../cfmlMain";
+import { extensionContext, LANGUAGE_ID } from "../cfmlMain";
 import { VALUE_PATTERN } from "../entities/attribute";
 import { Component, COMPONENT_EXT, objectNewInstanceInitPrefix } from "../entities/component";
+import { IPropertyData, IAtDirectiveData } from "../entities/css/cssLanguageTypes";
+import { cssDataManager, getEntryDescription as getCSSEntryDescription, cssWordRegex } from "../entities/css/languageFacts";
+import { cssPropertyPattern } from "../entities/css/property";
 import { DataType } from "../entities/dataType";
-import { Function, getFunctionSuffixPattern, constructSyntaxString } from "../entities/function";
+import { constructSyntaxString, Function, getFunctionSuffixPattern } from "../entities/function";
 import { GlobalFunction, GlobalTag, globalTagSyntaxToScript } from "../entities/globals";
-import { constructParameterLabel, Parameter, getParameterName } from "../entities/parameter";
+import { ITagData as HTMLTagData } from "../entities/html/htmlLanguageTypes";
+import { getTag as getHTMLTag, isKnownTag as isKnownHTMLTag } from "../entities/html/languageFacts";
+import { constructParameterLabel, getParameterName, Parameter } from "../entities/parameter";
 import { Signature } from "../entities/signature";
-import { getCfScriptTagAttributePattern, getCfTagAttributePattern, getTagPrefixPattern } from "../entities/tag";
+import { expressionCfmlTags, getCfScriptTagAttributePattern, getCfTagAttributePattern, getTagPrefixPattern } from "../entities/tag";
 import { getFunctionFromPrefix, UserFunction } from "../entities/userFunction";
 import { CFMLEngine, CFMLEngineName } from "../utils/cfdocs/cfmlEngine";
-import { MySet, MyMap } from "../utils/collections";
+import { CFDocsDefinitionInfo, EngineCompatibilityDetail } from "../utils/cfdocs/definitionInfo";
+import { MyMap, MySet } from "../utils/collections";
+import { getCssRanges, isCfmFile } from "../utils/contextUtil";
 import { DocumentPositionStateContext, getDocumentPositionStateContext } from "../utils/documentUtil";
 import { equalsIgnoreCase, textToMarkdownCompatibleString, textToMarkdownString } from "../utils/textUtil";
 import * as cachedEntity from "./cachedEntities";
 import { getComponent } from "./cachedEntities";
-import { CFDocsDefinitionInfo, EngineCompatibilityDetail } from "../utils/cfdocs/definitionInfo";
-import { isCfmFile, getCssRanges } from "../utils/contextUtil";
-import { HTMLTagSpecification, HTML_TAGS } from "../entities/html/htmlTag";
-import { isKnownCssProperty, getCssProperty, CssProperty, cssPropertyPattern } from "../entities/css/property";
 
 const cfDocsLinkPrefix = "https://cfdocs.org/";
 const mdnLinkPrefix = "https://developer.mozilla.org/docs/Web/";
@@ -144,10 +147,12 @@ export default class CFMLHoverProvider implements HoverProvider {
         const cfTagAttributePattern: RegExp = positionIsCfScript ? getCfScriptTagAttributePattern() : getCfTagAttributePattern();
         const cfTagAttributeMatch: RegExpExecArray = cfTagAttributePattern.exec(docPrefix);
         if (cfTagAttributeMatch) {
+          const ignoredTags: string[] = expressionCfmlTags;
           const tagName: string = cfTagAttributeMatch[2];
           const globalTag: GlobalTag = cachedEntity.getGlobalTag(tagName);
           const attributeValueMatch: RegExpExecArray = VALUE_PATTERN.exec(docPrefix);
-          if (globalTag && !attributeValueMatch) {
+          if (globalTag && !ignoredTags.includes(globalTag.name) && !attributeValueMatch) {
+            // TODO: Check valid attribute before calling createHover
             definition = this.attributeToHoverProviderItem(globalTag, currentWord);
             return this.createHover(definition);
           }
@@ -158,13 +163,13 @@ export default class CFMLHoverProvider implements HoverProvider {
 
       // HTML tags
       const htmlHoverSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.hover.html", document.uri);
-      if (isCfmFile(document) && htmlHoverSettings.get<boolean>("enable", true) && tagPrefixPattern.test(docPrefix) && HTML_TAGS.hasOwnProperty(lowerCurrentWord)) {
-        definition = this.htmlTagToHoverProviderItem(HTML_TAGS[lowerCurrentWord]);
+      if (isCfmFile(document) && htmlHoverSettings.get<boolean>("enable", true) && tagPrefixPattern.test(docPrefix) && isKnownHTMLTag(lowerCurrentWord)) {
+        definition = this.htmlTagToHoverProviderItem(getHTMLTag(lowerCurrentWord));
         return this.createHover(definition);
       }
     }
 
-    // CSS properties
+    // CSS
     const cssHoverSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.hover.css", document.uri);
     const cssRanges: Range[] = getCssRanges(documentPositionStateContext);
     if (cssHoverSettings.get<boolean>("enable", true)) {
@@ -184,11 +189,23 @@ export default class CFMLHoverProvider implements HoverProvider {
             document.positionAt(rangeTextOffset + propertyMatch.index + propertyMatch[0].length)
           );
 
-          if (propertyRange.contains(position) && isKnownCssProperty(propertyName)) {
-            definition = this.CssPropertyToHoverProviderItem(getCssProperty(propertyName));
+          if (propertyRange.contains(position) && cssDataManager.isKnownProperty(propertyName)) {
+            definition = this.cssPropertyToHoverProviderItem(cssDataManager.getProperty(propertyName));
             return this.createHover(definition, propertyRange);
           }
         }
+
+        const cssWordRange: Range = document.getWordRangeAtPosition(position, cssWordRegex);
+        const currentCssWord: string = cssWordRange ? document.getText(cssWordRange) : "";
+
+        if (currentCssWord.startsWith("@")) {
+          const cssAtDir: IAtDirectiveData = cssDataManager.getAtDirective(currentCssWord);
+          if (cssAtDir) {
+            definition = this.cssAtDirectiveToHoverProviderItem(cssAtDir);
+            return this.createHover(definition, cssWordRange);
+          }
+        }
+
       }
     }
 
@@ -358,7 +375,7 @@ export default class CFMLHoverProvider implements HoverProvider {
    * Creates HoverProviderItem from given HTML tag
    * @param htmlTag HTML tag to convert
    */
-  public htmlTagToHoverProviderItem(htmlTag: HTMLTagSpecification): HoverProviderItem {
+  public htmlTagToHoverProviderItem(htmlTag: HTMLTagData): HoverProviderItem {
     let hoverItem: HoverProviderItem = {
       name: htmlTag.name,
       syntax: `<${htmlTag.name}>`,
@@ -377,12 +394,12 @@ export default class CFMLHoverProvider implements HoverProvider {
    * Creates HoverProviderItem from given CSS property
    * @param cssProperty CSS property to convert
    */
-  public CssPropertyToHoverProviderItem(cssProperty: CssProperty): HoverProviderItem {
+  public cssPropertyToHoverProviderItem(cssProperty: IPropertyData): HoverProviderItem {
     let hoverItem: HoverProviderItem = {
       name: cssProperty.name,
       syntax: `${cssProperty.name}: value`,
       symbolType: "property",
-      description: cssProperty.desc,
+      description: getCSSEntryDescription(cssProperty),
       params: [],
       returnType: undefined,
       genericDocLink: `${mdnLinkPrefix}CSS/${cssProperty.name}`
@@ -391,6 +408,25 @@ export default class CFMLHoverProvider implements HoverProvider {
     if (cssProperty.syntax) {
       hoverItem.syntax = `${cssProperty.name}: ${cssProperty.syntax}`;
     }
+
+    return hoverItem;
+  }
+
+  /**
+   * Creates HoverProviderItem from given CSS at directive
+   * @param cssAtDir CSS at directive to convert
+   */
+  public cssAtDirectiveToHoverProviderItem(cssAtDir: IAtDirectiveData): HoverProviderItem {
+    let hoverItem: HoverProviderItem = {
+      name: cssAtDir.name,
+      syntax: cssAtDir.name,
+      symbolType: "property",
+      description: getCSSEntryDescription(cssAtDir),
+      params: [],
+      returnType: undefined,
+      genericDocLink: `${mdnLinkPrefix}CSS/${cssAtDir.name.replace(/-[a-z]+-/, "")}`,
+      language: "css"
+    };
 
     return hoverItem;
   }
