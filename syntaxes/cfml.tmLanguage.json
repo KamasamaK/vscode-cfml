@@ -10828,7 +10828,7 @@
       "patterns": [
         {
           "name": "meta.function.declaration.cfml",
-          "begin": "(?=\\([^\\(]*?\\)\\s*=>\\s*\\{)",
+          "begin": "(?=\\([^\\(]*?\\)\\s*=>\\s*\\{)|(?=[_$a-zA-Z][$\\w]*\\s*=>\\s*\\{)",
           "end": "(=>)\\s*",
           "endCaptures": {
             "1": {
@@ -10838,20 +10838,26 @@
           "patterns": [
             {
               "include": "#source-cfml-script-arrow-function-declaration-parameters"
+            },
+            {
+              "include": "#source-cfml-script-arrow-function-declaration-single-unparenthesized-parameter"
             }
           ]
         },
         {
-          "begin": "(?=\\([^\\(]*?\\)\\s*=>)",
+          "begin": "(?=\\([^\\(]*?\\)\\s*=>)|(?=[_$a-zA-Z][$\\w]*\\s*=>)",
           "end": "(?=[);}\\],\\n])",
           "patterns": [
             {
               "name": "meta.function.declaration.cfml",
-              "begin": "(?=\\()",
+              "begin": "(?=\\(|[_$a-zA-Z])",
               "end": "(?=(=>))",
               "patterns": [
                 {
                   "include": "#source-cfml-script-arrow-function-declaration-parameters"
+                },
+                {
+                  "include": "#source-cfml-script-arrow-function-declaration-single-unparenthesized-parameter"
                 }
               ]
             },
@@ -11877,6 +11883,17 @@
         }
       ]
     },
+    "source-cfml-script-arrow-function-declaration-single-unparenthesized-parameter": {
+      "name": "meta.function.parameters.cfml",
+      "begin": "(?=[_$a-zA-Z])",
+      "end": "(?=[^\\w])",
+      "patterns": [
+        {
+          "name": "variable.parameter.function.cfml",
+          "match": "[_$a-zA-Z][$\\w]*"
+        }
+      ]
+    },
     "source-cfml-script-arrow-function-declaration-parameters": {
       "name": "meta.function.parameters.cfml",
       "begin": "\\(",
@@ -12440,7 +12457,7 @@
           "match": ","
         },
         {
-          "begin": "\\b([_$a-zA-Z][$\\w\\.]*)\\s*(=)(?!=)",
+          "begin": "\\b([_$a-zA-Z][$\\w\\.]*)\\s*(=)(?!=|>)",
           "beginCaptures": {
             "1": {
               "name": "entity.other.parameter-name.cfml"
@@ -14040,21 +14057,58 @@
             },
             {
               "name": "meta.function.anonymous.cfml meta.function.declaration.cfml meta.function.parameters.cfml",
-              "begin": "\\(",
-              "beginCaptures": {
-                "0": {
-                  "name": "punctuation.definition.parameters.begin.cfml"
-                }
-              },
-              "end": "\\)",
-              "endCaptures": {
-                "0": {
-                  "name": "punctuation.definition.parameters.end.cfml"
-                }
-              },
+              "begin": "(?=\\(|[_$a-zA-Z])",
+              "end": "(?=(=>))",
               "patterns": [
                 {
-                  "include": "#source-cfml-script-function-parameter"
+                  "include": "#source-cfml-script-arrow-function-declaration-parameters"
+                },
+                {
+                  "include": "#source-cfml-script-arrow-function-declaration-single-unparenthesized-parameter"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "begin": "(?=\\s*\\([^\\(]*?\\)\\s*=>)|(?=[_$a-zA-Z][$\\w]*\\s*=>)",
+          "end": "(?=[);}\\],\\n])",
+          "patterns": [
+            {
+              "begin": "\\s*(=>)\\s*",
+              "beginCaptures": {
+                "0": {
+                  "name": "meta.function.anonymous.cfml meta.function.declaration.cfml"
+                },
+                "1": {
+                  "name": "storage.type.function.arrow.cfml"
+                }
+              },
+              "contentName": "meta.function.body.cfml",
+              "end": "(?=[);}\\],\\n])",
+              "patterns": [
+                {
+                  "include": "#source-cfml-script-expressions"
+                }
+              ]
+            },
+            {
+              "name": "meta.function.anonymous.cfml meta.function.declaration.cfml meta.function.parameters.cfml",
+              "begin": "(?=\\()",
+              "end": "(?=(=>))",
+              "patterns": [
+                {
+                  "include": "#source-cfml-script-arrow-function-declaration-parameters"
+                }
+              ]
+            },
+            {
+              "name": "meta.function.anonymous.cfml meta.function.declaration.cfml meta.function.parameters.cfml",
+              "begin": "(?=[_$a-zA-Z])",
+              "end": "(?=(=>))",
+              "patterns": [
+                {
+                  "include": "#source-cfml-script-arrow-function-declaration-single-unparenthesized-parameter"
                 }
               ]
             }
@@ -14554,7 +14608,7 @@
           ]
         },
         {
-          "begin": "(?=([_$a-zA-Z][$\\w]*)\\s*(=)\\s*(\\s*\\bfunction\\b|\\s*\\([^\\(]*?\\)\\s*=>\\s*\\{))",
+          "begin": "(?=([_$a-zA-Z][$\\w]*)\\s*(=)\\s*(((\\s*\\bfunction\\b|\\s*\\([^\\(]*?\\)\\s*=>\\s*\\{))|([_$a-zA-Z][$\\w]*\\s*=>\\s*\\{)))",
           "end": "\\}",
           "endCaptures": {
             "0": {
@@ -14594,11 +14648,11 @@
               },
               "patterns": [
                 {
-                  "name": "variable.other.constant.cfml entity.name.function.cfml",
+                  "name": "variable.other.constant.cfml entity.name.function.cfml_15",
                   "match": "[A-Z][_$\\dA-Z]*"
                 },
                 {
-                  "name": "variable.other.readwrite.cfml entity.name.function.cfml",
+                  "name": "variable.other.readwrite.cfml entity.name.function.cfml_16",
                   "match": "[_$a-zA-Z][$\\w]*"
                 }
               ]
@@ -14606,7 +14660,7 @@
           ]
         },
         {
-          "begin": "(?=([_$a-zA-Z][$\\w]*)\\s*(=)\\s*\\([^\\(]*?\\)\\s*=>)",
+          "begin": "(?=([_$a-zA-Z][$\\w]*)\\s*(=)\\s*(([_$a-zA-Z][$\\w]*)|(\\([^\\(]*?\\)))\\s*=>)",
           "end": "(?=[);}\\],\\n])",
           "patterns": [
             {
@@ -14623,11 +14677,11 @@
               },
               "patterns": [
                 {
-                  "name": "variable.other.constant.cfml entity.name.function.cfml",
+                  "name": "variable.other.constant.cfml entity.name.function.cfml_17",
                   "match": "[A-Z][_$\\dA-Z]*"
                 },
                 {
-                  "name": "variable.other.readwrite.cfml entity.name.function.cfml",
+                  "name": "variable.other.readwrite.cfml entity.name.function.cfml_18",
                   "match": "[_$a-zA-Z][$\\w]*"
                 }
               ]
