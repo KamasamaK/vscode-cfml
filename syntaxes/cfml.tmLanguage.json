@@ -14648,11 +14648,11 @@
               },
               "patterns": [
                 {
-                  "name": "variable.other.constant.cfml entity.name.function.cfml_15",
+                  "name": "variable.other.constant.cfml entity.name.function.cfml",
                   "match": "[A-Z][_$\\dA-Z]*"
                 },
                 {
-                  "name": "variable.other.readwrite.cfml entity.name.function.cfml_16",
+                  "name": "variable.other.readwrite.cfml entity.name.function.cfml",
                   "match": "[_$a-zA-Z][$\\w]*"
                 }
               ]
@@ -14677,11 +14677,11 @@
               },
               "patterns": [
                 {
-                  "name": "variable.other.constant.cfml entity.name.function.cfml_17",
+                  "name": "variable.other.constant.cfml entity.name.function.cfml",
                   "match": "[A-Z][_$\\dA-Z]*"
                 },
                 {
-                  "name": "variable.other.readwrite.cfml entity.name.function.cfml_18",
+                  "name": "variable.other.readwrite.cfml entity.name.function.cfml",
                   "match": "[_$a-zA-Z][$\\w]*"
                 }
               ]
