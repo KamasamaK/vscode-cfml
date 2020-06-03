@@ -615,8 +615,8 @@ export function parseTags(documentStateContext: DocumentStateContext, tagName: s
       name: tagName,
       attributes: parseAttributes(document, attributeRange),
       tagRange: new Range(
-        document.positionAt(thisTagMatch.index),
-        document.positionAt(thisTagMatch.index + thisTagMatch[0].length)
+        document.positionAt(textOffset + thisTagMatch.index),
+        document.positionAt(textOffset + thisTagMatch.index + thisTagMatch[0].length)
       ),
       bodyRange: tagBodyRange,
       isScript: false
@@ -624,6 +624,127 @@ export function parseTags(documentStateContext: DocumentStateContext, tagName: s
   }
 
   return tags;
+}
+
+//
+// the same args/return type as |parseTags|, but this is nested-tag aware and only grabs the top-level tags within the range (or the whole document if no range is supplied)
+//
+export function parseTopLevelTags(documentStateContext: DocumentStateContext, tagName: string, range?: Range): Tag[] {
+  let tags: Tag[] =[];
+  const document: TextDocument = documentStateContext.document;
+  let textOffset: number = 0;
+  let documentText: string = documentStateContext.sanitizedDocumentText;
+  if (range && document.validateRange(range)) {
+    textOffset = document.offsetAt(range.start);
+    documentText = documentText.slice(textOffset, document.offsetAt(range.end));
+  }
+
+  for (let thisTagMatch of matchTopLevelTags(tagName, documentText)) {
+    const tagStart: string = thisTagMatch.tagStartMatch[1];
+    const tagAttributes: string = thisTagMatch.tagStartMatch[2];
+    const tagBodyText: string = thisTagMatch.tagBodyText;
+
+    const attributeStartOffset: number = textOffset + thisTagMatch.tagStartMatch.index + tagStart.length;
+    const attributeRange: Range = new Range(
+      document.positionAt(attributeStartOffset),
+      document.positionAt(attributeStartOffset + tagAttributes.length)
+    );
+
+    let tagBodyRange: Range;
+    if (tagBodyText !== undefined) {
+      const thisBodyStartOffset: number = attributeStartOffset + tagAttributes.length + 1;
+      tagBodyRange = new Range(
+        document.positionAt(thisBodyStartOffset),
+        document.positionAt(thisBodyStartOffset + tagBodyText.length)
+      );
+    }
+
+    tags.push({
+      name: tagName,
+      attributes: parseAttributes(document, attributeRange),
+      tagRange: new Range(
+        document.positionAt(textOffset + thisTagMatch.tagStartMatch.index),
+        document.positionAt(textOffset + thisTagMatch.tagStartMatch.index + thisTagMatch.tagStartMatch[0].length)
+      ),
+      bodyRange: tagBodyRange,
+      isScript: false
+    });
+  }
+  return tags;
+}
+
+interface NestedTagMatch extends RegExpExecArray {
+  startTag: boolean;
+  selfClosingTag: boolean;
+  endTag: boolean;
+}
+
+//
+// this serves as an aid to |parseTopLevelTags|; it deals mostly text while |parseTopLevelTags| deals with indexes/ranges
+//
+function matchTopLevelTags(tagName: string, source: string) : {tagStartMatch: RegExpExecArray, tagBodyText: string}[] {
+  const matchAll = (string:string, regexWithGlobalFlag: RegExp) : RegExpExecArray[] => {
+    const result = [];
+    let match;
+    while ((match = regexWithGlobalFlag.exec(string))) {
+      result.push(match);
+    }
+    return result;
+  }
+  const tagMatchIsSelfClosing = (match: RegExpExecArray) => match[3] != undefined;
+
+  let startPattern = getStartTagPattern(tagName);
+  let endPattern = new RegExp(`</${tagName}>`, "gi");
+
+  //
+  // find all the opening and closing tags in the supplied source, then sort them by their indexes
+  // with a sorted list of opening / closing tags, we can iterate through and grab the non-nested ones (i.e., the top-level ones)
+  //
+  const allStartTagMatches    = matchAll(source, startPattern);
+  const endTagMatches         = matchAll(source, endPattern).map(tagMatch => ({startTag: false, selfClosingTag: false, endTag: true, ...tagMatch})) as NestedTagMatch[];
+  const openingTagMatches    = allStartTagMatches.filter(tagMatch => !tagMatchIsSelfClosing(tagMatch)).map(tagMatch => ({startTag: true, selfClosingTag: false, endTag: false, ...tagMatch})) as NestedTagMatch[];
+  const selfClosingTagMatches = allStartTagMatches.filter(tagMatch => tagMatchIsSelfClosing(tagMatch)).map(tagMatch => ({startTag: true, selfClosingTag: true, endTag: false, ...tagMatch})) as NestedTagMatch[];
+  const orderedMatches        = [...openingTagMatches, ...selfClosingTagMatches, ...endTagMatches].sort((l,r) => l.index < r.index ? -1 : 1) as NestedTagMatch[];
+
+  if (allStartTagMatches.length == 0) {
+      return null;
+  }
+
+  let tagDepth = 0;
+  let results = [];
+  let lookingForRootTag = true;
+  let topLevelStartMatch;
+
+  for (let thisMatch of orderedMatches) {
+      if (thisMatch.startTag) {
+        if (!thisMatch.selfClosingTag) {
+            tagDepth += 1;
+        }
+        if (lookingForRootTag) {
+          lookingForRootTag = false;
+          topLevelStartMatch = thisMatch;
+        }
+      }
+      else if (thisMatch.endTag) {
+          tagDepth -= 1;
+      }
+      if (tagDepth == 0) {
+        let body;
+        if (thisMatch.startTag && thisMatch.selfClosingTag) {
+          body = null;
+        }
+        else {
+          body = source.slice(topLevelStartMatch.index + topLevelStartMatch[0].length, thisMatch.index)
+        }
+        results.push({
+          tagStartMatch: topLevelStartMatch,
+          tagBodyText: body
+        });
+        lookingForRootTag = true;
+      }
+  }
+
+  return results;
 }
 
 

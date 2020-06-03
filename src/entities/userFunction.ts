@@ -12,7 +12,7 @@ import { Attributes, Attribute, parseAttributes } from "./attribute";
 import { equalsIgnoreCase } from "../utils/textUtil";
 import { MyMap, MySet } from "../utils/collections";
 import { getComponent, hasComponent } from "../features/cachedEntities";
-import { parseTags, Tag } from "./tag";
+import { parseTags, parseTopLevelTags, Tag } from "./tag";
 import { DocumentStateContext, DocumentPositionStateContext } from "../utils/documentUtil";
 import { getClosingPosition, getNextCharacterPosition, isInRanges, getCfScriptRanges } from "../utils/contextUtil";
 
@@ -513,7 +513,7 @@ export function parseTagFunctions(documentStateContext: DocumentStateContext): U
 
   parsedFunctionTags.forEach((tag: Tag) => {
     const functionRange: Range = tag.tagRange;
-    const functionBodyRange: Range = tag.bodyRange;
+    const functionBodyRange: Range = parseTopLevelTags(documentStateContext, "cffunction", new Range(tag.tagRange.start, documentStateContext.document.lineAt(documentStateContext.document.lineCount-1).range.end))[0].bodyRange;
     const parsedAttributes: Attributes = tag.attributes;
 
     if (!parsedAttributes.has("name") || !parsedAttributes.get("name").value) {
@@ -562,8 +562,14 @@ function parseTagFunctionArguments(documentStateContext: DocumentStateContext, f
   }
 
   const parsedArgumentTags: Tag[] = parseTags(documentStateContext, "cfargument", functionBodyRange);
+  const parsedNestedFunctionTags: Tag[] = parseTopLevelTags(documentStateContext, "cffunction", functionBodyRange);
 
   parsedArgumentTags.forEach((tag: Tag) => {
+    for (let nestedFunctionTag of parsedNestedFunctionTags) {
+      if (nestedFunctionTag.bodyRange.contains(tag.tagRange)) {
+        return;
+      }
+    }
     const parsedAttributes: Attributes = tag.attributes;
 
     const argumentAttributes: ArgumentAttributes = processArgumentAttributes(parsedAttributes);
