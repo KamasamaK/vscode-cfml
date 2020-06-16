@@ -901,7 +901,7 @@ export function getStartSigPosition(iterator: BackwardIterator): Position | unde
   while (iterator.hasNext()) {
     const ch: number = iterator.next();
 
-    if (stringRanges) {
+    if (stringRanges && iterator.getPosition()) {
       const position: Position = iterator.getPosition().translate(0, 1);
       const stringRange: Range = stringRanges.find((range: Range) => {
         return range.contains(position) && !range.end.isEqual(position);
