@@ -102,7 +102,7 @@ export class BackwardIterator {
         const document: TextDocument = this.getDocument();
         const lineRange: Range = document.lineAt(lineNumber).range;
         const lineText: string = this.documentStateContext.sanitizedDocumentText.slice(document.offsetAt(lineRange.start), document.offsetAt(lineRange.end));
-        lineCharacterOffset = lineText.length - 1;
+        lineCharacterOffset = Math.max(0, lineText.length - 1);
       } else {
         return undefined;
       }
