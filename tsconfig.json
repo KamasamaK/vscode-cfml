@@ -12,7 +12,8 @@
     "alwaysStrict": true,
     "noUnusedLocals": true,
     "noImplicitReturns": true,
-    "noImplicitThis": true
+    "noImplicitThis": true,
+    "skipLibCheck": true
   },
   "exclude": [
     "node_modules"
