@@ -37,7 +37,7 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
-        run: npm i
+        run: yarn
 
       - name: Setup package path
         id: setup
