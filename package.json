@@ -8,7 +8,7 @@
   "publisher": "KamasamaK",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.31.0"
+    "vscode": "^1.63.0"
   },
   "repository": {
     "type": "git",
@@ -489,7 +489,6 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "postinstall": "node ./node_modules/vscode/bin/install",
     "lint": "tslint src/*.ts -t verbose"
   },
   "dependencies": {
@@ -512,6 +511,6 @@
     "mocha": "~5.2.0",
     "tslint": "^5.12.1",
     "typescript": "^3.3.1",
-    "vscode": "^1.1.29"
+    "@types/vscode": "^1.63.0"
   }
 }
