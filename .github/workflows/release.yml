@@ -56,7 +56,7 @@ jobs:
       - name: Setup tag
         id: setup-tag
         run: |
-          $version = (Get-Content ./packages/extension/package.json -Raw | ConvertFrom-Json).version
+          $version = (Get-Content ./package.json -Raw | ConvertFrom-Json).version
           Write-Host "tag: release/$version"
           Write-Host "::set-output name=tag::release/$version"
           Write-Host "::set-output name=version::$version"
