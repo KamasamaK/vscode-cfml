@@ -1,12 +1,10 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2017",
+    "target": "ES2019",
     "outDir": "./out",
     "lib": [
-      "es2017",
-      "es2018.regexp",
-      "esnext.asynciterable"
+      "ES2019"
     ],
     "sourceMap": true,
     "alwaysStrict": true,
@@ -16,5 +14,10 @@
   },
   "exclude": [
     "node_modules"
+  ],
+  "plugins": [
+    {
+      "name": "typescript-tslint-plugin"
+    }
   ]
 }

@@ -28,7 +28,7 @@ export default class CFMLWorkspaceSymbolProvider implements WorkspaceSymbolProvi
       }
     }
     if (!uri) {
-      const documents: TextDocument[] = workspace.textDocuments;
+      const documents: ReadonlyArray<TextDocument> = workspace.textDocuments;
       for (const document of documents) {
         if (document.languageId === LANGUAGE_ID) {
           uri = document.uri;

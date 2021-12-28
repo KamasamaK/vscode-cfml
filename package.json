@@ -8,7 +8,7 @@
   "publisher": "KamasamaK",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.63.0"
+    "vscode": "^1.62.3"
   },
   "repository": {
     "type": "git",
@@ -108,9 +108,9 @@
             "string",
             "null"
           ],
-          "description": "Physical path to the data directory of CFDocs.",
+          "description": "Physical path to the data/language directory of CFDocs.",
           "default": null,
-          "scope": "window"
+          "scope": "machine-overridable"
         },
         "cfml.hover.enable": {
           "type": "boolean",
@@ -389,12 +389,12 @@
               "logicalPath": {
                 "type": "string",
                 "default": "",
-                "description": "The name of the tag"
+                "description": "The logical path to which the directory path is mapped. Must start with a /."
               },
               "directoryPath": {
                 "type": "string",
                 "default": "",
-                "description": "The default value for the tag"
+                "description": "The path to the actual directory that will be mapped. Can be a physical path or relative to the workspace root."
               },
               "isPhysicalDirectoryPath": {
                 "type": "boolean",
@@ -486,31 +486,35 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "clean": "rimraf out *.vsix",
+    "build": "tsc -p ./",
+    "rebuild": "npm run clean && npm run build",
     "watch": "tsc -watch -p ./",
-    "lint": "tslint src/*.ts -t verbose"
+    "pack": "vsce package",
+    "lint": "tslint -p tsconfig.json -t verbose",
+    "vscode:prepublish": "npm run build"
   },
   "dependencies": {
-    "@octokit/rest": "~16.15.0",
+    "@octokit/rest": "~16.15.1",
     "findup-sync": "2.0.0",
     "html-entities": "~1.2.1",
-    "request": "~2.88.0",
+    "request": "~2.88.2",
     "semver": "^5.5.1",
-    "trie-prefix-tree": "1.5.0",
+    "trie-prefix-tree": "1.5.1",
     "vscode-css-languageservice": "3.0.13-next.12",
     "vscode-html-languageservice": "2.1.11-next.11"
   },
   "devDependencies": {
     "@types/findup-sync": "2.0.0",
     "@types/html-entities": "~1.2.16",
-    "@types/mocha": "~5.2.5",
-    "@types/node": "~10.3.6",
-    "@types/request": "~2.48.1",
+    "@types/node": "~14.14.45",
+    "@types/request": "~2.48.7",
     "@types/semver": "~5.5.0",
-    "mocha": "~5.2.0",
-    "tslint": "^5.12.1",
-    "typescript": "^3.3.1",
-    "@types/vscode": "^1.63.0"
+    "@types/vscode": "~1.62.0",
+    "rimraf": "^3.0.2",
+    "tslint": "^6.1.3",
+    "typescript": "^3.9.10",
+    "typescript-tslint-plugin": "^1.0.1",
+    "vsce": "^2.5.3"
   }
 }
