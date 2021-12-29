@@ -1,4 +1,3 @@
-import * as fs from "fs";
 import * as path from "path";
 import { commands, ConfigurationChangeEvent, ConfigurationTarget, DocumentSelector, ExtensionContext, extensions, FileSystemWatcher, IndentAction, languages, TextDocument, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
 import { COMPONENT_FILE_GLOB } from "./entities/component";
