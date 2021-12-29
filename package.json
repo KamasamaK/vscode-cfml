@@ -517,12 +517,6 @@
         "mac": "shift+alt+a",
         "when": "editorTextFocus && !editorReadonly && editorLangId == cfml"
       }
-    ],
-    "jsonValidation": [
-      {
-        "fileMatch": "server*.json",
-        "url": "./resources/schemas/server.schema.json"
-      }
     ]
   },
   "scripts": {
@@ -535,7 +529,6 @@
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {
-    "@octokit/rest": "~16.15.1",
     "findup-sync": "2.0.0",
     "html-entities": "~1.2.1",
     "request": "~2.88.2",

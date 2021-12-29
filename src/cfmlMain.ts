@@ -1,4 +1,3 @@
-import * as Octokit from "@octokit/rest";
 import * as fs from "fs";
 import * as path from "path";
 import { commands, ConfigurationChangeEvent, ConfigurationTarget, DocumentSelector, ExtensionContext, extensions, FileSystemWatcher, IndentAction, languages, TextDocument, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
@@ -35,9 +34,6 @@ const DOCUMENT_SELECTOR: DocumentSelector = [
   }
 ];
 
-const octokit = new Octokit();
-const httpSuccessStatusCode: number = 200;
-
 export let extensionContext: ExtensionContext;
 
 /**
@@ -61,31 +57,6 @@ export function getConfigurationTarget(target: string): ConfigurationTarget {
   }
 
   return configTarget;
-}
-
-/**
- * Gets the latest CommandBox Server schema from the CommandBox git repository
- */
-async function getLatestCommandBoxServerSchema(): Promise<void> {
-  const cmdboxServerSchemaFileName: string = "server.schema.json";
-  const cmdboxServerSchemaFilePath: string = path.join(extensionContext.extensionPath, "resources", "schemas", cmdboxServerSchemaFileName);
-
-  try {
-    const cmdboxServerSchemaResult = await octokit.repos.getContents({
-      owner: "Ortus-Solutions",
-      repo: "commandbox",
-      path: `src/cfml/system/config/${cmdboxServerSchemaFileName}`,
-      ref: "master"
-    });
-
-    if (cmdboxServerSchemaResult && cmdboxServerSchemaResult.hasOwnProperty("status") && cmdboxServerSchemaResult.status === httpSuccessStatusCode && cmdboxServerSchemaResult.data.type === "file") {
-      const resultText: string = new Buffer(cmdboxServerSchemaResult.data.content, cmdboxServerSchemaResult.data.encoding).toString("utf8");
-
-      fs.writeFileSync(cmdboxServerSchemaFilePath, resultText);
-    }
-  } catch (err) {
-    console.error(err);
-  }
 }
 
 /**
@@ -131,8 +102,6 @@ export function activate(context: ExtensionContext): void {
       }
     ]
   });
-
-  getLatestCommandBoxServerSchema();
 
   context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", refreshGlobalDefinitionCache));
   context.subscriptions.push(commands.registerCommand("cfml.refreshWorkspaceDefinitionCache", refreshWorkspaceDefinitionCache));
