@@ -5,7 +5,7 @@ An extension for Visual Studio Code to assist in development with CFML.
 ## Acknowledgements
 
 - [`vscode-coldfusion`](https://github.com/ilich/vscode-coldfusion/) on which the syntax highlighting is based, which was based on the next extension
-- [`sublimetext-cfml`](https://github.com/jcberquist/sublimetext-cfml) as inspiration for some of the features. "Parsing" logic (including regexes) was also used.
+- [`sublimetext-cfml`](https://github.com/jcberquist/sublimetext-cfml) as inspiration for some of the features. Some "parsing" logic (including regexes) was also used.
 - [`cfdocs`](https://github.com/foundeo/cfdocs/) as the default documentation and sample images in this README
 - [`vscode-php-docblocker`](https://github.com/neild3r/vscode-php-docblocker) as the basis for docblock completion
 
@@ -64,7 +64,7 @@ This extension contributes these settings to Visual Studio Code:
 **Values**
   - `remote`: Retrieve resources remotely from GitHub. [*Default*]
   - `local`: Retrieve resources locally using `cfml.cfDocs.localPath`.
-- `cfml.cfDocs.localPath`: [*Optional*] Physical path to the data directory of CFDocs.
+- `cfml.cfDocs.localPath`: [*Optional*] Physical path to the data/language directory of CFDocs.
 - `cfml.hover.enable`: Whether hover is enabled for CFML entities. [*Default*: `true`]
 - `cfml.hover.html.enable`: Whether hover is enabled for HTML entities. [*Default*: `true`]
 - `cfml.hover.css.enable`: Whether hover is enabled for CSS entities. [*Default*: `true`]
@@ -98,7 +98,7 @@ This extension contributes these settings to Visual Studio Code:
 - `cfml.suggest.css.enable`: Whether CSS properties and values are part of completion help. [*Default*: `true`]
 - `cfml.definition.enable`: Whether providing definitions is enabled. [*Default*: `true`]
 - `cfml.definition.userFunctions.search.enable`: Whether to search for matching functions throughout the workspace when a reliable match cannot be determined. Peek Definition will provide a list of all matches. [*Default*: `false`]
-- `cfml.indexComponents.enable`: Whether to index all components in workspace on startup. This is done on each startup and duration depends on number and complexity of components as well as hardware specifications. Editor may be unresponsive during this period. It is currently required for most features involving components to work properly. [*Default*: `true`]
+- `cfml.indexComponents.enable`: Whether to index the components in workspace on startup. This is done on each startup and duration depends on number and complexity of components as well as hardware specifications. Editor may be unresponsive during this period. It is currently required for most features involving components to work properly. [*Default*: `true`]
 - `cfml.autoCloseTags.enable`: Whether to enable auto-closing tags for CFML. This uses the third-party extension `auto-close-tag`. This is only checked and set on startup. [*Default*: `true`]
 - `cfml.autoCloseTags.configurationTarget`: Auto-configuration target for auto-closing tags. [*Default*: `Global`]
 - `cfml.docBlock.gap`: Whether there should be a gap between the hint and other tags in a docblock. [*Default*: `true`]
@@ -138,14 +138,6 @@ This extension contributes these settings to Visual Studio Code:
     ]
     ```
 
-### VS Code
-
-I recommend the following settings overrides:
-
-```json
-"breadcrumbs.enabled": true
-```
-
 ### Other
 
 #### Emmet
@@ -160,7 +152,7 @@ You can enable Emmet within CFML files by using the following setting:
 
 ## Commands
 
-Used in Command Palette (Win/Linux: `Ctrl`+`Shift`+`P`; Mac: `Cmd`+`Shift`+`P`). Can also be bound to [Keyboard Shortcuts](https://code.visualstudio.com/docs/getstarted/keybindings).
+Used in [Command Palette](https://code.visualstudio.com/docs/getstarted/userinterface#_command-palette). Can also be bound to [Keyboard Shortcuts](https://code.visualstudio.com/docs/getstarted/keybindings).
 
 - Refresh cache for global definitions
 - Refresh cache for workspace definitions
@@ -188,18 +180,18 @@ Used in Command Palette (Win/Linux: `Ctrl`+`Shift`+`P`; Mac: `Cmd`+`Shift`+`P`).
 Feel free to open issues for these or any other features you would find helpful so we can discuss.
 
 - Provide additional completion suggestions
-  - Global member functions
+  - Member functions for native types
   - Enumerated values for global functions
 - Consider component imports
 - References (within same file/block)
 - Use proper parser ([CFParser](https://github.com/cfparser/cfparser))
-- Utilize a CFML language server
+- Utilize a CFML language server via LSP
 
 ## Recommended Extensions
 
 VS Code and this extension lack features and functionality that I find useful for development. Below are some supplemental extensions that I believe will improve the development experience for most.
 
-- [Auto Close Tag](https://marketplace.visualstudio.com/items?itemName=formulahendry.auto-close-tag) - Enables automatic closing of tags. There are settings (`cfml.autoCloseTags.*`) for this extension to automate the configuration for HTML and CFML tags.
+- [Auto Close Tag](https://marketplace.visualstudio.com/items?itemName=formulahendry.auto-close-tag) - Enables automatic closing of tags. There are settings (`cfml.autoCloseTags.*`) for this extension to automate the configuration for CFML tags.
 - [CFLint](https://marketplace.visualstudio.com/items?itemName=KamasamaK.vscode-cflint) - Integrates CFLint into VS Code as diagnostics/problems.
 - [highlight-matching-tag](https://marketplace.visualstudio.com/items?itemName=vincaslt.highlight-matching-tag) - This will highlight the relevant tags based on your configuration with a configurable style. There are also some useful commands.
 - [Path Autocomplete](https://marketplace.visualstudio.com/items?itemName=ionutvmi.path-autocomplete) - Provides suggestions when entering file paths
@@ -211,3 +203,7 @@ See [CHANGELOG.md](/CHANGELOG.md)
 ## Contributing
 
 See [CONTRIBUTING.md](/CONTRIBUTING.md)
+
+## Support
+
+For questions or help, join the `#ide` channel in the [CFML Slack workspace](https://cfml-slack.herokuapp.com/) to talk with people about this or other editor tools. To file a bug or feature request, open a [GitHub issue](https://github.com/KamasamaK/vscode-cfml/issues).
