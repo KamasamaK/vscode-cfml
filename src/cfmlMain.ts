@@ -1,3 +1,4 @@
+import * as micromatch from "micromatch";
 import * as path from "path";
 import { commands, ConfigurationChangeEvent, ConfigurationTarget, DocumentSelector, ExtensionContext, extensions, FileSystemWatcher, IndentAction, languages, TextDocument, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
 import { COMPONENT_FILE_GLOB } from "./entities/component";
@@ -56,6 +57,29 @@ export function getConfigurationTarget(target: string): ConfigurationTarget {
   }
 
   return configTarget;
+}
+
+/**
+ * Checks whether the given document should be excluded from being used.
+ * @param documentUri The URI of the document to check against
+ */
+function shouldExcludeDocument(documentUri: Uri): boolean {
+  const fileSettings: WorkspaceConfiguration = workspace.getConfiguration("files", documentUri);
+
+  const fileExcludes: {} = fileSettings.get<{}>("exclude", []);
+  let fileExcludeGlobs: string[] = [];
+  for (let fileExcludeGlob in fileExcludes) {
+    if (fileExcludes[fileExcludeGlob]) {
+      if (fileExcludeGlob.endsWith("/")) {
+        fileExcludeGlob += "**";
+      }
+      fileExcludeGlobs.push(fileExcludeGlob);
+    }
+  }
+
+  const relativePath = workspace.asRelativePath(documentUri);
+
+  return micromatch.some(relativePath, fileExcludeGlobs);
 }
 
 /**
@@ -124,6 +148,11 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(languages.registerColorProvider(DOCUMENT_SELECTOR, new CFMLDocumentColorProvider()));
 
   context.subscriptions.push(workspace.onDidSaveTextDocument((document: TextDocument) => {
+    const documentUri = document.uri;
+    if (shouldExcludeDocument(documentUri)) {
+      return;
+    }
+
     if (isCfcFile(document)) {
       cachedEntity.cacheComponentFromDocument(document);
     } else if (path.basename(document.fileName) === "Application.cfm") {
@@ -138,11 +167,19 @@ export function activate(context: ExtensionContext): void {
 
   const componentWatcher: FileSystemWatcher = workspace.createFileSystemWatcher(COMPONENT_FILE_GLOB, false, true, false);
   componentWatcher.onDidCreate((componentUri: Uri) => {
+    if (shouldExcludeDocument(componentUri)) {
+      return;
+    }
+
     workspace.openTextDocument(componentUri).then((document: TextDocument) => {
       cachedEntity.cacheComponentFromDocument(document);
     });
   });
   componentWatcher.onDidDelete((componentUri: Uri) => {
+    if (shouldExcludeDocument(componentUri)) {
+      return;
+    }
+
     cachedEntity.clearCachedComponent(componentUri);
 
     const fileName: string = path.basename(componentUri.fsPath);
@@ -155,6 +192,10 @@ export function activate(context: ExtensionContext): void {
   const applicationCfmWatcher: FileSystemWatcher = workspace.createFileSystemWatcher(APPLICATION_CFM_GLOB, false, true, false);
   context.subscriptions.push(applicationCfmWatcher);
   applicationCfmWatcher.onDidCreate((applicationUri: Uri) => {
+    if (shouldExcludeDocument(applicationUri)) {
+      return;
+    }
+
     workspace.openTextDocument(applicationUri).then((document: TextDocument) => {
       const documentStateContext: DocumentStateContext = getDocumentStateContext(document);
       const thisApplicationVariables: Variable[] = parseVariableAssignments(documentStateContext, documentStateContext.docIsScript);
@@ -165,6 +206,10 @@ export function activate(context: ExtensionContext): void {
     });
   });
   applicationCfmWatcher.onDidDelete((applicationUri: Uri) => {
+    if (shouldExcludeDocument(applicationUri)) {
+      return;
+    }
+
     cachedEntity.removeApplicationVariables(applicationUri);
   });
 
