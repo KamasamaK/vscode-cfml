@@ -472,6 +472,38 @@
         "title": "Fold all functions in active editor"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "cfml.toggleLineComment",
+          "when": "!editorReadonly && editorLangId == cfml"
+        },
+        {
+          "command": "cfml.toggleBlockComment",
+          "when": "!editorReadonly && editorLangId == cfml"
+        },
+        {
+          "command": "cfml.openActiveApplicationFile",
+          "when": "editorLangId == cfml"
+        },
+        {
+          "command": "cfml.goToMatchingTag",
+          "when": "editorLangId == cfml"
+        },
+        {
+          "command": "cfml.openCfDocs",
+          "when": "editorLangId == cfml"
+        },
+        {
+          "command": "cfml.openEngineDocs",
+          "when": "editorLangId == cfml"
+        },
+        {
+          "command": "cfml.foldAllFunctions",
+          "when": "editorLangId == cfml"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "cfml.toggleLineComment",
