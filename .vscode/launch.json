@@ -18,6 +18,7 @@
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
             ],
+            "skipFiles": ["<node_internals>/**"],
             "preLaunchTask": "npm: watch"
         }
     ]
