@@ -1,4 +1,6 @@
 .sonarlint/**
+.github/**
+.history/**
 .vscode/**
 .vscode-test/**
 test/**
