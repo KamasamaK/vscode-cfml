@@ -57,10 +57,8 @@ function getCommentCommand(commentType: CommentType): string {
  * Return a function that can be used to execute a line or block comment
  * @param commentType The comment type for which the command will be executed
  */
-export function toggleComment(commentType: CommentType): () => Promise<void> {
-  return async () => {
-    const editor: TextEditor = window.activeTextEditor;
-
+export function toggleComment(commentType: CommentType): (editor: TextEditor) => Promise<void> {
+  return async (editor: TextEditor) => {
     if (editor) {
       // default comment config
       let languageConfig: LanguageConfiguration = {

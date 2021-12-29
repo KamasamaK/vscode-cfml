@@ -7,7 +7,7 @@ import { decreasingIndentingTags, goToMatchingTag, nonClosingTags, nonIndentingT
 import { parseVariableAssignments, Variable } from "./entities/variable";
 import * as cachedEntity from "./features/cachedEntities";
 import CFMLDocumentColorProvider from "./features/colorProvider";
-import { foldAllFunctions, openActiveApplicationFile, refreshGlobalDefinitionCache, refreshWorkspaceDefinitionCache } from "./features/commands";
+import { foldAllFunctions, showApplicationDocument, refreshGlobalDefinitionCache, refreshWorkspaceDefinitionCache } from "./features/commands";
 import { CommentType, toggleComment } from "./features/comment";
 import CFMLCompletionItemProvider from "./features/completionItemProvider";
 import CFMLDefinitionProvider from "./features/definitionProvider";
@@ -105,13 +105,13 @@ export function activate(context: ExtensionContext): void {
 
   context.subscriptions.push(commands.registerCommand("cfml.refreshGlobalDefinitionCache", refreshGlobalDefinitionCache));
   context.subscriptions.push(commands.registerCommand("cfml.refreshWorkspaceDefinitionCache", refreshWorkspaceDefinitionCache));
-  context.subscriptions.push(commands.registerCommand("cfml.toggleLineComment", toggleComment(CommentType.Line)));
-  context.subscriptions.push(commands.registerCommand("cfml.toggleBlockComment", toggleComment(CommentType.Block)));
-  context.subscriptions.push(commands.registerCommand("cfml.openActiveApplicationFile", openActiveApplicationFile));
-  context.subscriptions.push(commands.registerCommand("cfml.goToMatchingTag", goToMatchingTag));
-  context.subscriptions.push(commands.registerCommand("cfml.openCfDocs", CFDocsService.openCfDocsForCurrentWord));
-  context.subscriptions.push(commands.registerCommand("cfml.openEngineDocs", CFDocsService.openEngineDocsForCurrentWord));
-  context.subscriptions.push(commands.registerCommand("cfml.foldAllFunctions", foldAllFunctions));
+  context.subscriptions.push(commands.registerTextEditorCommand("cfml.toggleLineComment", toggleComment(CommentType.Line)));
+  context.subscriptions.push(commands.registerTextEditorCommand("cfml.toggleBlockComment", toggleComment(CommentType.Block)));
+  context.subscriptions.push(commands.registerTextEditorCommand("cfml.openActiveApplicationFile", showApplicationDocument));
+  context.subscriptions.push(commands.registerTextEditorCommand("cfml.goToMatchingTag", goToMatchingTag));
+  context.subscriptions.push(commands.registerTextEditorCommand("cfml.openCfDocs", CFDocsService.openCfDocsForCurrentWord));
+  context.subscriptions.push(commands.registerTextEditorCommand("cfml.openEngineDocs", CFDocsService.openEngineDocsForCurrentWord));
+  context.subscriptions.push(commands.registerTextEditorCommand("cfml.foldAllFunctions", foldAllFunctions));
 
   context.subscriptions.push(languages.registerHoverProvider(DOCUMENT_SELECTOR, new CFMLHoverProvider()));
   context.subscriptions.push(languages.registerDocumentSymbolProvider(DOCUMENT_SELECTOR, new CFMLDocumentSymbolProvider()));

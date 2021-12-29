@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as request from "request";
-import { commands, Position, Range, TextDocument, TextLine, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
+import { commands, Position, Range, TextDocument, TextLine, Uri, window, workspace, WorkspaceConfiguration, TextEditor } from "vscode";
 import { getFunctionSuffixPattern } from "../../entities/function";
 import { GlobalEntity } from "../../entities/globals";
 import { getTagPrefixPattern } from "../../entities/tag";
@@ -243,13 +243,13 @@ export default class CFDocsService {
     return true;
   }
 
-  public static async openCfDocsForCurrentWord(): Promise<void> {
-    if (!window.activeTextEditor) {
-      return;
-    }
-
-    const document: TextDocument = window.activeTextEditor.document;
-    const position: Position = window.activeTextEditor.selection.start;
+  /**
+   * Opens the documentation web page on CFDocs for the word at the current cursor position
+   * @editor The text editor which represents the document for which to check the word
+   */
+  public static async openCfDocsForCurrentWord(editor: TextEditor): Promise<void> {
+    const document: TextDocument = editor.document;
+    const position: Position = editor.selection.start;
     const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
 
     if (documentPositionStateContext.positionInComment) {
@@ -281,13 +281,13 @@ export default class CFDocsService {
     }
   }
 
-  public static async openEngineDocsForCurrentWord(): Promise<void> {
-    if (!window.activeTextEditor) {
-      return;
-    }
-
-    const document: TextDocument = window.activeTextEditor.document;
-    const position: Position = window.activeTextEditor.selection.start;
+  /**
+   * Opens the documentation web page of the currently set CF engine for the word at the current cursor position
+   * @editor The text editor which represents the document for which to check the word
+   */
+  public static async openEngineDocsForCurrentWord(editor: TextEditor): Promise<void> {
+    const document: TextDocument = editor.document;
+    const position: Position = editor.selection.start;
     const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(document, position);
 
     if (documentPositionStateContext.positionInComment) {

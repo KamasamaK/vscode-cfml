@@ -849,13 +849,9 @@ export function getCfTags(documentStateContext: DocumentStateContext, isScript: 
 
 /**
  * Relocates cursor to the start of the tag matching the current selection
+ * @editor The text editor in which to find the matching tag
  */
-export async function goToMatchingTag(): Promise<void> {
-  if (!window.activeTextEditor) {
-    return;
-  }
-
-  const editor: TextEditor = window.activeTextEditor;
+export async function goToMatchingTag(editor: TextEditor): Promise<void> {
   const position: Position = editor.selection.active;
 
   const documentPositionStateContext: DocumentPositionStateContext = getDocumentPositionStateContext(editor.document, position);

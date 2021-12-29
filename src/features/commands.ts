@@ -1,10 +1,13 @@
-import { commands, TextDocument, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
+import { commands, TextDocument, Uri, window, workspace, WorkspaceConfiguration, TextEditor } from "vscode";
 import { Component, getApplicationUri } from "../entities/component";
 import { UserFunction } from "../entities/userFunction";
 import CFDocsService from "../utils/cfdocs/cfDocsService";
 import { isCfcFile } from "../utils/contextUtil";
 import * as cachedEntity from "./cachedEntities";
 
+/**
+ * Refreshes (clears and retrieves) all CFML global definitions
+ */
 export async function refreshGlobalDefinitionCache(): Promise<void> {
   cachedEntity.clearAllGlobalFunctions();
   cachedEntity.clearAllGlobalTags();
@@ -16,6 +19,9 @@ export async function refreshGlobalDefinitionCache(): Promise<void> {
   }
 }
 
+/**
+ * Refreshes (clears and retrieves) all CFML workspace definitions
+ */
 export async function refreshWorkspaceDefinitionCache(): Promise<void> {
   const cfmlIndexComponentsSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.indexComponents");
   if (cfmlIndexComponentsSettings.get<boolean>("enable")) {
@@ -23,13 +29,12 @@ export async function refreshWorkspaceDefinitionCache(): Promise<void> {
   }
 }
 
-export async function openActiveApplicationFile(): Promise<void> {
-  if (window.activeTextEditor === undefined) {
-    window.showErrorMessage("No active text editor was found.");
-    return;
-  }
-
-  const activeDocumentUri: Uri = window.activeTextEditor.document.uri;
+/**
+ * Opens the relevant Application file based on the given editor
+ * @editor The text editor which represents the document for which to open the file
+ */
+export async function showApplicationDocument(editor: TextEditor): Promise<void> {
+  const activeDocumentUri: Uri = editor.document.uri;
 
   if (activeDocumentUri.scheme === "untitled") {
     return;
@@ -47,12 +52,12 @@ export async function openActiveApplicationFile(): Promise<void> {
   }
 }
 
-export async function foldAllFunctions(): Promise<void> {
-  if (!window.activeTextEditor) {
-    return;
-  }
-
-  const document: TextDocument = window.activeTextEditor.document;
+/**
+ * Folds all functions in the active editor. Currently only works for components.
+ * @editor The text editor which represents the document for which to fold all function
+ */
+export async function foldAllFunctions(editor: TextEditor): Promise<void> {
+  const document: TextDocument = editor.document;
 
   if (isCfcFile(document)) {
     const thisComponent: Component = cachedEntity.getComponent(document.uri);
