@@ -2,7 +2,6 @@ import * as semver from "semver";
 import { DataType } from "../../entities/dataType";
 import { Uri } from "vscode";
 import { extensionContext } from "../../cfmlMain";
-import * as fs from "fs";
 
 export enum CFMLEngineName {
   ColdFusion = "coldfusion",
@@ -37,11 +36,11 @@ export class CFMLEngine {
   private name: CFMLEngineName;
   private version: string;
 
-  constructor(name: CFMLEngineName, version: string|undefined) {
+  constructor(name: CFMLEngineName, version: string | undefined) {
     this.name = name;
-    if (semver.valid(version)) {
-      this.version = version;
-    } else if (DataType.isNumeric(version)) {
+    if (semver.valid(version, true)) {
+      this.version = semver.valid(version, true);
+    } else {
       this.version = CFMLEngine.toSemVer(version);
     }
   }
@@ -86,7 +85,7 @@ export class CFMLEngine {
    * Check if this engine is older than `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
-  public isOlder(other: CFMLEngine): boolean|undefined {
+  public isOlder(other: CFMLEngine): boolean | undefined {
     if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
       return undefined;
     }
@@ -97,7 +96,7 @@ export class CFMLEngine {
    * Check if this engine is older than or equals `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
-  public isOlderOrEquals(other: CFMLEngine): boolean|undefined {
+  public isOlderOrEquals(other: CFMLEngine): boolean | undefined {
     if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
       return undefined;
     }
@@ -108,7 +107,7 @@ export class CFMLEngine {
    * Check if this engine is newer than `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
-  public isNewer(other: CFMLEngine): boolean|undefined {
+  public isNewer(other: CFMLEngine): boolean | undefined {
     if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
       return undefined;
     }
@@ -119,7 +118,7 @@ export class CFMLEngine {
    * Check if this engine is newer than or equals `other`. Returns undefined if they have different name.
    * @param other A CFML engine.
    */
-  public isNewerOrEquals(other: CFMLEngine): boolean|undefined {
+  public isNewerOrEquals(other: CFMLEngine): boolean | undefined {
     if (this.name === CFMLEngineName.Unknown || other.name === CFMLEngineName.Unknown || this.name !== other.name || !this.version || !other.version) {
       return undefined;
     }
@@ -142,8 +141,6 @@ export class CFMLEngine {
    * Returns whether this engine supports named parameters for global functions
    */
   public supportsGlobalFunctionNamedParams(): boolean {
-    // NOTE: Railo and Lucee support this using colons.
-    // TODO: Find when = was supported
     return (
       this.name === CFMLEngineName.Unknown
       || (this.name === CFMLEngineName.ColdFusion && semver.gte(this.version, "2018.0.0"))
@@ -153,32 +150,30 @@ export class CFMLEngine {
   }
 
   /**
-   * Check if `other` is newer than or equals this engine version. Returns undefined if they have different name.
-   * @param version A version string.
+   * Attempts to transform versionStr into a valid semver version
+   * @param versionStr A version string.
    */
-  public static toSemVer(version: string): string|undefined {
-    if (semver.clean(version)) {
-      return semver.clean(version);
-    } else if (DataType.isNumeric(version)) {
-      const splitVer: string[] = version.split(".");
+  public static toSemVer(versionStr: string): string | undefined {
+    if (semver.clean(versionStr, true)) {
+      return semver.clean(versionStr, true);
+    } else if (DataType.isNumeric(versionStr)) {
+      const splitVer: string[] = versionStr.split(".");
       while (splitVer.length < 3) {
         splitVer.push("0");
       }
-      return splitVer.join(".");
-    } else {
-      return undefined;
+      const reconstructedVer = splitVer.join(".");
+      if (semver.valid(reconstructedVer, true)) {
+        return semver.valid(reconstructedVer, true);
+      }
     }
+
+    return undefined;
   }
 
   /**
    * Gets the CFML engine icon URI
    */
-  public static getIconUri(name: CFMLEngineName): Uri | undefined {
-    const iconPath = extensionContext.asAbsolutePath(`images/${name}.png`);
-    if (fs.existsSync(iconPath)) {
-      return Uri.file(iconPath);
-    }
-
-    return undefined;
+  public static getIconUri(name: CFMLEngineName): Uri {
+    return Uri.joinPath(extensionContext.extensionUri, `images/${name}.png`);
   }
 }

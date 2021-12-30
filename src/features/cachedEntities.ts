@@ -10,9 +10,7 @@ import { MyMap, SearchMode } from "../utils/collections";
 import { APPLICATION_CFM_GLOB } from "../utils/contextUtil";
 import { DocumentStateContext, getDocumentStateContext } from "../utils/documentUtil";
 import { resolveCustomMappingPaths, resolveRelativePath, resolveRootPath } from "../utils/fileUtil";
-import { ITrie } from "../typings/trie-prefix-tree";
-
-import trie = require("trie-prefix-tree");
+import trie from "trie-prefix-tree";
 
 let allGlobalEntityDefinitions = new MyMap<string, CFDocsDefinitionInfo>();
 
@@ -26,8 +24,8 @@ let allComponentsByName: ComponentsByName = {};
 // let allUserFunctionsByUri: UserFunctionsByUri = {};
 let allUserFunctionsByName: UserFunctionsByName = {};
 
-let allComponentNames: ITrie = trie([]);
-let allFunctionNames: ITrie = trie([]);
+let allComponentNames = trie([]);
+let allFunctionNames = trie([]);
 
 let allServerVariables: VariablesByUri = new VariablesByUri();
 let allApplicationVariables: VariablesByUri = new VariablesByUri();

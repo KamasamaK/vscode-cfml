@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as request from "request";
+import request from "request";
 import { commands, Position, Range, TextDocument, TextLine, Uri, window, workspace, WorkspaceConfiguration, TextEditor } from "vscode";
 import { getFunctionSuffixPattern } from "../../entities/function";
 import { GlobalEntity } from "../../entities/globals";

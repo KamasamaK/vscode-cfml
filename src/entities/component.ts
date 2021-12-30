@@ -1,4 +1,4 @@
-import * as findup from "findup-sync";
+import findup from "findup-sync";
 import * as fs from "fs";
 import * as path from "path";
 import { Position, Range, TextDocument, Uri } from "vscode";
