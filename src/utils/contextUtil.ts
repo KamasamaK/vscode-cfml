@@ -102,7 +102,7 @@ export class BackwardIterator {
         const document: TextDocument = this.getDocument();
         const lineRange: Range = document.lineAt(lineNumber).range;
         const lineText: string = this.documentStateContext.sanitizedDocumentText.slice(document.offsetAt(lineRange.start), document.offsetAt(lineRange.end));
-        lineCharacterOffset = lineText.length - 1;
+        lineCharacterOffset = Math.max(0, lineText.length - 1);
       } else {
         return undefined;
       }
@@ -901,7 +901,7 @@ export function getStartSigPosition(iterator: BackwardIterator): Position | unde
   while (iterator.hasNext()) {
     const ch: number = iterator.next();
 
-    if (stringRanges) {
+    if (stringRanges && iterator.getPosition()) {
       const position: Position = iterator.getPosition().translate(0, 1);
       const stringRange: Range = stringRanges.find((range: Range) => {
         return range.contains(position) && !range.end.isEqual(position);
