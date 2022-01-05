@@ -2,6 +2,14 @@
 
 All notable changes to the CFML extension will be documented in this file.
 
+## [0.5.4] - 2022-01-05
+
+- Improved grammar
+- Improved command registration and availability
+- Now respects `files.exclude` for features
+- Removed usage of CommandBox server schema. Please use [`ortus-solutions.vscode-commandbox`](https://github.com/Ortus-Solutions/vscode-commandbox) instead.
+- Improved code documentation
+
 ## [0.5.3] - 2019-02-07
 
 - Improved component parsing
