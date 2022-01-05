@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       publishMS:
-        description: 'Publish to the MS Marketplace'
+        description: 'Publish to the VS Marketplace'
         type: boolean
         required: true
         default: "true"
@@ -63,7 +63,7 @@ jobs:
         shell: pwsh
 
   publishMS:
-    name: Publish to MS marketplace
+    name: Publish to VS marketplace
     runs-on: ubuntu-latest
     needs: package
     if: github.event.inputs.publishMS == 'true'
@@ -72,7 +72,7 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           name: ${{ needs.package.outputs.packageName }}
-      - name: Publish to MS marketplace
+      - name: Publish to VS marketplace
         run: npx vsce publish --packagePath ./${{ needs.package.outputs.packageName }} -p ${{ secrets.VSCE_PAT }}
 
   publishOVSX:
@@ -113,5 +113,5 @@ jobs:
         uses: AButler/upload-release-assets@v2.0
         with:
           files: ${{ needs.package.outputs.packageName }}
-          release-tag:  ${{ needs.package.outputs.tag }}
+          release-tag: ${{ needs.package.outputs.tag }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
