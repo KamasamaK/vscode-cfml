@@ -10,6 +10,12 @@ import { DocumentPositionStateContext, getDocumentPositionStateContext } from ".
 
 export default class CFMLTypeDefinitionProvider implements TypeDefinitionProvider {
 
+  /**
+   * Provide the type definition of the symbol at the given position in the given document.
+   * @param document The document for which the command was invoked.
+   * @param position The position for which the command was invoked.
+   * @param _token A cancellation token.
+   */
   public async provideTypeDefinition(document: TextDocument, position: Position, _token: CancellationToken): Promise<Definition> {
     const results: Definition = [];
 

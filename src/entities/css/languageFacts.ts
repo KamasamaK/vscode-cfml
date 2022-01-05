@@ -12,7 +12,7 @@ export const cssColors: { [name: string]: string } = cssLanguageFacts.colors;
 function getEntryStatus(status: cssLanguageTypes.EntryStatus): string {
   switch (status) {
     case "experimental":
-      return "⚠️ Property is experimental. Be cautious when using it.️\n\n";
+      return "⚠️ Property is experimental. Be cautious when using it.\n\n";
     case "nonstandard":
       return "🚨️ Property is nonstandard. Avoid using it.\n\n";
     case "obsolete":
@@ -22,6 +22,10 @@ function getEntryStatus(status: cssLanguageTypes.EntryStatus): string {
   }
 }
 
+/**
+ * Constructs a description for the given CSS entry
+ * @param entry A CSS entry object
+ */
 export function getEntryDescription(entry: cssLanguageTypes.IEntry): string | null {
   if (!entry.description || entry.description === "") {
     return null;

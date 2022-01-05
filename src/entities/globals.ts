@@ -123,6 +123,14 @@ export function constructTagSnippet(
   return tagSnippet;
 }
 
+/**
+ * Constructs a snippet for the given attribute
+ * @param param
+ * @param index
+ * @param attributeQuoteType The type of quote to use for attributes
+ * @param includeDefaultValue Whether to fill the attribute value with the default if it exists
+ * @param includeAttributesCustom Provides an optional set of attributes which overrides the set type
+ */
 export function constructAttributeSnippet(
   param: Parameter,
   index: number,

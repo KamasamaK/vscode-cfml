@@ -1,6 +1,9 @@
 import * as micromatch from "micromatch";
 import * as path from "path";
-import { commands, ConfigurationChangeEvent, ConfigurationTarget, DocumentSelector, ExtensionContext, extensions, FileSystemWatcher, IndentAction, languages, TextDocument, Uri, window, workspace, WorkspaceConfiguration } from "vscode";
+import {
+  commands, ConfigurationChangeEvent, ConfigurationTarget, DocumentSelector, ExtensionContext, extensions,
+  FileSystemWatcher, IndentAction, languages, TextDocument, Uri, window, workspace, WorkspaceConfiguration
+} from "vscode";
 import { COMPONENT_FILE_GLOB } from "./entities/component";
 import { Scope } from "./entities/scope";
 import { decreasingIndentingTags, goToMatchingTag, nonClosingTags, nonIndentingTags } from "./entities/tag";
@@ -220,7 +223,8 @@ export function activate(context: ExtensionContext): void {
   }));
 
   const cfmlSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml");
-  const autoCloseTagExt = extensions.getExtension("formulahendry.auto-close-tag");
+  const autoCloseTagExtId = "formulahendry.auto-close-tag";
+  const autoCloseTagExt = extensions.getExtension(autoCloseTagExtId);
   const enableAutoCloseTags: boolean = cfmlSettings.get<boolean>("autoCloseTags.enable", true);
   if (autoCloseTagExt) {
     const autoCloseTagsSettings: WorkspaceConfiguration = workspace.getConfiguration("auto-close-tag", null);
@@ -263,7 +267,7 @@ export function activate(context: ExtensionContext): void {
     window.showInformationMessage("You have the autoCloseTags setting enabled, but do not have the necessary extension installed/enabled.", "Install/Enable Extension", "Disable Setting").then(
       (selection: string) => {
         if (selection === "Install/Enable Extension") {
-          commands.executeCommand("extension.open", "formulahendry.auto-close-tag");
+          commands.executeCommand("extension.open", autoCloseTagExtId);
         } else if (selection === "Disable Setting") {
           cfmlSettings.update(
             "autoCloseTags.enable",

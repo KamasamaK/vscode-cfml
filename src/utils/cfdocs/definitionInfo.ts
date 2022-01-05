@@ -26,6 +26,7 @@ export interface EngineCompatibilityDetail {
 }
 
 export interface EngineInfo {
+  // expected to be CFMLEngineName
   [name: string]: EngineCompatibilityDetail;
 }
 

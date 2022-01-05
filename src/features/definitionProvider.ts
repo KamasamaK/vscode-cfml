@@ -12,6 +12,12 @@ import { getFunctionSuffixPattern } from "../entities/function";
 
 export default class CFMLDefinitionProvider implements DefinitionProvider {
 
+  /**
+   * Provide the definition of the symbol at the given position in the given document.
+   * @param document The document for which the command was invoked.
+   * @param position The position for which the command was invoked.
+   * @param _token A cancellation token.
+   */
   public async provideDefinition(document: TextDocument, position: Position, _token: CancellationToken): Promise<DefinitionLink[]> {
     const cfmlDefinitionSettings: WorkspaceConfiguration = workspace.getConfiguration("cfml.definition", document.uri);
     if (!cfmlDefinitionSettings.get<boolean>("enable", true)) {

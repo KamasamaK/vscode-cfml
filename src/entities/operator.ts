@@ -23,7 +23,7 @@ export const operators = new MySet<string>([
   "XOR",
   "EQ",
   "==",
-  "===", // Lucee-only
+  "===",
   "NEQ",
   "<>",
   "!=",
@@ -44,5 +44,6 @@ export const operators = new MySet<string>([
   "&=",
   ".",
   "?:",
-  ".?"
+  ".?",
+  "..."
 ]);

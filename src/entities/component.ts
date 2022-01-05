@@ -377,6 +377,7 @@ export function parseComponent(documentStateContext: DocumentStateContext): Comp
 
   component.functions = componentFunctions;
 
+  // Only check before first function definition
   const componentDefinitionRange = new Range(document.positionAt(componentMatch.index + head.length), earliestFunctionRangeStart);
   component.variables = parseVariableAssignments(documentStateContext, componentIsScript, componentDefinitionRange);
 

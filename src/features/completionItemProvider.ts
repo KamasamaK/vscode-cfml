@@ -60,6 +60,13 @@ function matches(word: string, suggestion: string): boolean {
   return word.length === 0 || (suggestion.length >= word.length && equalsIgnoreCase(suggestion.substr(0, word.length), word));
 }
 
+/**
+ * Creates a completion proposal
+ * @param name The proposal name
+ * @param kind The proposal kind
+ * @param entry Additional proposal info
+ * @param sortPrefix A string to prefix for sorting proposals
+ */
 function createNewProposal(name: string, kind: CompletionItemKind, entry?: CompletionEntry, sortPrefix?: string): CompletionItem {
   const proposal: CompletionItem = new CompletionItem(name, kind);
   if (entry) {

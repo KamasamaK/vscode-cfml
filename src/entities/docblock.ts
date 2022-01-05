@@ -1,5 +1,6 @@
 import { Range, TextDocument } from "vscode";
 
+// If the key has no value, the last letter is ignored
 const DOC_PATTERN: RegExp = /(\n\s*(?:\*[ \t]*)?(?:@(\w+)(?:\.(\w+))?)?[ \t]*)(\S.*)/gi;
 
 export interface DocBlockKeyValue {

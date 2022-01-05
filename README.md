@@ -1,5 +1,9 @@
 # VS Code CFML
 
+[![VS Marketplace](https://vsmarketplacebadge.apphb.com/version-short/KamasamaK.vscode-cfml.svg)](https://marketplace.visualstudio.com/items?itemName=KamasamaK.vscode-cfml)
+[![Open VSX](https://img.shields.io/open-vsx/v/KamasamaK/vscode-cfml)](https://open-vsx.org/extension/KamasamaK/vscode-cfml)
+[![cfml](https://img.shields.io/badge/cfml-ide-blue.svg?logo=slack&labelColor=555555)](https://cfml-slack.herokuapp.com)
+
 An extension for Visual Studio Code to assist in development with CFML.
 
 ## Acknowledgements

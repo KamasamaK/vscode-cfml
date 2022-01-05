@@ -16,6 +16,11 @@ export function getDirectories(srcPath: string): string[] {
   return filterDirectories(files, srcPath);
 }
 
+/**
+ * Takes an array of files and filters them to only the directories
+ * @param files A list of files to filter
+ * @param srcPath The path of the directory in which the files are contained
+ */
 export function filterDirectories(files: string[], srcPath: string): string[] {
   return files.filter((file: string) => {
     return fs.statSync(path.join(srcPath, file)).isDirectory();
@@ -28,6 +33,10 @@ export function getComponents(srcPath: string): string[] {
   return filterComponents(files);
 }
 
+/**
+ * Takes an array of files and filters them to only the components
+ * @param files A list of files to filter
+ */
 export function filterComponents(files: string[]): string[] {
   return files.filter((file: string) => {
     return equalsIgnoreCase(path.extname(file), COMPONENT_EXT);

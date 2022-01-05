@@ -151,7 +151,7 @@ export default class DocBlockCompletions implements CompletionItemProvider {
     }
 
     if (suggestions) {
-      suggestions.filter((suggestDesc: string, suggestionName: string) => {
+      suggestions.filter((_suggestDesc: string, suggestionName: string) => {
         return suggestionName.match(search) !== null;
       }).forEach((suggestDesc: string, suggestionName: string) => {
         let item = new CompletionItem(suggestionName, CompletionItemKind.Property);

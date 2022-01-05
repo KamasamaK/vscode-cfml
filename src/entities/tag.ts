@@ -81,6 +81,7 @@ const nonClosingCfmlTags: string[] = [
   "cfrethrow",
   "cfreturn",
   "cfschedule",
+  "cfspreadsheet",
   "cfsearch",
   "cfset",
   "cfsetting",
@@ -153,6 +154,7 @@ export const nonIndentingTags: string[] = [
   "cfrethrow",
   "cfreturn",
   "cfschedule",
+  "cfspreadsheet",
   "cfsearch",
   "cfset",
   "cfsetting",
@@ -447,6 +449,9 @@ const componentPathAttributes: ComponentPathAttributes = {
   ],
 };
 
+/**
+ * Returns which attributes of which tags potentially contain component paths
+ */
 export function getComponentPathAttributes(): ComponentPathAttributes {
   return componentPathAttributes;
 }
