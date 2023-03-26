@@ -1,7 +1,7 @@
 /** Adopted from https://github.com/Microsoft/vscode-css-languageservice/blob/27f369f0d527b1952689e223960f779e89457374/src/languageFacts/index.ts */
 
 import * as cssLanguageTypes from "./cssLanguageTypes";
-import * as cssLanguageFacts from "vscode-css-languageservice/lib/umd/languageFacts/index";
+import * as cssLanguageFacts from "vscode-css-languageservice/lib/umd/languageFacts/facts";
 
 export const cssWordRegex: RegExp = /(#?-?\d*\.\d\w*%?)|(::?[\w-]*(?=[^,{;]*[,{]))|(([@#.!])?[\w-?]+%?|[@#!.])/;
 
