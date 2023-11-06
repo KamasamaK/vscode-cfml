@@ -1,26 +1,26 @@
 export enum Scope {
-  Application = "APPLICATION",
-  Arguments = "ARGUMENTS",
-  Attributes = "ATTRIBUTES",
-  Caller = "CALLER",
-  Cffile = "CFFILE",
-  CGI = "CGI",
-  Client = "CLIENT",
-  Cookie = "COOKIE",
-  Flash = "FLASH",
-  Form = "FORM",
-  Local = "LOCAL",
-  Request = "REQUEST",
-  Server = "SERVER",
-  Session = "SESSION",
-  Static = "STATIC",
-  This = "THIS",
-  ThisTag = "THISTAG",
-  Thread = "THREAD",
-  ThreadLocal = "THREADLOCAL", // Not a real prefix
-  URL = "URL",
-  Unknown = "UNKNOWN", // Not a real scope. Use as default.
-  Variables = "VARIABLES"
+  Application = "application",
+  Arguments = "arguments",
+  Attributes = "attributes",
+  Caller = "caller",
+  Cffile = "cffile",
+  CGI = "cgi",
+  Client = "client",
+  Cookie = "cookie",
+  Flash = "flash",
+  Form = "form",
+  Local = "local",
+  Request = "request",
+  Server = "server",
+  Session = "session",
+  Static = "static",
+  This = "this",
+  ThisTag = "thistag",
+  Thread = "thread",
+  ThreadLocal = "threadlocal", // Not a real prefix
+  URL = "url",
+  Unknown = "unknown", // Not a real scope. Use as default.
+  Variables = "variables"
 }
 
 export namespace Scope {
