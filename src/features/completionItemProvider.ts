@@ -487,11 +487,15 @@ export default class CFMLCompletionItemProvider implements CompletionItemProvide
       }
     }
 
+    const scopesCase = cfmlCompletionSettings.get<string>("scopes.case", "lower");
+    const uppercaseScope = (scopesCase == "upper");
+
     // Scopes
     if (!isContinuingExpression) {
       // TODO: Filter by engine
-      for (const name in scopes) {
+      for (let name in scopes) {
         if (currentWordMatches(name)) {
+          if (uppercaseScope) name = name.toUpperCase();
           result.push(createNewProposal(name, CompletionItemKind.Struct, scopes[name]));
         }
       }

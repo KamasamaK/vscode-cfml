@@ -100,6 +100,7 @@ This extension contributes these settings to Visual Studio Code:
 - `cfml.suggest.htmlTags.enable`: Whether HTML tags are part of completion help. [*Default*: `true`]
 - `cfml.suggest.htmlTags.attributes.quoteType`: Which quote type to use when completing HTML attribute suggestion. [*Default*: `double`]
 - `cfml.suggest.css.enable`: Whether CSS properties and values are part of completion help. [*Default*: `true`]
+- `cfml.suggest.scopes.case`: Whether the completed scopes should be uppercase or lowercase. [*Default*: `lowercase`]
 - `cfml.definition.enable`: Whether providing definitions is enabled. [*Default*: `true`]
 - `cfml.definition.userFunctions.search.enable`: Whether to search for matching functions throughout the workspace when a reliable match cannot be determined. Peek Definition will provide a list of all matches. [*Default*: `false`]
 - `cfml.indexComponents.enable`: Whether to index the components in workspace on startup. This is done on each startup and duration depends on number and complexity of components as well as hardware specifications. Editor may be unresponsive during this period. It is currently required for most features involving components to work properly. [*Default*: `true`]
